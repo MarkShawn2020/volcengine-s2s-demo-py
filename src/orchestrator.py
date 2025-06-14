@@ -125,9 +125,12 @@ class Orchestrator:
 
                 if audio_format == "ogg":
                     audio_data = self.ogg_converter.convert(audio_data)
+                    # OGG已转换为PCM，更新格式标记
+                    format_type = "pcm"
+                else:
+                    format_type = "pcm"
 
                 # 通过音频IO发送输出
-                format_type = "ogg" if audio_format == "ogg" else "pcm"
                 asyncio.create_task(self.audio_io.send_audio_output(audio_data, format_type))
 
             elif isinstance(response.get('payload_msg'), dict):

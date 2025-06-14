@@ -591,12 +591,29 @@ class AudioStreamTrack(MediaStreamTrack):
     
     def _process_and_split_audio(self, audio_data: bytes):
         """处理音频数据并分割成OPUS标准帧"""
-        # 解析float32 PCM数据
-        samples = np.frombuffer(audio_data, dtype=np.float32)
-        
-        # 转换为int16并重采样到48kHz
-        samples = np.clip(samples, -1.0, 1.0)
-        samples = (samples * 32767).astype('int16')
+        # 自动检测音频格式并解析
+        if len(audio_data) % 4 == 0 and len(audio_data) % 2 == 0:
+            # 尝试float32格式（火山引擎TTS原生格式）
+            try:
+                samples_f32 = np.frombuffer(audio_data, dtype=np.float32)
+                max_val = np.max(np.abs(samples_f32)) if len(samples_f32) > 0 else 0.0
+                
+                if 0.001 <= max_val <= 1.5:  # float32典型范围
+                    samples = np.clip(samples_f32, -1.0, 1.0)
+                    samples = (samples * 32767).astype('int16')
+                    logger.debug(f"🔍 检测为float32格式: {len(audio_data)}字节, 最大值={max_val:.6f}")
+                else:
+                    # 可能是int16格式（OGG转换后）
+                    samples = np.frombuffer(audio_data, dtype=np.int16)
+                    logger.debug(f"🔍 检测为int16格式: {len(audio_data)}字节, 最大值={np.max(np.abs(samples)) if len(samples) > 0 else 0}")
+            except Exception:
+                # 解析失败，按int16处理
+                samples = np.frombuffer(audio_data[:len(audio_data)//2*2], dtype=np.int16)
+                logger.debug(f"🔍 解析失败，按int16处理: {len(audio_data)}字节")
+        else:
+            # 长度不是4的倍数，只能是int16
+            samples = np.frombuffer(audio_data[:len(audio_data)//2*2], dtype=np.int16)
+            logger.debug(f"🔍 按int16处理: {len(audio_data)}字节")
         
         # 重采样到48kHz (从24kHz)
         target_length = int(len(samples) * 48000 / 24000)
