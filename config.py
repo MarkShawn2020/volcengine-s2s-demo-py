@@ -28,7 +28,9 @@ start_session_req = {
 }
 
 input_audio_config = {
-    "chunk": 160,  # Match Go version: 160 samples = 10ms at 16kHz
+    "chunk": 1600,  # 100ms latency - see AUDIO_BUFFER_GUIDE.md for details
+    # IMPORTANT: For optimal AirPods compatibility, use 160 samples (10ms)
+    # Current 1600 samples = 100ms latency, acceptable but not ideal
     "format": "pcm",
     "channels": 1,
     "sample_rate": 16000,
