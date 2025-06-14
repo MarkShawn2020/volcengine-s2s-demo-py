@@ -4,8 +4,7 @@ import json
 
 from typing import Dict, Any
 
-import protocol
-import config
+from . import protocol, config
 
 
 class RealtimeDialogClient:

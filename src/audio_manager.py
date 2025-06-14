@@ -13,8 +13,9 @@ from pydub import AudioSegment
 import io
 import numpy as np
 
-import config
-from realtime_dialog_client import RealtimeDialogClient
+from .realtime_dialog_client import RealtimeDialogClient
+from . import config
+
 
 # 配置日志
 def setup_logging(level=logging.INFO):

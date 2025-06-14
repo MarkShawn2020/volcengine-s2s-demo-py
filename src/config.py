@@ -6,8 +6,8 @@ import os
 ws_connect_config = {
     "base_url": "wss://openspeech.bytedance.com/api/v3/realtime/dialogue",
     "headers": {
-        "X-Api-App-ID": os.getenv("VOLCENGINE_APP_ID"),
-        "X-Api-Access-Key": os.getenv("VOLCENGINE_ACCESS_TOKEN"),
+        "X-Api-App-ID": os.environ["VOLCENGINE_APP_ID"],
+        "X-Api-Access-Key": os.environ["VOLCENGINE_ACCESS_TOKEN"],
         "X-Api-Resource-Id": "volc.speech.dialog",
         "X-Api-App-Key": "PlgvMymc7f3tQnJ6",
         "X-Api-Connect-Id": str(uuid.uuid4()),
