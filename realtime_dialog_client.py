@@ -24,7 +24,7 @@ class RealtimeDialogClient:
             additional_headers=self.config['headers'],
             ping_interval=None
         )
-        self.logid = self.ws.response_headers.get("X-Tt-Logid")
+        self.logid = self.ws.response_headers.get("X-Tt-Logid") if hasattr(self.ws, 'response_headers') else None
         print(f"dialog server response logid: {self.logid}")
 
         # StartConnection request
