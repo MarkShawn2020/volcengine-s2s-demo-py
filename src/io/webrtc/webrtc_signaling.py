@@ -47,13 +47,18 @@ class WebRTCSignalingServer:
             async for message in websocket:
                 await self.handle_message(client_id, message)
         except websockets.exceptions.ConnectionClosed:
-            logger.info(f"🔌 客户端断开连接: {client_id}")
+            logger.info(f"🔌 客户端正常断开连接: {client_id}")
+        except websockets.exceptions.ConnectionClosedError:
+            logger.info(f"🔌 客户端异常断开连接: {client_id}")
+        except websockets.exceptions.ConnectionClosedOK:
+            logger.info(f"🔌 客户端优雅断开连接: {client_id}")
         except Exception as e:
-            logger.error(f"❌ 处理客户端消息错误: {e}")
+            logger.warning(f"⚠️ 处理客户端连接异常: {client_id} - {type(e).__name__}: {e}")
         finally:
             # 清理客户端
             if client_id in self.clients:
                 del self.clients[client_id]
+                logger.debug(f"🧹 清理客户端WebSocket连接: {client_id}")
 
             # 通知客户端断开连接
             if self.on_client_disconnected_callback:

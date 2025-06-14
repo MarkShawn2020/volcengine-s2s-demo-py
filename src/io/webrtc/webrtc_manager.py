@@ -25,6 +25,9 @@ class WebRTCManager:
         
         # 管理器运行状态
         self.is_running = True
+        
+        # 错误计数器，避免重复错误日志
+        self._error_counters = {}
 
         # 设置信令服务器回调
         self.signaling_server.set_callbacks(on_offer=self.handle_offer,
@@ -95,14 +98,16 @@ class WebRTCManager:
 
             if state == "failed":
                 logger.error(f"❌ WebRTC连接失败: {client_id}")
+                # 连接失败时立即清理资源
+                self._cleanup_client_resources(client_id)
             elif state == "disconnected":
                 logger.warning(f"⚠️ WebRTC连接断开: {client_id}")
+                # 连接断开时立即清理资源
+                self._cleanup_client_resources(client_id)
             elif state == "closed":
                 logger.info(f"🔌 WebRTC连接已关闭: {client_id}")
-                # 清理资源
-                if client_id in self.audio_tracks:
-                    del self.audio_tracks[client_id]
-                    logger.debug(f"🧹 已清理客户端音频轨道: {client_id}")
+                # 确保资源已清理
+                self._cleanup_client_resources(client_id)
             elif state == "connected":
                 logger.info(f"✅ WebRTC连接已建立: {client_id}")
 
@@ -119,7 +124,12 @@ class WebRTCManager:
     def handle_client_disconnected(self, client_id: str):
         """处理客户端断开连接"""
         logger.info(f"🔌 WebRTC客户端断开: {client_id}")
+        self._cleanup_client_resources(client_id)
 
+    def _cleanup_client_resources(self, client_id: str):
+        """清理指定客户端的所有资源"""
+        logger.debug(f"🧹 开始清理客户端资源: {client_id}")
+        
         # 取消音频轨道处理任务
         if hasattr(self, '_track_handlers') and client_id in self._track_handlers:
             task = self._track_handlers[client_id]
@@ -128,18 +138,43 @@ class WebRTCManager:
                 logger.debug(f"🛑 已取消音频轨道处理任务: {client_id}")
             del self._track_handlers[client_id]
 
-        # 清理资源
+        # 停止音频轨道
+        if client_id in self.audio_tracks:
+            try:
+                audio_track = self.audio_tracks[client_id]
+                if hasattr(audio_track, 'stop'):
+                    audio_track.stop()
+                    logger.debug(f"🛑 已停止音频轨道: {client_id}")
+            except Exception as e:
+                logger.debug(f"停止音频轨道错误: {e}")
+            del self.audio_tracks[client_id]
+
+        # 清理peer connection
         if client_id in self.peer_connections:
             try:
-                asyncio.create_task(self.peer_connections[client_id].close())
+                pc = self.peer_connections[client_id]
+                # 不使用asyncio.create_task，因为这可能在回调中被调用
+                if hasattr(pc, 'close'):
+                    # 尝试同步关闭，或者安排异步关闭
+                    try:
+                        import asyncio
+                        loop = asyncio.get_event_loop()
+                        if loop.is_running():
+                            asyncio.create_task(pc.close())
+                        else:
+                            loop.run_until_complete(pc.close())
+                    except Exception:
+                        pass  # 如果异步关闭失败，忽略错误
             except Exception as e:
                 logger.debug(f"关闭peer connection时出错: {e}")
             del self.peer_connections[client_id]
-
-        if client_id in self.audio_tracks:
-            del self.audio_tracks[client_id]
-
-        logger.debug(f"🧹 已清理客户端所有资源: {client_id}")
+            
+        # 清理错误计数器
+        keys_to_remove = [key for key in self._error_counters.keys() if key.startswith(f"{client_id}:")]
+        for key in keys_to_remove:
+            del self._error_counters[key]
+            
+        logger.debug(f"✅ 客户端资源清理完成: {client_id}")
 
     async def handle_offer(self, client_id: str, data: Dict[str, Any]):
         """处理WebRTC Offer"""
@@ -227,10 +262,17 @@ class WebRTCManager:
         logger.info(f"🎵 开始处理音频轨道: {client_id}")
 
         try:
-            while self.is_running:
+            while self.is_running and client_id in self.peer_connections:
+                # 检查客户端连接状态
+                if client_id in self.peer_connections:
+                    pc = self.peer_connections[client_id]
+                    if pc.connectionState in ["failed", "disconnected", "closed"]:
+                        logger.info(f"🔚 客户端连接已断开，停止音频轨道处理: {client_id} (状态: {pc.connectionState})")
+                        break
+                
                 try:
                     # 设置接收超时，避免无限等待
-                    frame = await asyncio.wait_for(track.recv(), timeout=5.0)
+                    frame = await asyncio.wait_for(track.recv(), timeout=1.0)
 
                     if frame is None:
                         logger.debug(f"⚠️ 接收到空音频帧，跳过处理")
@@ -289,6 +331,18 @@ class WebRTCManager:
                     if not self.is_running:
                         logger.debug(f"🛑 WebRTC管理器已停止，结束音频轨道处理: {client_id}")
                         break
+                    
+                    # 检查客户端是否仍然连接
+                    if client_id not in self.peer_connections:
+                        logger.debug(f"🔚 客户端已断开连接，停止音频轨道处理: {client_id}")
+                        break
+                        
+                    # 检查连接状态
+                    pc = self.peer_connections[client_id]
+                    if pc.connectionState in ["failed", "disconnected", "closed"]:
+                        logger.debug(f"🔚 客户端连接状态异常，停止音频轨道处理: {client_id} (状态: {pc.connectionState})")
+                        break
+                    
                     logger.debug(f"⏰ 音频轨道接收超时: {client_id}")
                     continue
                 except asyncio.CancelledError:
@@ -299,13 +353,36 @@ class WebRTCManager:
                     if not self.is_running:
                         logger.debug(f"🛑 WebRTC管理器已停止，退出音频轨道处理: {client_id}")
                         break
+                    
+                    # 检查客户端是否仍然连接
+                    if client_id not in self.peer_connections:
+                        logger.debug(f"🔚 客户端已断开连接，退出音频轨道处理: {client_id}")
+                        break
                         
-                    # 检查是否是MediaStreamError，这通常表示流已结束
-                    if "MediaStreamError" in str(e):
-                        logger.info(f"🔚 音频流已结束: {client_id}")
+                    # 检查是否是流结束相关的错误
+                    error_str = str(e).lower()
+                    if any(keyword in error_str for keyword in ["mediastreamerror", "stream", "connection", "closed", "disconnected"]):
+                        logger.info(f"🔚 音频流已结束: {client_id} ({e})")
                         break
                     else:
-                        logger.warning(f"⚠️ 处理音频帧错误: {e}")
+                        # 其他错误，记录并继续，但减少重复日志
+                        error_key = f"{client_id}:{type(e).__name__}"
+                        error_count = self._error_counters.get(error_key, 0) + 1
+                        self._error_counters[error_key] = error_count
+                        
+                        # 只在前几次错误时记录日志，避免日志洪水
+                        if error_count <= 3:
+                            logger.warning(f"⚠️ 处理音频帧错误 ({error_count}/3): {type(e).__name__}: {e}")
+                        elif error_count == 10:
+                            logger.warning(f"⚠️ 客户端 {client_id} 音频处理错误过多，停止详细日志")
+                        
+                        # 如果错误过多，直接退出处理
+                        if error_count >= 10:
+                            logger.info(f"🔚 客户端 {client_id} 错误过多，停止音频轨道处理")
+                            break
+                            
+                        # 等待一小段时间避免错误循环
+                        await asyncio.sleep(0.1)
                         continue
 
         except Exception as e:
