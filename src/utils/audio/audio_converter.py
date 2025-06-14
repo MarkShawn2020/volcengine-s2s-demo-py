@@ -1,42 +1,43 @@
 import io
-from typing import Optional
+
 import numpy as np
 from pydub import AudioSegment
-from src.logger import logger
+
+from src.utils.logger import logger
 
 
 class OggToPcmConverter:
     """OGG转PCM流式转换器"""
-    
+
     def __init__(self, sample_rate: int = 24000, channels: int = 1):
         """
         初始化转换器
-        
+
         Args:
             sample_rate: 目标采样率
             channels: 目标声道数
         """
         self.sample_rate = sample_rate
         self.channels = channels
-        
+
         # OGG 流缓存
         self.ogg_buffer = bytearray()
         self.last_pcm_size = 0  # 记录上次解码的PCM数据大小
-        
+
         # 统计信息
         self.stats = {
             'ogg_pages_received': 0,
             'pcm_bytes_decoded': 0,
             'decoding_errors': 0
         }
-    
+
     def convert(self, ogg_page: bytes) -> bytes:
         """
         处理 OGG 流式数据 - 改进的增量解码版本
-        
+
         Args:
             ogg_page: OGG音频页面数据
-            
+
         Returns:
             转换后的PCM数据
         """
@@ -101,7 +102,7 @@ class OggToPcmConverter:
 
         # 返回空数据，等待更多OGG页面
         return b''
-    
+
     def _validate_pcm_data(self, pcm_data: bytes) -> bytes:
         """验证和过滤PCM数据，防止爆炸嗞音"""
         if len(pcm_data) == 0:
@@ -139,7 +140,7 @@ class OggToPcmConverter:
         except Exception as e:
             logger.error(f"PCM数据验证失败: {e}")
             return pcm_data  # 验证失败时返回原始数据
-    
+
     def _manage_buffer(self):
         """管理OGG缓冲区大小"""
         max_buffer_size = 200000  # 200KB
@@ -157,49 +158,13 @@ class OggToPcmConverter:
                 self.ogg_buffer.clear()
                 self.last_pcm_size = 0
                 logger.debug("OGG缓冲区过大且无有效页面，重置缓冲区")
-    
+
     def reset(self):
         """重置转换器状态"""
         self.ogg_buffer.clear()
         self.last_pcm_size = 0
         logger.debug("OGG转换器已重置")
-    
+
     def get_stats(self) -> dict:
         """获取转换器统计信息"""
         return self.stats.copy()
-
-
-def detect_audio_format(audio_data: bytes) -> str:
-    """
-    检测音频格式
-    
-    Args:
-        audio_data: 音频数据
-        
-    Returns:
-        音频格式 ("ogg" 或 "pcm")
-    """
-    if len(audio_data) < 4:
-        return "pcm"
-
-    # 检查 OGG 文件头 (4F 67 67 53)
-    if audio_data[:4] == b'OggS':
-        return "ogg"
-
-    # 检查 WebM 文件头 (1A 45 DF A3)
-    if audio_data[:4] == b'\x1A\x45\xDF\xA3':
-        return "ogg"  # WebM 也用 OGG 解码器处理
-
-    # 检查 Opus 在 OGG 中的特征
-    if b'OpusHead' in audio_data[:64]:
-        return "ogg"
-
-    # 默认为 PCM
-    return "pcm"
-
-
-def debug_audio_data(audio_data: bytes) -> None:
-    """调试音频数据格式"""
-    # 简化调试输出，避免过多信息
-    if len(audio_data) >= 4 and audio_data[:4] == b'OggS':
-        logger.debug(f"检测到OGG页面: {len(audio_data)}字节")

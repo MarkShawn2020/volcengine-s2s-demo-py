@@ -4,8 +4,10 @@ import json
 
 from typing import Dict, Any
 
-from . import protocol, config
-from .logger import logger
+import src.volcengine.config
+from . import config
+from .volcengine import protocol
+from src.utils.logger import logger
 
 
 class RealtimeDialogClient:
@@ -39,7 +41,7 @@ class RealtimeDialogClient:
 
     async def start_session(self) -> None:
         """发送StartSession请求"""
-        request_params = config.start_session_req
+        request_params = src.volcengine.config.start_session_req
         payload_bytes = str.encode(json.dumps(request_params))
         payload_bytes = gzip.compress(payload_bytes)
         start_session_request = bytearray(protocol.generate_header())

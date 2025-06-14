@@ -1,13 +1,13 @@
 import asyncio
 
+import src.volcengine.config
 from src import config
-from src.dialog_session import DialogSession
+from src.orchestrator import Orchestrator
 
 
 async def main() -> None:
-    socket_mode = config.ENABLE_SOCKET_MODE
-    webrtc_mode = config.ENABLE_WEBRTC_MODE
-    session = DialogSession(config.ws_connect_config, socket_mode=socket_mode, webrtc_mode=webrtc_mode)
+    io_mode = config.IO_MODE
+    session = Orchestrator(src.volcengine.config.ws_connect_config, io_mode=io_mode)
     await session.start()
 
 if __name__ == "__main__":

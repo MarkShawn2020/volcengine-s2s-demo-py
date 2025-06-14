@@ -1,52 +1,8 @@
 import os
-import uuid
 
-import pyaudio
+from src.utils.logger import logger
+from src.volcengine.config import start_session_req
 
-from src.logger import logger
-
-# 配置信息
-ws_connect_config = {
-    "base_url": "wss://openspeech.bytedance.com/api/v3/realtime/dialogue",
-    "headers": {
-        "X-Api-App-ID": os.environ["VOLCENGINE_APP_ID"],
-        "X-Api-Access-Key": os.environ["VOLCENGINE_ACCESS_TOKEN"],
-        "X-Api-Resource-Id": "volc.speech.dialog",
-        "X-Api-App-Key": "PlgvMymc7f3tQnJ6",
-        "X-Api-Connect-Id": str(uuid.uuid4()),
-    }
-}
-
-# 【重要】
-# - bitsize（如果指定tts回复，则要f32，否则i16）
-# - chunk 在使用耳机的时候，要低于1600
-# - channels 始终为 1 即可
-
-input_audio_config = {
-    "bit_size": pyaudio.paInt16,
-    "chunk": 1600,
-    "format": "pcm",
-    "channels": 1,
-    "sample_rate": 16000,
-}
-
-ogg_output_audio_config = {
-    "bit_size": pyaudio.paInt16,
-    "chunk": 3200,
-    "format": "pcm",
-    "channels": 1,
-    "sample_rate": 24000,
-}
-
-tts_output_audio_config = {
-    "bit_size": pyaudio.paFloat32,
-    "channels": 1,
-    "format": "pcm",
-    "sample_rate": 24000,
-    "chunk": 3200
-}
-
-start_session_req = {"dialog": {"bot_name": "小塔"}, "tts": {"audio_config": tts_output_audio_config}}
 
 # 服务器默认直接返回pcm格式音频，客户端可以直接播放，代码量小，但传输较慢
 # 开启OGG后，服务器将只返回ogg封装的opus音频，客户端自行解码后播放，性能较高
@@ -55,22 +11,9 @@ logger.info(f"OGG Enabled: {ENABLE_OOG_AUDIO_FROM_SERVER}")
 if ENABLE_OOG_AUDIO_FROM_SERVER:
     start_session_req.pop("tts")
 
-# Socket模式配置
-ENABLE_SOCKET_MODE = os.getenv("ENABLE_SOCKET_MODE", False)
-socket_config = {
-    "host": os.getenv("SOCKET_HOST", "localhost"),
-    "port": int(os.getenv("SOCKET_PORT", "8888")),
-}
-logger.info(f"Socket Mode Enabled: {ENABLE_SOCKET_MODE}")
-if ENABLE_SOCKET_MODE:
-    logger.info(f"Socket Config: {socket_config['host']}:{socket_config['port']}")
+IO_MODE = os.getenv("IO_MODE", "system").lower()
+if IO_MODE not in ["system", "webrtc", "websocket"]:
+    logger.warning(f"无效的IO_MODE: {IO_MODE}，使用默认值 'system'")
+    IO_MODE = "system"
 
-# WebRTC模式配置
-ENABLE_WEBRTC_MODE = os.getenv("ENABLE_WEBRTC_MODE", False)
-webrtc_config = {
-    "signaling_host": os.getenv("WEBRTC_SIGNALING_HOST", "localhost"),
-    "signaling_port": int(os.getenv("WEBRTC_SIGNALING_PORT", "8765")),
-}
-logger.info(f"WebRTC Mode Enabled: {ENABLE_WEBRTC_MODE}")
-if ENABLE_WEBRTC_MODE:
-    logger.info(f"WebRTC Config: {webrtc_config['signaling_host']}:{webrtc_config['signaling_port']}")
+logger.info(f"IO Mode: {IO_MODE}")

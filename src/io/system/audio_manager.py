@@ -1,12 +1,9 @@
-import logging
-from typing import Optional
-import wave
-import pyaudio
 from dataclasses import dataclass
+from typing import Optional
 
-from . import config
-from .logger import setup_logging, logger
+import pyaudio
 
+from src.utils.logger import logger
 
 
 @dataclass
@@ -68,12 +65,3 @@ class AudioDeviceManager:
                 stream.stop_stream()
                 stream.close()
         self.pyaudio.terminate()
-
-
-def save_pcm_to_wav(pcm_data: bytes, filename: str) -> None:
-    """保存PCM数据为WAV文件"""
-    with wave.open(filename, 'wb') as wf:
-        wf.setnchannels(config.input_audio_config["channels"])
-        wf.setsampwidth(2)  # paInt16 = 2 bytes
-        wf.setframerate(config.input_audio_config["sample_rate"])
-        wf.writeframes(pcm_data)
