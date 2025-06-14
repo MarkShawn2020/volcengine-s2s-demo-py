@@ -22,6 +22,9 @@ class WebRTCManager:
 
         # 音频处理回调
         self.audio_input_callback: Optional[Callable[[bytes], None]] = None
+        
+        # 管理器运行状态
+        self.is_running = True
 
         # 设置信令服务器回调
         self.signaling_server.set_callbacks(on_offer=self.handle_offer,
@@ -38,10 +41,36 @@ class WebRTCManager:
     async def stop(self):
         """停止WebRTC管理器"""
         logger.info("🛑 停止WebRTC管理器")
+        
+        # 设置停止标志
+        self.is_running = False
+
+        # 取消所有音频轨道处理任务
+        if hasattr(self, '_track_handlers'):
+            for client_id, task in list(self._track_handlers.items()):
+                if not task.done():
+                    task.cancel()
+                    logger.debug(f"🛑 已取消音频轨道处理任务: {client_id}")
+            self._track_handlers.clear()
+
+        # 关闭所有音频轨道
+        for client_id, audio_track in list(self.audio_tracks.items()):
+            try:
+                if hasattr(audio_track, 'stop'):
+                    audio_track.stop()
+            except Exception as e:
+                logger.debug(f"停止音频轨道错误: {e}")
 
         # 关闭所有peer connections
         for pc in self.peer_connections.values():
-            await pc.close()
+            try:
+                await pc.close()
+            except Exception as e:
+                logger.debug(f"关闭peer connection错误: {e}")
+
+        # 清理所有资源
+        self.peer_connections.clear()
+        self.audio_tracks.clear()
 
         await self.signaling_server.stop()
 
@@ -198,7 +227,7 @@ class WebRTCManager:
         logger.info(f"🎵 开始处理音频轨道: {client_id}")
 
         try:
-            while True:
+            while self.is_running:
                 try:
                     # 设置接收超时，避免无限等待
                     frame = await asyncio.wait_for(track.recv(), timeout=5.0)
@@ -256,9 +285,21 @@ class WebRTCManager:
                         self.audio_input_callback(audio_data)
 
                 except asyncio.TimeoutError:
+                    # 在超时时检查是否应该停止
+                    if not self.is_running:
+                        logger.debug(f"🛑 WebRTC管理器已停止，结束音频轨道处理: {client_id}")
+                        break
                     logger.debug(f"⏰ 音频轨道接收超时: {client_id}")
                     continue
+                except asyncio.CancelledError:
+                    logger.debug(f"🛑 音频轨道处理任务已取消: {client_id}")
+                    break
                 except Exception as e:
+                    # 如果管理器已停止，直接退出
+                    if not self.is_running:
+                        logger.debug(f"🛑 WebRTC管理器已停止，退出音频轨道处理: {client_id}")
+                        break
+                        
                     # 检查是否是MediaStreamError，这通常表示流已结束
                     if "MediaStreamError" in str(e):
                         logger.info(f"🔚 音频流已结束: {client_id}")
@@ -279,20 +320,32 @@ class WebRTCManager:
         max_retries = 3
         retry_count = 0
 
-        while retry_count < max_retries:
+        while retry_count < max_retries and self.is_running:
             try:
                 await self.process_audio_track(client_id, track)
                 # 如果正常结束，跳出重试循环
                 break
 
+            except asyncio.CancelledError:
+                logger.debug(f"🛑 音频轨道恢复处理任务已取消: {client_id}")
+                break
             except Exception as e:
                 retry_count += 1
                 logger.warning(f"⚠️ 音频轨道处理失败 ({retry_count}/{max_retries}): {e}")
 
+                # 如果管理器已停止，不再重试
+                if not self.is_running:
+                    logger.debug(f"🛑 WebRTC管理器已停止，停止重试: {client_id}")
+                    break
+
                 if retry_count < max_retries:
                     # 等待一段时间后重试
-                    await asyncio.sleep(1.0 * retry_count)
-                    logger.info(f"🔄 重试音频轨道处理: {client_id}")
+                    try:
+                        await asyncio.sleep(1.0 * retry_count)
+                        logger.info(f"🔄 重试音频轨道处理: {client_id}")
+                    except asyncio.CancelledError:
+                        logger.debug(f"🛑 重试等待已取消: {client_id}")
+                        break
                 else:
                     logger.error(f"❌ 音频轨道处理最终失败: {client_id}")
                     break
@@ -347,9 +400,24 @@ class AudioStreamTrack(MediaStreamTrack):
         self._timestamp = 0
         self._sample_rate = 48000  # 48kHz，与浏览器匹配
         self._samples_per_frame = int(self._sample_rate * 0.02)  # 20ms frames
+        self._is_running = True
+
+    def stop(self):
+        """停止音频轨道"""
+        self._is_running = False
+        # 清空队列
+        while not self.audio_queue.empty():
+            try:
+                self.audio_queue.get_nowait()
+            except queue.Empty:
+                break
 
     async def recv(self):
         """接收音频帧"""
+        # 如果已停止，返回空帧
+        if not self._is_running:
+            return None
+            
         try:
             # 从队列获取音频数据
             audio_data = await asyncio.get_event_loop().run_in_executor(None, self.audio_queue.get, True, 1.0)
@@ -431,6 +499,9 @@ class AudioStreamTrack(MediaStreamTrack):
 
     def add_audio_data(self, audio_data: bytes):
         """添加音频数据到发送队列"""
+        if not self._is_running:
+            return
+            
         try:
             # 清理旧数据避免延迟累积，保持较短队列
             while self.audio_queue.qsize() > 5:
