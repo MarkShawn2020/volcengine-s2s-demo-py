@@ -378,8 +378,7 @@ class DialogSession:
                 tts_type = payload_msg.get('tts_type', 'default')
                 text = payload_msg.get('text', '')
                 logger.debug(f"🎵 TTS开始: {tts_type} - '{text[:30]}...'")
-                # 清空上一轮的AI文本
-                self.current_ai_text = ""
+                # TTS开始时不清空AI文本，因为CHAT_RESPONSE可能还在继续
             elif event == ServerEvent.TTS_SENTENCE_END:
                 logger.debug("🎵 TTS句子结束")
             elif event == ServerEvent.TTS_RESPONSE:
@@ -425,15 +424,14 @@ class DialogSession:
                     # AI实时文本回复 - 累积显示
                     if not self.is_ai_responding:
                         self.is_ai_responding = True
-                        self.current_ai_text = ""
+                        self.current_ai_text = ""  # 只在第一次CHAT_RESPONSE时清空
                     self.current_ai_text += content
                     self._update_console_display()
                     logger.debug(f"🤖 AI文本回复: '{content}' → 总计: '{self.current_ai_text[:50]}...'")
             elif event == ServerEvent.CHAT_ENDED:
                 logger.debug("🤖 AI文本回复结束")
+                # 不在这里显示最终AI文本，等待TTS_ENDED时统一处理
                 self.is_ai_responding = False
-                if self.current_ai_text and self.current_ai_text.strip():
-                    self._update_console_display(final_ai=True)
             else:
                 # 其他未知事件
                 logger.debug(f"📡 未知事件: {event}")
@@ -474,13 +472,13 @@ class DialogSession:
                 # AI回复完成，显示最终结果
                 print(f"🤖 AI: {self.current_ai_text}")
             elif self.is_user_speaking and self.current_user_text:
-                # 用户正在说话，实时更新
+                # 用户正在说话，实时更新 - 保持一致的显示格式
                 display_text = self.current_user_text[:100] + "..." if len(self.current_user_text) > 100 else self.current_user_text
-                print(f"🎤 {display_text}", end="", flush=True)
+                print(f"👤 用户: {display_text}", end="", flush=True)
             elif self.is_ai_responding and self.current_ai_text:
                 # AI正在回复，实时更新
                 display_text = self.current_ai_text[:100] + "..." if len(self.current_ai_text) > 100 else self.current_ai_text
-                print(f"🤖 {display_text}", end="", flush=True)
+                print(f"🤖 AI: {display_text}", end="", flush=True)
             elif not self.is_user_speaking and not self.is_ai_responding:
                 # 等待状态
                 print("🎙️ 请说话...", end="", flush=True)
@@ -495,14 +493,6 @@ class DialogSession:
                     'ai': self.current_ai_text,
                     'timestamp': time.time()
                 })
-
-                # 确保最终文本被显示
-                if self.current_user_text and not self.current_ai_text:
-                    self._clear_current_line()
-                    print(f"👤 用户: {self.current_user_text}")
-                elif self.current_ai_text:
-                    self._clear_current_line()
-                    print(f"🤖 AI: {self.current_ai_text}")
 
                 # 清空当前内容
                 self.current_user_text = ""
