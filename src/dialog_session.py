@@ -174,7 +174,7 @@ class DialogSession:
         # 默认为 PCM
         return "pcm"
 
-    def _process_ogg_stream(self, ogg_page: bytes) -> bytes:
+    def ogg2pcm(self, ogg_page: bytes) -> bytes:
         """处理 OGG 流式数据 - 改进的增量解码版本"""
         # 将新的 OGG 页面添加到缓冲区
         self.ogg_buffer.extend(ogg_page)
@@ -290,10 +290,6 @@ class DialogSession:
             logger.error(f"PCM数据验证失败: {e}")
             return pcm_data  # 验证失败时返回原始数据
 
-    def _convert_ogg_to_pcm(self, ogg_data: bytes) -> bytes:
-        """将 OGG/Opus 音频转换为 PCM"""
-        return self._process_ogg_stream(ogg_data)
-
     def _debug_audio_data(self, audio_data: bytes) -> None:
         """调试音频数据格式"""
         # 简化调试输出，避免过多信息
@@ -329,7 +325,7 @@ class DialogSession:
                 # logger.info(f"format: {audio_format}")
                 # 如果是 OGG 格式，处理流式数据
                 if audio_format == "ogg":
-                    audio_data = self._convert_ogg_to_pcm(audio_data)
+                    audio_data = self.ogg2pcm(audio_data)
 
                 try:
                     self.audio_queue.put(audio_data, timeout=0.1)
