@@ -6,6 +6,7 @@ from src.io.io_base import IOBase
 from src.io.webrtc.webrtc_manager import WebRTCManager
 from src import config
 from src.utils.logger import logger
+from src.utils.audio.audio_converter import OggToPcmConverter
 
 
 class WebRTCIO(IOBase):
@@ -26,6 +27,9 @@ class WebRTCIO(IOBase):
         
         # 设置音频输入回调
         self.webrtc_manager.set_audio_input_callback(self._handle_webrtc_audio_input)
+        
+        # 初始化OGG转PCM转换器
+        self.ogg_converter = OggToPcmConverter(sample_rate=24000, channels=1)
         
     async def start(self) -> None:
         """启动WebRTC音频输入输出"""
@@ -61,7 +65,12 @@ class WebRTCIO(IOBase):
             
         logger.debug(f"🎵 发送AI音频回复 ({format_type}): {len(audio_data)}字节")
         if self.webrtc_manager:
-            self.webrtc_manager.send_audio_to_all_clients(audio_data)
+            if format_type == "ogg":
+                # OGG格式需要解码为PCM再处理
+                self._handle_ogg_audio(audio_data)
+            else:
+                # PCM格式直接处理
+                self.webrtc_manager.send_audio_to_all_clients(audio_data)
             
     def display_welcome_screen(self) -> None:
         """显示WebRTC欢迎界面"""
@@ -93,3 +102,17 @@ class WebRTCIO(IOBase):
             return
             
         self._handle_audio_input(audio_data)
+    
+    def _handle_ogg_audio(self, ogg_data: bytes) -> None:
+        """处理OGG格式音频数据"""
+        try:
+            # 使用OGG转PCM转换器
+            pcm_data = self.ogg_converter.convert(ogg_data)
+            if pcm_data and len(pcm_data) > 0:
+                # 将转换后的PCM数据发送给WebRTC客户端
+                self.webrtc_manager.send_audio_to_all_clients(pcm_data)
+                logger.debug(f"🎵 OGG转PCM成功: {len(ogg_data)}字节 → {len(pcm_data)}字节")
+            else:
+                logger.debug(f"🔄 OGG数据缓冲中: {len(ogg_data)}字节")
+        except Exception as e:
+            logger.error(f"❌ OGG音频处理失败: {e}")
