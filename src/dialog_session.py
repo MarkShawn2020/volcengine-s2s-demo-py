@@ -92,6 +92,9 @@ class DialogSession:
         self.current_ai_text = ""    # 当前AI回复内容
         self.conversation_history = []  # 对话历史
         self.subtitle_lock = threading.Lock()  # 字幕显示线程锁
+        self.console_lines = []  # 控制台显示缓存
+        self.is_user_speaking = False  # 用户正在说话状态
+        self.is_ai_responding = False  # AI正在回复状态
 
     def _audio_player_thread(self):
         """音频播放线程 - 改进的错误处理"""
@@ -283,9 +286,10 @@ class DialogSession:
             logger.debug(f"检测到OGG页面: {len(audio_data)}字节")
 
     def handle_server_response(self, response: Dict[str, Any]) -> None:
+        """处理服务器响应"""
         if response == {}:
             return
-        """处理服务器响应"""
+        
         if response['message_type'] == 'SERVER_ACK':
             # 检查事件类型，特别处理TTSResponse事件(352)的二进制音频数据
             event = response.get('event', 0)
@@ -337,23 +341,22 @@ class DialogSession:
                     self._display_subtitle(ai_text=self.current_ai_text, is_final=False)
         elif response['message_type'] == 'SERVER_FULL_RESPONSE':
             event = response.get('event', 'unknown')
-            logger.info(f'Event: {event}, Response: {response}\n')
+            # 只在调试模式下记录详细日志
+            if logger.level <= 10:  # DEBUG level
+                logger.debug(f'Event: {event}, Response: {response}\n')
             payload_msg = response.get('payload_msg', {})
 
             # 记录重要服务器事件，过滤调试噪音
             connection_events = [ServerEvent.CONNECTION_STARTED, ServerEvent.CONNECTION_FAILED, 
                                ServerEvent.CONNECTION_FINISHED, ServerEvent.SESSION_STARTED, 
                                ServerEvent.SESSION_FINISHED, ServerEvent.SESSION_FAILED]
-            tts_asr_chat_events = [ServerEvent.TTS_SENTENCE_START, ServerEvent.TTS_SENTENCE_END, 
-                                 ServerEvent.TTS_ENDED, ServerEvent.ASR_INFO, ServerEvent.ASR_RESPONSE, 
-                                 ServerEvent.ASR_ENDED, ServerEvent.CHAT_RESPONSE, ServerEvent.CHAT_ENDED]
             
             if event in connection_events:
-                logger.info(f"📡 服务器事件: {ServerEvent(event).name}({event})")
-            elif event in tts_asr_chat_events:
-                logger.debug(f"📡 服务器事件: {ServerEvent(event).name}({event})")
+                logger.info(f"📡 {ServerEvent(event).name}")
             else:
-                logger.debug(f"📡 未知事件: {event}")
+                # 其他事件只在调试模式下显示
+                event_name = ServerEvent(event).name if event in ServerEvent._value2member_map_ else f'Unknown({event})'
+                logger.debug(f"📡 {event_name}")
 
             # 处理服务器事件
             if event == ServerEvent.CONNECTION_STARTED:
@@ -385,7 +388,6 @@ class DialogSession:
             elif event == ServerEvent.TTS_ENDED:
                 logger.debug("🎵 TTS音频合成结束")
                 # TTS完成，结束这轮对话
-                # if self.current_ai_text: self._display_subtitle(ai_text=self.current_ai_text, is_final=True)
                 self._finalize_conversation_turn()
             elif event == ServerEvent.ASR_INFO:
                 # 清空音频队列，停止当前播放
@@ -398,9 +400,11 @@ class DialogSession:
                 self.ogg_buffer.clear()
                 self.last_pcm_size = 0
                 logger.debug("已清空音频缓冲区 (用户打断)")
-                # print("\n🎤 正在识别...", end="", flush=True)  # 显示识别状态
-                # 清空上一轮的用户文本
+                # 开始用户说话状态
+                self.is_user_speaking = True
+                self.is_ai_responding = False
                 self.current_user_text = ""
+                self._update_console_display()
             elif event == ServerEvent.ASR_RESPONSE:
                 results = payload_msg.get('results', [])
                 if results and len(results) > 0:
@@ -408,27 +412,28 @@ class DialogSession:
                     is_interim = results[0].get('is_interim', False)
                     if text and text.strip():
                         self.current_user_text = text
-                        # self._display_subtitle(user_text=self.current_user_text, is_final=not is_interim)
+                        self._update_console_display()
                         logger.debug(f"👤 用户语音识别: '{text}' (临时: {is_interim})")
             elif event == ServerEvent.ASR_ENDED:
-                pass
-                # 确认用户文本最终结果
-                # if self.current_user_text and self.current_user_text.strip():
-                #     self._display_subtitle(user_text=self.current_user_text, is_final=True)
-                # else:
-                #     logger.debug("语音识别结束但内容为空")
+                self.is_user_speaking = False
+                if self.current_user_text and self.current_user_text.strip():
+                    self._update_console_display(final_user=True)
+                logger.debug("语音识别结束")
             elif event == ServerEvent.CHAT_RESPONSE:
                 content = payload_msg.get('content', '')
                 if content and content.strip():
                     # AI实时文本回复 - 累积显示
+                    if not self.is_ai_responding:
+                        self.is_ai_responding = True
+                        self.current_ai_text = ""
                     self.current_ai_text += content
+                    self._update_console_display()
                     logger.debug(f"🤖 AI文本回复: '{content}' → 总计: '{self.current_ai_text[:50]}...'")
-                    # self._display_subtitle(ai_text=self.current_ai_text, is_final=False)
             elif event == ServerEvent.CHAT_ENDED:
                 logger.debug("🤖 AI文本回复结束")
-                # 确认AI文本最终结果
-                # if self.current_ai_text and self.current_ai_text.strip():
-                #     self._display_subtitle(ai_text=self.current_ai_text, is_final=True)
+                self.is_ai_responding = False
+                if self.current_ai_text and self.current_ai_text.strip():
+                    self._update_console_display(final_ai=True)
             else:
                 # 其他未知事件
                 logger.debug(f"📡 未知事件: {event}")
@@ -438,6 +443,8 @@ class DialogSession:
 
     def _display_welcome_screen(self):
         """显示欢迎界面"""
+        # 清屏
+        print("\033[2J\033[H", end="")
         print("\n" + "=" * 80)
         print("🎙️ 🤖  实时语音对话系统  🤖 🎙️")
         print("=" * 80)
@@ -450,36 +457,33 @@ class DialogSession:
         print("🚀 系统已就绪，请开始说话...")
         print("=" * 80 + "\n")
 
-    def _clear_line(self):
+    def _clear_current_line(self):
         """清除当前行"""
-        print("\r" + " " * 120 + "\r", end="", flush=True)
+        print("\r\033[K", end="", flush=True)
 
-    def _display_subtitle(self, user_text: str = None, ai_text: str = None, is_final: bool = False):
-        """显示实时字幕"""
+    def _update_console_display(self, final_user: bool = False, final_ai: bool = False):
+        """更新控制台显示"""
         with self.subtitle_lock:
-            if user_text is not None:
-                self.current_user_text = user_text
-            if ai_text is not None:
-                self.current_ai_text = ai_text
-
             # 清除当前行
-            self._clear_line()
-
-            # 显示字幕
-            if self.current_user_text:
-                if is_final:
-                    print(f"💬 【用户】{self.current_user_text}")
-                else:
-                    # 限制显示长度，避免换行
-                    display_text = self.current_user_text[:80] + "..." if len(self.current_user_text) > 80 else self.current_user_text
-                    print(f"🎤 【用户】{display_text}", end="", flush=True)
-            elif self.current_ai_text:
-                if is_final:
-                    print(f"🤖 【AI助手】{self.current_ai_text}")
-                else:
-                    # 限制显示长度，避免换行
-                    display_text = self.current_ai_text[:80] + "..." if len(self.current_ai_text) > 80 else self.current_ai_text
-                    print(f"🤖 【AI助手】{display_text}", end="", flush=True)
+            self._clear_current_line()
+            
+            if final_user and self.current_user_text:
+                # 用户说话完成，显示最终结果
+                print(f"👤 用户: {self.current_user_text}")
+            elif final_ai and self.current_ai_text:
+                # AI回复完成，显示最终结果
+                print(f"🤖 AI: {self.current_ai_text}")
+            elif self.is_user_speaking and self.current_user_text:
+                # 用户正在说话，实时更新
+                display_text = self.current_user_text[:100] + "..." if len(self.current_user_text) > 100 else self.current_user_text
+                print(f"🎤 {display_text}", end="", flush=True)
+            elif self.is_ai_responding and self.current_ai_text:
+                # AI正在回复，实时更新
+                display_text = self.current_ai_text[:100] + "..." if len(self.current_ai_text) > 100 else self.current_ai_text
+                print(f"🤖 {display_text}", end="", flush=True)
+            elif not self.is_user_speaking and not self.is_ai_responding:
+                # 等待状态
+                print("🎙️ 请说话...", end="", flush=True)
 
     def _finalize_conversation_turn(self):
         """完成一轮对话"""
@@ -492,14 +496,27 @@ class DialogSession:
                     'timestamp': time.time()
                 })
 
+                # 确保最终文本被显示
+                if self.current_user_text and not self.current_ai_text:
+                    self._clear_current_line()
+                    print(f"👤 用户: {self.current_user_text}")
+                elif self.current_ai_text:
+                    self._clear_current_line()
+                    print(f"🤖 AI: {self.current_ai_text}")
+
                 # 清空当前内容
                 self.current_user_text = ""
                 self.current_ai_text = ""
+                self.is_user_speaking = False
+                self.is_ai_responding = False
 
                 # 显示简洁的分隔线
                 print(f"\n{'─' * 50}")
                 print(f"📊 第{len(self.conversation_history)}轮对话 | ⏰ {time.strftime('%H:%M:%S')}")
-                print(f"{'─' * 50}")
+                print(f"{'─' * 50}\n")
+                
+                # 显示等待状态
+                print("🎙️ 请说话...", end="", flush=True)
 
     def log_stats(self):
         """输出统计信息"""
