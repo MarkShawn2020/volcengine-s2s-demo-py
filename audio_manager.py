@@ -72,7 +72,7 @@ class AudioDeviceManager:
         """打开音频输入流"""
         # p = pyaudio.PyAudio()
         default_input_device = self.pyaudio.get_default_input_device_info()
-        logger.info(f"默认输入设备: {default_input_device['name']} (索引: {default_input_device['index']})")
+        logger.info(f"🎤 输入设备: {default_input_device['name']}")
         self.input_stream = self.pyaudio.open(
             input_device_index=default_input_device['index'],
             channels=self.input_config.channels,
@@ -89,7 +89,7 @@ class AudioDeviceManager:
     def open_output_stream(self) -> pyaudio.Stream:
         """打开音频输出流"""
         default_output_device = self.pyaudio.get_default_output_device_info()
-        logger.info(f"默认输出设备: {default_output_device['name']} (索引: {default_output_device['index']})")
+        logger.info(f"🔊 输出设备: {default_output_device['name']}")
         self.output_stream = self.pyaudio.open(
             format=self.output_config.bit_size,
             channels=self.output_config.channels,
@@ -117,7 +117,7 @@ class DialogSession:
         set_debug_mode(debug_mode)
         
         self.session_id = str(uuid.uuid4())
-        logger.info(f"初始化对话会话，会话ID: {self.session_id}")
+        logger.info(f"🚀 启动对话会话 (ID: {self.session_id[:8]}...)")
         
         self.client = RealtimeDialogClient(config=ws_config, session_id=self.session_id)
         self.audio_device = AudioDeviceManager(
@@ -220,7 +220,8 @@ class DialogSession:
         # 将新的 OGG 页面添加到缓冲区
         self.ogg_buffer.extend(ogg_page)
         self.stats['ogg_pages_received'] += 1
-        logger.debug(f"接收OGG页面: {len(ogg_page)}字节, 缓冲区总大小: {len(self.ogg_buffer)}字节")
+        if len(self.ogg_buffer) % 5000 < len(ogg_page):  # 每5KB输出一次日志
+            logger.debug(f"🔊 接收音频流: {len(self.ogg_buffer)}字节")
         
         # 尝试解码当前缓冲区的音频流
         try:
@@ -247,7 +248,7 @@ class DialogSession:
                             validated_data = self._validate_pcm_data(new_pcm_data)
                             if len(validated_data) > 0:
                                 self.stats['pcm_bytes_decoded'] += len(validated_data)
-                                logger.debug(f"增量解码 {len(validated_data)} 字节新PCM数据")
+                                logger.debug(f"🎵 解码音频: {len(validated_data)}字节")
                                 return validated_data
                     else:
                         # 没有新数据
@@ -259,7 +260,7 @@ class DialogSession:
                     validated_data = self._validate_pcm_data(full_pcm_data)
                     if len(validated_data) > 0:
                         self.stats['pcm_bytes_decoded'] += len(validated_data)
-                        logger.debug(f"首次解码 {len(validated_data)} 字节PCM数据")
+                        logger.debug(f"🎵 首次解码: {len(validated_data)}字节")
                         return validated_data
                 
         except Exception as e:
@@ -365,18 +366,22 @@ class DialogSession:
                         self.audio_queue.put(processed_audio, timeout=0.1)
                     except queue.Full:
                         self.stats['audio_queue_overflows'] += 1
-                        logger.warning("音频队列已满，跳过此音频片段")
+                        if self.stats['audio_queue_overflows'] % 10 == 1:  # 每10次溢出才输出一次警告
+                            logger.warning(f"⚠️ 音频队列溢出 (第{self.stats['audio_queue_overflows']}次)")
             else:
                 # PCM格式直接播放
                 try:
                     self.audio_queue.put(audio_data, timeout=0.1)
                 except queue.Full:
                     self.stats['audio_queue_overflows'] += 1
-                    logger.warning("音频队列已满，跳过此音频片段")
+                    if self.stats['audio_queue_overflows'] % 10 == 1:  # 每10次溢出才输出一次警告
+                        logger.warning(f"⚠️ 音频队列溢出 (第{self.stats['audio_queue_overflows']}次)")
         elif response['message_type'] == 'SERVER_FULL_RESPONSE':
-            logger.info(f"服务器响应: 事件{response.get('event', 'unknown')}")
-            if response['event'] == 450:
-                logger.info(f"清空缓存音频，会话ID: {response['session_id']}")
+            event = response.get('event', 'unknown')
+            
+            # 只记录重要事件，过滤噪音
+            if event == 450:
+                logger.info("🔄 对话轮次结束，准备下一轮")
                 # 清空音频队列
                 while not self.audio_queue.empty():
                     try:
@@ -386,7 +391,29 @@ class DialogSession:
                 # 清空OGG缓冲区，准备下一轮对话
                 self.ogg_buffer.clear()
                 self.last_pcm_size = 0
-                logger.info("已清空OGG缓冲区")
+                logger.debug("已清空音频缓冲区")
+            elif event == 350:
+                logger.info("🎤 开始语音识别")
+            elif event == 351:
+                logger.info("🎤 语音识别结束")
+            elif event == 550:
+                # ASR实时结果，只在debug模式下显示
+                content = response.get('payload_msg', {}).get('content', '')
+                if content:
+                    logger.debug(f"📝 识别文本: {content}")
+            elif event == 559:
+                logger.info("📝 语音识别完成")
+            elif event == 359:
+                logger.info("🤖 AI响应完成")
+            elif event in [451, 459]:
+                # 音频数据事件，在debug模式下显示
+                logger.debug(f"🔊 音频事件: {event}")
+            elif event in [50, 150]:
+                # 连接和会话事件
+                logger.debug(f"🔗 连接事件: {event}")
+            else:
+                # 其他未知事件
+                logger.debug(f"📡 服务器事件: {event}")
         elif response['message_type'] == 'SERVER_ERROR':
             logger.error(f"服务器错误: {response['payload_msg']}")
             raise Exception("服务器错误")
@@ -401,7 +428,7 @@ class DialogSession:
         logger.info("==================")
 
     def _keyboard_signal(self, sig, frame):
-        logger.info("接收到键盘中断信号 (Ctrl+C)")
+        logger.info("👋 收到退出信号，正在关闭...")
         self.log_stats()
         self.is_recording = False
         self.is_playing = False
@@ -424,7 +451,7 @@ class DialogSession:
     async def process_microphone_input(self) -> None:
         """处理麦克风输入"""
         stream = self.audio_device.open_input_stream()
-        logger.info("已打开麦克风，请讲话...")
+        logger.info("🎙️ 麦克风已就绪，开始监听...")
 
         while self.is_recording:
             try:
