@@ -5,10 +5,39 @@ import signal
 import threading
 import time
 import uuid
+from enum import IntEnum
 from typing import Dict, Any
 
 import numpy as np
 from pydub import AudioSegment
+
+
+class ServerEvent(IntEnum):
+    """服务端事件类型枚举"""
+    # Connect类事件
+    CONNECTION_STARTED = 50
+    CONNECTION_FAILED = 51
+    CONNECTION_FINISHED = 52
+    
+    # Session类事件
+    SESSION_STARTED = 150
+    SESSION_FINISHED = 152
+    SESSION_FAILED = 153
+    
+    # TTS类事件
+    TTS_SENTENCE_START = 350
+    TTS_SENTENCE_END = 351
+    TTS_RESPONSE = 352
+    TTS_ENDED = 359
+    
+    # ASR类事件
+    ASR_INFO = 450
+    ASR_RESPONSE = 451
+    ASR_ENDED = 459
+    
+    # Chat类事件
+    CHAT_RESPONSE = 550
+    CHAT_ENDED = 559
 
 from src import config
 from src.audio_manager import set_debug_mode, logger, AudioDeviceManager, AudioConfig, save_pcm_to_wav
@@ -269,7 +298,7 @@ class DialogSession:
                     return
 
                 # 特殊处理TTSResponse事件的音频数据
-                if event == 352:  # TTSResponse
+                if event == ServerEvent.TTS_RESPONSE:
                     logger.debug(f"🎵 收到TTSResponse音频数据: {len(audio_data)}字节")
                 
                 # 调试：分析音频数据
@@ -308,51 +337,57 @@ class DialogSession:
                     self._display_subtitle(ai_text=self.current_ai_text, is_final=False)
         elif response['message_type'] == 'SERVER_FULL_RESPONSE':
             event = response.get('event', 'unknown')
+            logger.info(f'Event: {event}, Response: {response}\n')
             payload_msg = response.get('payload_msg', {})
 
             # 记录重要服务器事件，过滤调试噪音
-            if event in [50, 51, 52, 150, 152, 153]:  # 连接和会话相关事件
-                logger.info(f"📡 服务器事件: {event}")
-            elif event in [350, 351, 359, 450, 451, 459, 550, 559]:  # TTS/ASR/Chat事件
-                logger.debug(f"📡 服务器事件: {event}")
+            connection_events = [ServerEvent.CONNECTION_STARTED, ServerEvent.CONNECTION_FAILED, 
+                               ServerEvent.CONNECTION_FINISHED, ServerEvent.SESSION_STARTED, 
+                               ServerEvent.SESSION_FINISHED, ServerEvent.SESSION_FAILED]
+            tts_asr_chat_events = [ServerEvent.TTS_SENTENCE_START, ServerEvent.TTS_SENTENCE_END, 
+                                 ServerEvent.TTS_ENDED, ServerEvent.ASR_INFO, ServerEvent.ASR_RESPONSE, 
+                                 ServerEvent.ASR_ENDED, ServerEvent.CHAT_RESPONSE, ServerEvent.CHAT_ENDED]
+            
+            if event in connection_events:
+                logger.info(f"📡 服务器事件: {ServerEvent(event).name}({event})")
+            elif event in tts_asr_chat_events:
+                logger.debug(f"📡 服务器事件: {ServerEvent(event).name}({event})")
             else:
                 logger.debug(f"📡 未知事件: {event}")
 
             # 处理服务器事件
-            if event == 50:  # ConnectionStarted
+            if event == ServerEvent.CONNECTION_STARTED:
                 logger.info("🔗 连接已建立")
-            elif event == 51:  # ConnectionFailed
+            elif event == ServerEvent.CONNECTION_FAILED:
                 error = payload_msg.get('error', 'Unknown error')
                 logger.error(f"❌ 连接失败: {error}")
-            elif event == 52:  # ConnectionFinished
+            elif event == ServerEvent.CONNECTION_FINISHED:
                 logger.info("🔗 连接已结束")
-            elif event == 150:  # SessionStarted
+            elif event == ServerEvent.SESSION_STARTED:
                 dialog_id = payload_msg.get('dialog_id', '')
                 logger.info(f"🚀 会话已启动 (Dialog ID: {dialog_id[:8]}...)")
-            elif event == 152:  # SessionFinished
+            elif event == ServerEvent.SESSION_FINISHED:
                 logger.info("✅ 会话已结束")
-            elif event == 153:  # SessionFailed
+            elif event == ServerEvent.SESSION_FAILED:
                 error = payload_msg.get('error', 'Unknown error')
                 logger.error(f"❌ 会话失败: {error}")
-            elif event == 350:  # TTSSentenceStart
+            elif event == ServerEvent.TTS_SENTENCE_START:
                 tts_type = payload_msg.get('tts_type', 'default')
                 text = payload_msg.get('text', '')
                 logger.debug(f"🎵 TTS开始: {tts_type} - '{text[:30]}...'")
                 # 清空上一轮的AI文本
                 self.current_ai_text = ""
-            elif event == 351:  # TTSSentenceEnd
+            elif event == ServerEvent.TTS_SENTENCE_END:
                 logger.debug("🎵 TTS句子结束")
-            elif event == 352:  # TTSResponse - 音频数据
+            elif event == ServerEvent.TTS_RESPONSE:
                 # 这个事件的音频数据已经在 SERVER_ACK 中处理了
                 logger.debug("🎵 收到TTS音频数据")
-            elif event == 359:  # TTSEnded
+            elif event == ServerEvent.TTS_ENDED:
                 logger.debug("🎵 TTS音频合成结束")
                 # TTS完成，结束这轮对话
-                if self.current_ai_text:
-                    self._display_subtitle(ai_text=self.current_ai_text, is_final=True)
+                # if self.current_ai_text: self._display_subtitle(ai_text=self.current_ai_text, is_final=True)
                 self._finalize_conversation_turn()
-            elif event == 450:  # ASRInfo - 首字检测，用于打断
-                logger.debug("🎤 检测到用户开始说话 (可打断)")
+            elif event == ServerEvent.ASR_INFO:
                 # 清空音频队列，停止当前播放
                 while not self.audio_queue.empty():
                     try:
@@ -363,37 +398,37 @@ class DialogSession:
                 self.ogg_buffer.clear()
                 self.last_pcm_size = 0
                 logger.debug("已清空音频缓冲区 (用户打断)")
-                print("\n🎤 正在识别...", end="", flush=True)  # 显示识别状态
+                # print("\n🎤 正在识别...", end="", flush=True)  # 显示识别状态
                 # 清空上一轮的用户文本
                 self.current_user_text = ""
-            elif event == 451:  # ASRResponse - 语音识别结果
+            elif event == ServerEvent.ASR_RESPONSE:
                 results = payload_msg.get('results', [])
                 if results and len(results) > 0:
                     text = results[0].get('text', '')
                     is_interim = results[0].get('is_interim', False)
                     if text and text.strip():
                         self.current_user_text = text
-                        self._display_subtitle(user_text=self.current_user_text, is_final=not is_interim)
+                        # self._display_subtitle(user_text=self.current_user_text, is_final=not is_interim)
                         logger.debug(f"👤 用户语音识别: '{text}' (临时: {is_interim})")
-            elif event == 459:  # ASREnded
-                logger.debug("🎤 语音识别结束")
+            elif event == ServerEvent.ASR_ENDED:
+                pass
                 # 确认用户文本最终结果
-                if self.current_user_text and self.current_user_text.strip():
-                    self._display_subtitle(user_text=self.current_user_text, is_final=True)
-                else:
-                    logger.debug("语音识别结束但内容为空")
-            elif event == 550:  # ChatResponse - AI文本回复
+                # if self.current_user_text and self.current_user_text.strip():
+                #     self._display_subtitle(user_text=self.current_user_text, is_final=True)
+                # else:
+                #     logger.debug("语音识别结束但内容为空")
+            elif event == ServerEvent.CHAT_RESPONSE:
                 content = payload_msg.get('content', '')
                 if content and content.strip():
                     # AI实时文本回复 - 累积显示
                     self.current_ai_text += content
                     logger.debug(f"🤖 AI文本回复: '{content}' → 总计: '{self.current_ai_text[:50]}...'")
-                    self._display_subtitle(ai_text=self.current_ai_text, is_final=False)
-            elif event == 559:  # ChatEnded
+                    # self._display_subtitle(ai_text=self.current_ai_text, is_final=False)
+            elif event == ServerEvent.CHAT_ENDED:
                 logger.debug("🤖 AI文本回复结束")
                 # 确认AI文本最终结果
-                if self.current_ai_text and self.current_ai_text.strip():
-                    self._display_subtitle(ai_text=self.current_ai_text, is_final=True)
+                # if self.current_ai_text and self.current_ai_text.strip():
+                #     self._display_subtitle(ai_text=self.current_ai_text, is_final=True)
             else:
                 # 其他未知事件
                 logger.debug(f"📡 未知事件: {event}")
@@ -488,8 +523,8 @@ class DialogSession:
             while True:
                 response = await self.client.receive_server_response()
                 self.handle_server_response(response)
-                if 'event' in response and (response['event'] == 152 or response['event'] == 153):
-                    logger.info(f"接收到会话结束事件: {response['event']}")
+                if 'event' in response and (response['event'] == ServerEvent.SESSION_FINISHED or response['event'] == ServerEvent.SESSION_FAILED):
+                    logger.info(f"接收到会话结束事件: {ServerEvent(response['event']).name}({response['event']})")
                     self.is_session_finished = True
                     break
         except asyncio.CancelledError:
