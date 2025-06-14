@@ -21,6 +21,7 @@ class WebRTCSignalingServer:
         self.on_ice_candidate_callback: Optional[Callable[[str, Dict[str, Any]], None]] = None
         self.on_client_connected_callback: Optional[Callable[[str], None]] = None
         self.on_client_disconnected_callback: Optional[Callable[[str], None]] = None
+        self.on_test_audio_callback: Optional[Callable[[str], None]] = None
 
     async def start(self):
         """启动信令服务器"""
@@ -90,6 +91,12 @@ class WebRTCSignalingServer:
             elif message_type == "ping":
                 # 心跳包
                 await self.send_to_client(client_id, {"type": "pong"})
+            
+            elif message_type == "test-audio":
+                # 测试音频请求
+                logger.info(f"🎵 收到测试音频请求: {client_id}")
+                if self.on_test_audio_callback:
+                    self.on_test_audio_callback(client_id)
 
             else:
                 logger.warning(f"⚠️ 未知消息类型: {message_type}")
@@ -148,7 +155,8 @@ class WebRTCSignalingServer:
                      on_answer: Optional[Callable[[str, Dict[str, Any]], None]] = None,
                      on_ice_candidate: Optional[Callable[[str, Dict[str, Any]], None]] = None,
                      on_client_connected: Optional[Callable[[str], None]] = None,
-                     on_client_disconnected: Optional[Callable[[str], None]] = None):
+                     on_client_disconnected: Optional[Callable[[str], None]] = None,
+                     on_test_audio: Optional[Callable[[str], None]] = None):
         """设置回调函数"""
         if on_offer:
             self.on_offer_callback = on_offer
@@ -160,6 +168,8 @@ class WebRTCSignalingServer:
             self.on_client_connected_callback = on_client_connected
         if on_client_disconnected:
             self.on_client_disconnected_callback = on_client_disconnected
+        if on_test_audio:
+            self.on_test_audio_callback = on_test_audio
 
     async def stop(self):
         """停止信令服务器"""

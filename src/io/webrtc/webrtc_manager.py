@@ -34,7 +34,8 @@ class WebRTCManager:
             on_answer=self.handle_answer,
             on_ice_candidate=self.handle_ice_candidate,
             on_client_connected=self.handle_client_connected,
-            on_client_disconnected=self.handle_client_disconnected)
+            on_client_disconnected=self.handle_client_disconnected,
+            on_test_audio=self.handle_test_audio_request)
 
     async def start(self):
         """启动WebRTC管理器"""
@@ -88,7 +89,19 @@ class WebRTCManager:
         # 创建音频轨道用于发送音频给浏览器
         audio_track = AudioStreamTrack()
         self.audio_tracks[client_id] = audio_track
-        pc.addTrack(audio_track)
+        
+        # 明确指定音频轨道参数，确保与OPUS编码器兼容
+        transceiver = pc.addTransceiver(audio_track, direction="sendrecv")
+        
+        # 设置OPUS编码器参数 - 通过SDP协商来配置
+        try:
+            # aiortc会自动选择OPUS编码器，我们只需要确保音频格式正确
+            logger.info(f"🎵 WebRTC轨道已添加，将使用OPUS编码")
+        except Exception as e:
+            logger.warning(f"⚠️ OPUS编码器配置失败: {e}")
+        
+        # 日志记录WebRTC配置
+        logger.info(f"🎵 创建音频轨道: 48kHz, mono, s16 -> OPUS编码")
 
         # 设置连接状态变化回调
         @pc.on("connectionstatechange")
@@ -118,7 +131,7 @@ class WebRTCManager:
             if track.kind == "audio":
                 # 记录音频轨道，用于重连时的清理
                 self._track_handlers = getattr(self, '_track_handlers', {})
-                task = asyncio.create_task(self.process_audio_track_with_recovery(client_id, track))
+                task = asyncio.create_task(self.process_audio_track(client_id, track))
                 self._track_handlers[client_id] = task
 
     def handle_client_disconnected(self, client_id: str):
@@ -272,7 +285,7 @@ class WebRTCManager:
                 
                 try:
                     # 设置接收超时，避免无限等待
-                    frame = await asyncio.wait_for(track.recv(), timeout=1.0)
+                    frame = await asyncio.wait_for(track.recv(), timeout=3.0)
 
                     if frame is None:
                         logger.debug(f"⚠️ 接收到空音频帧，跳过处理")
@@ -392,51 +405,17 @@ class WebRTCManager:
         finally:
             logger.info(f"🔚 音频轨道处理结束: {client_id}")
 
-    async def process_audio_track_with_recovery(self, client_id: str, track):
-        """带恢复机制的音频轨道处理"""
-        max_retries = 3
-        retry_count = 0
-
-        while retry_count < max_retries and self.is_running:
-            try:
-                await self.process_audio_track(client_id, track)
-                # 如果正常结束，跳出重试循环
-                break
-
-            except asyncio.CancelledError:
-                logger.debug(f"🛑 音频轨道恢复处理任务已取消: {client_id}")
-                break
-            except Exception as e:
-                retry_count += 1
-                logger.warning(f"⚠️ 音频轨道处理失败 ({retry_count}/{max_retries}): {e}")
-
-                # 如果管理器已停止，不再重试
-                if not self.is_running:
-                    logger.debug(f"🛑 WebRTC管理器已停止，停止重试: {client_id}")
-                    break
-
-                if retry_count < max_retries:
-                    # 等待一段时间后重试
-                    try:
-                        await asyncio.sleep(1.0 * retry_count)
-                        logger.info(f"🔄 重试音频轨道处理: {client_id}")
-                    except asyncio.CancelledError:
-                        logger.debug(f"🛑 重试等待已取消: {client_id}")
-                        break
-                else:
-                    logger.error(f"❌ 音频轨道处理最终失败: {client_id}")
-                    break
-
-        # 清理任务记录
-        if hasattr(self, '_track_handlers') and client_id in self._track_handlers:
-            del self._track_handlers[client_id]
-
     def send_audio_to_client(self, client_id: str, audio_data: bytes):
         """发送音频数据给指定客户端"""
         if client_id in self.audio_tracks:
             try:
+                # 检查客户端连接状态
+                if client_id in self.peer_connections:
+                    pc_state = self.peer_connections[client_id].connectionState
+                    # logger.debug(f"📡 向客户端 {client_id} 发送音频: {len(audio_data)}字节, 连接状态: {pc_state}")
+                
                 self.audio_tracks[client_id].add_audio_data(audio_data)
-                logger.debug(f"✅ 音频数据已发送给客户端: {client_id}")
+                # logger.debug(f"✅ 音频数据已发送给客户端: {client_id}")
             except Exception as e:
                 logger.error(f"❌ 发送音频数据给客户端失败 {client_id}: {e}")
         else:
@@ -456,6 +435,35 @@ class WebRTCManager:
         logger.debug(f"📡 向 {len(active_clients)} 个客户端发送音频数据: {len(audio_data)}字节")
         for client_id in active_clients:
             self.send_audio_to_client(client_id, audio_data)
+    
+    def send_test_audio(self):
+        """发送测试音频 - 440Hz正弦波（A4音符）"""
+        active_clients = list(self.audio_tracks.keys())
+        if not active_clients:
+            return
+            
+        # 生成440Hz正弦波测试音频 (1秒)
+        import math
+        sample_rate = 24000  # 火山引擎格式
+        duration = 1.0  # 1秒
+        frequency = 440  # A4音符
+        num_samples = int(sample_rate * duration)
+        
+        # 生成正弦波
+        samples = []
+        for i in range(num_samples):
+            t = i / sample_rate
+            amplitude = 0.3  # 30%音量
+            sample = amplitude * math.sin(2 * math.pi * frequency * t)
+            # 转换为24kHz float32格式（模拟火山引擎输出）
+            samples.append(sample)
+        
+        # 转换为bytes格式
+        import struct
+        test_audio = b''.join(struct.pack('<f', sample) for sample in samples)
+        
+        logger.info(f"🎵 发送测试音频: 440Hz正弦波, {len(test_audio)}字节")
+        self.send_audio_to_all_clients(test_audio)
 
     def set_audio_input_callback(self, callback: Callable[[bytes], None]):
         """设置音频输入回调函数"""
@@ -464,6 +472,11 @@ class WebRTCManager:
     def get_client_count(self) -> int:
         """获取当前连接的客户端数量"""
         return len(self.peer_connections)
+    
+    def handle_test_audio_request(self, client_id: str):
+        """处理测试音频请求"""
+        logger.info(f"🎵 处理测试音频请求: {client_id}")
+        self.send_test_audio()
 
 
 class AudioStreamTrack(MediaStreamTrack):
@@ -473,7 +486,7 @@ class AudioStreamTrack(MediaStreamTrack):
 
     def __init__(self):
         super().__init__()
-        self.audio_queue = queue.Queue(maxsize=50)  # 限制队列大小
+        self.audio_queue = queue.Queue(maxsize=10)  # 适中的队列大小，避免音频丢失
         self._timestamp = 0
         self._sample_rate = 48000  # 48kHz，与浏览器匹配
         self._samples_per_frame = int(self._sample_rate * 0.02)  # 20ms frames
@@ -496,71 +509,47 @@ class AudioStreamTrack(MediaStreamTrack):
             return None
             
         try:
-            # 从队列获取音频数据
-            audio_data = await asyncio.get_event_loop().run_in_executor(None, self.audio_queue.get, True, 1.0)
+            # 从队列获取预处理的OPUS帧数据
+            frame_data = await asyncio.get_event_loop().run_in_executor(None, self.audio_queue.get, True, 1.0)
+            logger.debug(f"🎧 从队列获取OPUS帧数据: {len(frame_data) if frame_data else 0}字节")
 
-            if audio_data is None:
+            if frame_data is None or len(frame_data) == 0:
                 # 生成静音帧
-                samples = np.zeros(self._samples_per_frame, dtype=np.int16)
+                samples = np.zeros(960, dtype=np.int16)
+                logger.debug(f"🔇 生成静音帧: 960样本")
             else:
-                # 检测音频数据格式并转换为numpy array
-                # 火山引擎TTS返回的是24kHz float32格式
-                if len(audio_data) % 4 == 0:  # float32 = 4 bytes per sample
-                    # 尝试作为float32解析
-                    try:
-                        samples = np.frombuffer(audio_data, dtype=np.float32)
-                        # 转换float32到int16
-                        samples = (samples * 32767).astype('int16')
-                        source_sample_rate = 24000  # 火山引擎TTS输出采样率
-                    except:
-                        # 如果float32解析失败，尝试int16
-                        samples = np.frombuffer(audio_data, dtype=np.int16)
-                        source_sample_rate = 16000  # 假设int16格式为16kHz
-                else:
-                    # 数据长度不是4的倍数，按int16处理
-                    samples = np.frombuffer(audio_data[:len(audio_data)//2*2], dtype=np.int16)
-                    source_sample_rate = 16000
-
-                # 首先检查是否有音频数据
-                if len(samples) == 0:
-                    samples = np.zeros(self._samples_per_frame, dtype=np.int16)
-                else:
-                    # 适度降低音量避免爆音，但保持可听性
-                    samples = (samples * 0.3).astype('int16')
-
-                    # 重采样到48kHz（根据实际输入采样率）
-                    target_length = int(len(samples) * 48000 / source_sample_rate)
-                    if target_length > 0:
-                        indices = np.linspace(0, len(samples) - 1, target_length)
-                        samples = np.interp(indices, range(len(samples)), samples).astype('int16')
-
-                    # 如果数据不够一帧，用零填充
-                    if len(samples) < self._samples_per_frame:
-                        padding = np.zeros(self._samples_per_frame - len(samples), dtype=np.int16)
-                        samples = np.concatenate([samples, padding])
-                    elif len(samples) > self._samples_per_frame:
-                        # 如果数据太多，截取前面部分
-                        samples = samples[:self._samples_per_frame]
-
-                    # 音量标准化，确保不会爆音但保持清晰
-                    max_val = np.max(np.abs(samples))
-                    if max_val > 16000:  # 如果音量过大，进行标准化
-                        samples = (samples * 16000 / max_val).astype('int16')
-                    elif max_val < 1000:  # 如果音量过小，适度放大
-                        samples = (samples * 1.5).astype('int16')
-
+                # 直接使用预处理的int16数据
+                samples = np.frombuffer(frame_data, dtype=np.int16)
+                logger.debug(f"🎵 使用预处理帧: {len(samples)}样本")
+            
             # 创建音频帧
             from av import AudioFrame
             from fractions import Fraction
-            frame = AudioFrame(format="s16", layout="mono", samples=self._samples_per_frame)
-            frame.sample_rate = self._sample_rate
+            
+            frame = AudioFrame(format="s16", layout="mono", samples=960)
+            frame.sample_rate = 48000
+            
+            # 计算时间戳
+            import time
+            current_time = time.time()
+            if not hasattr(self, '_start_time'):
+                self._start_time = current_time
+                self._timestamp = 0
+            
             frame.pts = self._timestamp
-            frame.time_base = Fraction(1, self._sample_rate)
+            frame.time_base = Fraction(1, 48000)
 
-            # 填充音频数据
+            # 填充音频数据（确保960样本）
+            if len(samples) < 960:
+                padding = np.zeros(960 - len(samples), dtype=np.int16)
+                samples = np.concatenate([samples, padding])
+            elif len(samples) > 960:
+                samples = samples[:960]
+            
             frame.planes[0].update(samples.tobytes())
-
-            self._timestamp += self._samples_per_frame
+            self._timestamp += 960
+            
+            logger.debug(f"🎵 创建OPUS帧: 960样本, PTS={frame.pts}")
             return frame
 
         except queue.Empty:
@@ -590,23 +579,58 @@ class AudioStreamTrack(MediaStreamTrack):
             return frame
 
     def add_audio_data(self, audio_data: bytes):
-        """添加音频数据到发送队列"""
+        """添加音频数据到发送队列，分割成OPUS帧"""
         if not self._is_running:
             return
             
         try:
-            # 清理旧数据避免延迟累积，保持较短队列
-            while self.audio_queue.qsize() > 5:
+            # 处理音频数据并分割成多个OPUS帧
+            self._process_and_split_audio(audio_data)
+        except Exception as e:
+            logger.error(f"❌ 处理音频数据失败: {e}")
+    
+    def _process_and_split_audio(self, audio_data: bytes):
+        """处理音频数据并分割成OPUS标准帧"""
+        # 解析float32 PCM数据
+        samples = np.frombuffer(audio_data, dtype=np.float32)
+        
+        # 转换为int16并重采样到48kHz
+        samples = np.clip(samples, -1.0, 1.0)
+        samples = (samples * 32767).astype('int16')
+        
+        # 重采样到48kHz (从24kHz)
+        target_length = int(len(samples) * 48000 / 24000)
+        if target_length > 0:
+            indices = np.linspace(0, len(samples) - 1, target_length)
+            samples = np.interp(indices, range(len(samples)), samples).astype('int16')
+        
+        # 分割成960样本的OPUS帧
+        opus_frame_size = 960
+        for i in range(0, len(samples), opus_frame_size):
+            frame_samples = samples[i:i + opus_frame_size]
+            
+            # 如果不足960样本，填充零
+            if len(frame_samples) < opus_frame_size:
+                padding = np.zeros(opus_frame_size - len(frame_samples), dtype=np.int16)
+                frame_samples = np.concatenate([frame_samples, padding])
+            
+            # 将帧数据转换为bytes并加入队列
+            frame_bytes = frame_samples.tobytes()
+            
+            # 清理旧数据避免延迟累积
+            while self.audio_queue.qsize() > 8:
                 try:
                     self.audio_queue.get_nowait()
                     logger.debug("清理旧音频数据以减少延迟")
                 except queue.Empty:
                     break
-
-            self.audio_queue.put_nowait(audio_data)
-            logger.debug(f"添加音频数据到队列: {len(audio_data)}字节，队列大小: {self.audio_queue.qsize()}")
-        except queue.Full:
-            logger.warning("⚠️ 音频发送队列已满，丢弃数据")
+            
+            try:
+                self.audio_queue.put_nowait(frame_bytes)
+                logger.debug(f"添加OPUS帧到队列: {len(frame_bytes)}字节，队列大小: {self.audio_queue.qsize()}")
+            except queue.Full:
+                logger.warning("⚠️ 音频发送队列已满，丢弃数据")
+                break
 
 
 AIORTC_AVAILABLE = True

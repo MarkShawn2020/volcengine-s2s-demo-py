@@ -192,6 +192,8 @@
         <div class="controls">
             <button id="start-audio-btn" onclick="startAudio()" disabled>开始录音</button>
             <button id="stop-audio-btn" onclick="stopAudio()" disabled>停止录音</button>
+            <button id="play-audio-btn" onclick="manualPlayAudio()" disabled>手动播放音频</button>
+            <button id="test-audio-btn" onclick="requestTestAudio()" disabled>请求测试音频</button>
         </div>
         
         <div class="log" id="log"></div>
@@ -227,11 +229,85 @@
         function updateButtons() {
             const connected = signalingSocket && signalingSocket.readyState === WebSocket.OPEN;
             const hasAudio = localStream !== null;
+            const hasRemoteAudio = window.remoteAudio !== null && window.remoteAudio !== undefined;
             
             document.getElementById('connect-btn').disabled = connected;
             document.getElementById('disconnect-btn').disabled = !connected;
             document.getElementById('start-audio-btn').disabled = !connected || hasAudio;
             document.getElementById('stop-audio-btn').disabled = !hasAudio;
+            document.getElementById('play-audio-btn').disabled = !hasRemoteAudio;
+            document.getElementById('test-audio-btn').disabled = !connected;
+        }
+        
+        // 手动播放音频
+        function manualPlayAudio() {
+            if (window.remoteAudio) {
+                window.remoteAudio.play().then(() => {
+                    log('手动播放音频成功', 'success');
+                }).catch(error => {
+                    log(`手动播放失败: ${error.message}`, 'error');
+                });
+            } else {
+                log('没有可播放的音频', 'warning');
+            }
+        }
+        
+        // 请求测试音频
+        function requestTestAudio() {
+            if (signalingSocket && signalingSocket.readyState === WebSocket.OPEN) {
+                log('请求服务器发送测试音频', 'info');
+                signalingSocket.send(JSON.stringify({
+                    type: 'test-audio'
+                }));
+            } else {
+                log('连接未建立，无法请求测试音频', 'error');
+            }
+        }
+        
+        // WebRTC统计信息监控
+        function startRTCStatsMonitoring() {
+            if (!peerConnection) return;
+            
+            const monitorStats = async () => {
+                try {
+                    const stats = await peerConnection.getStats();
+                    let audioReceived = false;
+                    let packetsReceived = 0;
+                    let bytesReceived = 0;
+                    
+                    stats.forEach(report => {
+                        if (report.type === 'inbound-rtp' && report.mediaType === 'audio') {
+                            audioReceived = true;
+                            packetsReceived = report.packetsReceived || 0;
+                            bytesReceived = report.bytesReceived || 0;
+                            
+                            log(`📊 音频接收统计: 包=${packetsReceived}, 字节=${bytesReceived}`, 'info');
+                            
+                            if (report.packetsLost) {
+                                log(`⚠️ 丢包数量: ${report.packetsLost}`, 'warning');
+                            }
+                        }
+                        
+                        if (report.type === 'media-source' && report.mediaType === 'audio') {
+                            log(`🎵 音频源统计: ${JSON.stringify({
+                                audioLevel: report.audioLevel,
+                                totalAudioEnergy: report.totalAudioEnergy
+                            })}`, 'info');
+                        }
+                    });
+                    
+                    if (!audioReceived) {
+                        log('⚠️ 未检测到音频接收统计', 'warning');
+                    }
+                    
+                } catch (error) {
+                    log(`统计信息获取失败: ${error.message}`, 'error');
+                }
+            };
+            
+            // 每2秒检查一次统计信息
+            setInterval(monitorStats, 2000);
+            log('开始监控WebRTC统计信息', 'info');
         }
         
         // 连接信令服务器
@@ -332,6 +408,10 @@
             
             peerConnection = new RTCPeerConnection(config);
             
+            // 添加双向音频transceiver
+            peerConnection.addTransceiver('audio', { direction: 'sendrecv' });
+            log('添加双向音频transceiver', 'info');
+            
             // ICE候选事件
             peerConnection.onicecandidate = (event) => {
                 if (event.candidate) {
@@ -346,45 +426,139 @@
             // 连接状态变化
             peerConnection.onconnectionstatechange = () => {
                 log(`WebRTC连接状态: ${peerConnection.connectionState}`);
+                
+                // 如果连接成功，开始监控统计信息
+                if (peerConnection.connectionState === 'connected') {
+                    startRTCStatsMonitoring();
+                }
             };
             
             // 接收远程音频流
             peerConnection.ontrack = (event) => {
                 log('接收到远程音频流', 'success');
+                console.log('接收到音频轨道:', event.track);
+                console.log('音频流:', event.streams[0]);
                 
                 // 创建音频元素并播放
                 const remoteAudio = document.createElement('audio');
-                remoteAudio.srcObject = event.streams[0];
+                remoteAudio.controls = true; // 显示控件便于调试
                 remoteAudio.autoplay = true;
-                remoteAudio.volume = 0.5; // 设置音量为50%避免过响
+                remoteAudio.volume = 1.0; // 设置为最大音量进行测试
+                remoteAudio.muted = false;
                 
-                // 添加错误处理
-                remoteAudio.onerror = (error) => {
-                    log(`音频播放错误: ${error}`, 'error');
+                // 设置音频流
+                remoteAudio.srcObject = event.streams[0];
+                
+                // 添加详细的事件监听
+                remoteAudio.onloadstart = () => {
+                    log('开始加载音频', 'info');
+                };
+                
+                remoteAudio.onloadeddata = () => {
+                    log('音频数据加载完成', 'success');
                 };
                 
                 remoteAudio.onloadedmetadata = () => {
-                    log('音频元数据加载完成', 'success');
+                    log(`音频元数据加载完成: 时长=${remoteAudio.duration}s`, 'success');
                 };
                 
                 remoteAudio.oncanplay = () => {
                     log('音频可以播放', 'success');
-                    remoteAudio.play().catch(error => {
-                        log(`播放失败: ${error.message}`, 'error');
-                        // 如果自动播放失败，提示用户手动播放
-                        if (error.name === 'NotAllowedError') {
-                            log('浏览器阻止自动播放，请手动点击播放', 'warning');
-                            // 可以在这里添加一个播放按钮
-                        }
-                    });
+                    
+                    // 立即显示音频控件
+                    remoteAudio.style.display = 'block';
+                    remoteAudio.style.margin = '10px auto';
+                    remoteAudio.style.width = '300px';
+                    document.body.appendChild(remoteAudio);
+                    
+                    // 尝试自动播放
+                    const playPromise = remoteAudio.play();
+                    if (playPromise !== undefined) {
+                        playPromise.then(() => {
+                            log('✅ 音频自动播放成功', 'success');
+                        }).catch(error => {
+                            log(`⚠️ 自动播放失败，需要用户交互: ${error.message}`, 'warning');
+                            
+                            // 创建播放按钮
+                            const playButton = document.createElement('button');
+                            playButton.textContent = '🔊 点击播放音频';
+                            playButton.style.display = 'block';
+                            playButton.style.margin = '10px auto';
+                            playButton.style.padding = '10px 20px';
+                            playButton.style.fontSize = '16px';
+                            playButton.style.backgroundColor = '#4CAF50';
+                            playButton.style.color = 'white';
+                            playButton.style.border = 'none';
+                            playButton.style.borderRadius = '5px';
+                            playButton.style.cursor = 'pointer';
+                            
+                            playButton.onclick = () => {
+                                remoteAudio.play().then(() => {
+                                    log('✅ 手动播放成功', 'success');
+                                    playButton.remove();
+                                }).catch(err => {
+                                    log(`❌ 手动播放也失败: ${err.message}`, 'error');
+                                });
+                            };
+                            
+                            document.body.appendChild(playButton);
+                            log('已添加播放按钮，请点击开始播放', 'info');
+                        });
+                    }
                 };
                 
-                // 将音频元素添加到页面（隐藏）
-                remoteAudio.style.display = 'none';
-                document.body.appendChild(remoteAudio);
+                remoteAudio.onplay = () => {
+                    log('音频开始播放事件', 'success');
+                };
+                
+                remoteAudio.onplaying = () => {
+                    log('音频正在播放', 'success');
+                };
+                
+                remoteAudio.onpause = () => {
+                    log('音频暂停', 'warning');
+                };
+                
+                remoteAudio.onended = () => {
+                    log('音频播放结束', 'info');
+                };
+                
+                remoteAudio.onerror = (error) => {
+                    log(`音频播放错误: ${error}`, 'error');
+                    console.error('音频错误详情:', remoteAudio.error);
+                };
+                
+                remoteAudio.onvolumechange = () => {
+                    log(`音量变化: ${remoteAudio.volume}`, 'info');
+                };
+                
+                // 监听音频轨道状态
+                event.track.onmute = () => {
+                    log('音频轨道被静音', 'warning');
+                };
+                
+                event.track.onunmute = () => {
+                    log('音频轨道取消静音', 'success');
+                };
+                
+                // 音频元素将在oncanplay事件中添加到页面
                 
                 // 保存引用用于后续清理
                 window.remoteAudio = remoteAudio;
+                updateButtons(); // 更新按钮状态
+                
+                // 额外的调试信息
+                setTimeout(() => {
+                    log(`音频状态检查: paused=${remoteAudio.paused}, muted=${remoteAudio.muted}, volume=${remoteAudio.volume}`, 'info');
+                    const stream = remoteAudio.srcObject;
+                    if (stream) {
+                        const tracks = stream.getAudioTracks();
+                        log(`音频轨道数量: ${tracks.length}`, 'info');
+                        tracks.forEach((track, index) => {
+                            log(`轨道${index}: enabled=${track.enabled}, muted=${track.muted}, readyState=${track.readyState}`, 'info');
+                        });
+                    }
+                }, 1000);
             };
             
             return peerConnection;

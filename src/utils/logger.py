@@ -36,6 +36,12 @@ def setup_logging(level=logging.INFO):
     root_logger.addHandler(console_handler)
     root_logger.addHandler(file_handler)
     
+    # 屏蔽第三方库的DEBUG日志以减少噪音
+    logging.getLogger('websockets').setLevel(logging.WARNING)
+    logging.getLogger('aiortc').setLevel(logging.WARNING)
+    logging.getLogger('aioice').setLevel(logging.WARNING)
+    logging.getLogger('av').setLevel(logging.WARNING)
+    
     # 创建或更新符号链接指向最新的日志文件
     try:
         # 如果符号链接已存在，先删除
