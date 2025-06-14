@@ -93,8 +93,8 @@ class DialogSession:
         self.is_session_finished = False
 
         signal.signal(signal.SIGINT, self._keyboard_signal)
-        # 初始化音频队列和输出流
-        self.audio_queue = queue.Queue()
+        # 初始化音频队列和输出流 - 限制队列大小防止延迟累积
+        self.audio_queue = queue.Queue(maxsize=50)
         self.output_stream = self.audio_device.open_output_stream()
         # 启动播放线程
         self.is_recording = True
@@ -103,24 +103,47 @@ class DialogSession:
         self.player_thread.daemon = True
         self.player_thread.start()
         
-        # OGG 流缓存
+        # OGG 流缓存 - 改进的缓冲管理
         self.ogg_buffer = bytearray()
-        self.ogg_pages_count = 0
+        self.last_decoded_size = 0  # 记录上次解码的缓冲区大小
 
     def _audio_player_thread(self):
-        """音频播放线程"""
+        """音频播放线程 - 改进的错误处理"""
+        consecutive_errors = 0
+        max_consecutive_errors = 5
+        
         while self.is_playing:
             try:
                 # 从队列获取音频数据
                 audio_data = self.audio_queue.get(timeout=1.0)
-                if audio_data is not None:
+                if audio_data is not None and len(audio_data) > 0:
                     self.output_stream.write(audio_data)
+                    consecutive_errors = 0  # 重置错误计数
+                    
             except queue.Empty:
                 # 队列为空时等待一小段时间
                 time.sleep(0.1)
+                consecutive_errors = 0
+                
             except Exception as e:
-                print(f"音频播放错误: {e}")
-                time.sleep(0.1)
+                consecutive_errors += 1
+                print(f"音频播放错误 ({consecutive_errors}/{max_consecutive_errors}): {e}")
+                
+                if consecutive_errors >= max_consecutive_errors:
+                    print("连续播放错误过多，尝试重新初始化音频流")
+                    try:
+                        # 重新初始化输出流
+                        if self.output_stream:
+                            self.output_stream.stop_stream()
+                            self.output_stream.close()
+                        self.output_stream = self.audio_device.open_output_stream()
+                        consecutive_errors = 0
+                        print("音频流重新初始化成功")
+                    except Exception as reinit_error:
+                        print(f"音频流重新初始化失败: {reinit_error}")
+                        time.sleep(1.0)
+                else:
+                    time.sleep(0.2)
 
     def _detect_audio_format(self, audio_data: bytes) -> str:
         """检测音频格式"""
@@ -148,61 +171,64 @@ class DialogSession:
         return "pcm"
     
     def _process_ogg_stream(self, ogg_page: bytes) -> bytes:
-        """处理 OGG 流式数据"""
+        """处理 OGG 流式数据 - 增量解码版本"""
         # 将新的 OGG 页面添加到缓冲区
         self.ogg_buffer.extend(ogg_page)
-        self.ogg_pages_count += 1
+        print(f"OGG页面: {len(ogg_page)}字节, 缓冲区总大小: {len(self.ogg_buffer)}字节")
         
-        print(f"累积 OGG 页面: {self.ogg_pages_count}, 缓冲区大小: {len(self.ogg_buffer)} 字节")
+        # 只有当缓冲区有新数据时才尝试解码
+        if len(self.ogg_buffer) <= self.last_decoded_size:
+            return b''
         
-        # 动态调整阈值：从3个页面开始尝试，最多等到8个页面
-        min_pages = 3
-        max_pages = 8
-        
-        if self.ogg_pages_count >= min_pages:
-            for attempt_pages in range(min_pages, min(self.ogg_pages_count + 1, max_pages + 1)):
-                try:
-                    # 尝试解码整个缓冲区
-                    audio = AudioSegment.from_file(io.BytesIO(bytes(self.ogg_buffer)), format="ogg")
-                    
-                    # 转换为目标格式
-                    audio = audio.set_frame_rate(self.output_config.sample_rate)
-                    audio = audio.set_channels(self.output_config.channels)
-                    
-                    # 根据输出配置设置样本格式 - 先尝试使用 int16 避免转换问题
-                    audio = audio.set_sample_width(2)  # int16 = 2 bytes
-                    pcm_data = audio.raw_data
-                    
-                    print(f"原始解码信息:")
-                    print(f"- 采样率: {audio.frame_rate} Hz")
-                    print(f"- 声道数: {audio.channels}")
-                    print(f"- 样本宽度: {audio.sample_width} bytes")
-                    print(f"- 数据长度: {len(pcm_data)} bytes")
-                    
-                    # 暂时使用 int16 格式，避免 float32 转换问题
-                    # TODO: 如果需要 float32，稍后再优化转换
-                    print(f"成功解码 OGG 流: {len(pcm_data)} 字节 PCM 数据")
-                    
-                    # 清空缓冲区，重新开始
-                    self.ogg_buffer.clear()
-                    self.ogg_pages_count = 0
-                    
-                    return pcm_data
-                    
-                except Exception as e:
-                    # 继续尝试更多页面
-                    continue
+        # 尝试解码完整的音频流
+        try:
+            audio = AudioSegment.from_file(io.BytesIO(bytes(self.ogg_buffer)), format="ogg")
             
-            # 所有尝试都失败了
-            print(f"OGG 流解码失败，尝试了 {min_pages}-{min(self.ogg_pages_count, max_pages)} 个页面")
+            # 转换为目标格式
+            audio = audio.set_frame_rate(self.output_config.sample_rate)
+            audio = audio.set_channels(self.output_config.channels)
+            audio = audio.set_sample_width(2)  # int16 = 2 bytes
             
-            # 如果页面太多或缓冲区太大，重置
-            if self.ogg_pages_count >= max_pages or len(self.ogg_buffer) > 50000:
-                print("重置 OGG 缓冲区")
+            full_pcm_data = audio.raw_data
+            
+            if len(full_pcm_data) > 0:
+                # 计算新增的PCM数据
+                if self.last_decoded_size > 0:
+                    # 根据缓冲区大小比例计算已解码部分
+                    decoded_ratio = self.last_decoded_size / len(self.ogg_buffer)
+                    already_decoded_pcm_size = int(len(full_pcm_data) * decoded_ratio)
+                    new_pcm_data = full_pcm_data[already_decoded_pcm_size:]
+                else:
+                    new_pcm_data = full_pcm_data
+                
+                # 更新已解码大小
+                self.last_decoded_size = len(self.ogg_buffer)
+                
+                if len(new_pcm_data) > 0:
+                    print(f"增量解码 {len(new_pcm_data)} 字节新PCM数据")
+                    return new_pcm_data
+                
+        except Exception as e:
+            # 解码失败，等待更多数据
+            pass
+        
+        # 缓冲区管理：如果过大则保留最近的有效OGG数据
+        max_buffer_size = 200000  # 200KB
+        if len(self.ogg_buffer) > max_buffer_size:
+            # 寻找最后一个完整的OGG页面边界
+            last_ogg_start = self.ogg_buffer.rfind(b'OggS')
+            if last_ogg_start > 0:
+                # 从最后一个OGG页面开始保留
+                self.ogg_buffer = self.ogg_buffer[last_ogg_start:]
+                self.last_decoded_size = 0  # 重置解码计数
+                print(f"缓冲区过大，从最后OGG页面保留 {len(self.ogg_buffer)} 字节")
+            else:
+                # 清空缓冲区重新开始
                 self.ogg_buffer.clear()
-                self.ogg_pages_count = 0
+                self.last_decoded_size = 0
+                print("缓冲区过大且无有效OGG页面，重置缓冲区")
         
-        # 还没有足够的数据进行解码
+        # 返回空数据，等待更多OGG页面
         return b''
     
     def _convert_ogg_to_pcm(self, ogg_data: bytes) -> bytes:
@@ -222,6 +248,9 @@ class DialogSession:
         if response['message_type'] == 'SERVER_ACK' and isinstance(response.get('payload_msg'), bytes):
             audio_data = response['payload_msg']
             
+            if len(audio_data) == 0:
+                return
+            
             # 调试：分析音频数据
             self._debug_audio_data(audio_data)
             
@@ -230,21 +259,33 @@ class DialogSession:
             
             # 如果是 OGG 格式，处理流式数据
             if audio_format == "ogg":
-                audio_data = self._convert_ogg_to_pcm(audio_data)
-                if len(audio_data) == 0:
-                    return  # 等待更多数据
-            
-            if len(audio_data) > 0:
-                self.audio_queue.put(audio_data)
+                processed_audio = self._convert_ogg_to_pcm(audio_data)
+                if len(processed_audio) > 0:
+                    # 将处理后的PCM数据加入播放队列
+                    try:
+                        self.audio_queue.put(processed_audio, timeout=0.1)
+                    except queue.Full:
+                        print("音频队列已满，跳过此音频片段")
+            else:
+                # PCM格式直接播放
+                try:
+                    self.audio_queue.put(audio_data, timeout=0.1)
+                except queue.Full:
+                    print("音频队列已满，跳过此音频片段")
         elif response['message_type'] == 'SERVER_FULL_RESPONSE':
             print(f"服务器响应: {response}")
             if response['event'] == 450:
                 print(f"清空缓存音频: {response['session_id']}")
+                # 清空音频队列
                 while not self.audio_queue.empty():
                     try:
                         self.audio_queue.get_nowait()
                     except queue.Empty:
                         continue
+                # 清空OGG缓冲区，准备下一轮对话
+                self.ogg_buffer.clear()
+                self.last_decoded_size = 0
+                print("已清空OGG缓冲区")
         elif response['message_type'] == 'SERVER_ERROR':
             print(f"服务器错误: {response['payload_msg']}")
             raise Exception("服务器错误")
