@@ -1,47 +1,17 @@
 import asyncio
-import io
 import queue
 import signal
 import threading
 import time
 import uuid
-from enum import IntEnum
 from typing import Dict, Any
 
-import numpy as np
-from pydub import AudioSegment
-
-
-class ServerEvent(IntEnum):
-    """服务端事件类型枚举"""
-    # Connect类事件
-    CONNECTION_STARTED = 50
-    CONNECTION_FAILED = 51
-    CONNECTION_FINISHED = 52
-    
-    # Session类事件
-    SESSION_STARTED = 150
-    SESSION_FINISHED = 152
-    SESSION_FAILED = 153
-    
-    # TTS类事件
-    TTS_SENTENCE_START = 350
-    TTS_SENTENCE_END = 351
-    TTS_RESPONSE = 352
-    TTS_ENDED = 359
-    
-    # ASR类事件
-    ASR_INFO = 450
-    ASR_RESPONSE = 451
-    ASR_ENDED = 459
-    
-    # Chat类事件
-    CHAT_RESPONSE = 550
-    CHAT_ENDED = 559
-
 from src import config
-from src.audio_manager import set_debug_mode, logger, AudioDeviceManager, AudioConfig, save_pcm_to_wav
-from src.realtime_dialog_client import RealtimeDialogClient
+from src.audio_converter import OggToPcmConverter, detect_audio_format, debug_audio_data
+from src.audio_manager import AudioDeviceManager, AudioConfig, save_pcm_to_wav
+from src.logger import logger, set_debug_mode
+from src.protocol import ServerEvent
+from src.dialog_client import RealtimeDialogClient
 
 
 class DialogSession:
@@ -63,14 +33,10 @@ class DialogSession:
         if tts_config:
             tts_audio_config = tts_config.get("audio_config")
             if tts_audio_config:
-                output_audio_config = tts_audio_config
-                # output_audio_config['channels'] = tts_audio_config.pop("channel")
-                # output_audio_config['chunk'] = 3200
+                output_audio_config = tts_audio_config  # output_audio_config['channels'] = tts_audio_config.pop("channel")  # output_audio_config['chunk'] = 3200
 
-        self.audio_device = AudioDeviceManager(
-            AudioConfig(**config.input_audio_config),
-            AudioConfig(**output_audio_config)
-        )
+        self.audio_device = AudioDeviceManager(AudioConfig(**config.input_audio_config),
+            AudioConfig(**output_audio_config))
         self.output_config = AudioConfig(**config.ogg_output_audio_config)
 
         self.is_running = True
@@ -87,21 +53,17 @@ class DialogSession:
         self.player_thread.daemon = True
         self.player_thread.start()
 
-        # OGG 流缓存 - 改进的缓冲管理
-        self.ogg_buffer = bytearray()
-        self.last_pcm_size = 0  # 记录上次解码的PCM数据大小
+        # 音频转换器
+        self.ogg_converter = OggToPcmConverter(sample_rate=self.output_config.sample_rate,
+            channels=self.output_config.channels)
 
         # 统计信息
-        self.stats = {
-            'ogg_pages_received': 0,
-            'pcm_bytes_decoded': 0,
-            'audio_queue_overflows': 0,
-            'decoding_errors': 0
+        self.stats = {'audio_queue_overflows': 0
         }
 
         # 实时字幕显示
         self.current_user_text = ""  # 当前用户说话内容
-        self.current_ai_text = ""    # 当前AI回复内容
+        self.current_ai_text = ""  # 当前AI回复内容
         self.conversation_history = []  # 对话历史
         self.subtitle_lock = threading.Lock()  # 字幕显示线程锁
         self.console_lines = []  # 控制台显示缓存
@@ -148,163 +110,15 @@ class DialogSession:
                 else:
                     time.sleep(0.2)
 
-    def _detect_audio_format(self, audio_data: bytes) -> str:
-
-        """检测音频格式"""
-        if len(audio_data) < 4:
-            return "pcm"
-
-        # 检查 OGG 文件头 (4F 67 67 53)
-        if audio_data[:4] == b'OggS':
-            return "ogg"
-
-        # 检查 WebM 文件头 (1A 45 DF A3)
-        if audio_data[:4] == b'\x1A\x45\xDF\xA3':
-            return "ogg"  # WebM 也用 OGG 解码器处理
-
-        # 检查 Opus 在 OGG 中的特征
-        if b'OpusHead' in audio_data[:64]:
-            return "ogg"
-
-        # 根据配置判断：如果没有配置 TTS，很可能是压缩格式
-        if not hasattr(config, 'start_session_req') or 'tts' not in config.start_session_req:
-            # 没有 TTS 配置时，尝试作为压缩音频处理
-            return "ogg"
-
-        # 默认为 PCM
-        return "pcm"
-
-    def ogg2pcm(self, ogg_page: bytes) -> bytes:
-        """处理 OGG 流式数据 - 改进的增量解码版本"""
-        # 将新的 OGG 页面添加到缓冲区
-        self.ogg_buffer.extend(ogg_page)
-        self.stats['ogg_pages_received'] += 1
-        if len(self.ogg_buffer) % 5000 < len(ogg_page):  # 每5KB输出一次日志
-            logger.debug(f"🔊 接收音频流: {len(self.ogg_buffer)}字节")
-
-        # 尝试解码当前缓冲区的音频流
-        try:
-            audio = AudioSegment.from_file(io.BytesIO(bytes(self.ogg_buffer)), format="ogg")
-
-            # 转换为目标格式
-            audio = audio.set_frame_rate(self.output_config.sample_rate)
-            audio = audio.set_channels(self.output_config.channels)
-            audio = audio.set_sample_width(2)  # int16 = 2 bytes
-
-            full_pcm_data = audio.raw_data
-
-            if len(full_pcm_data) > 0:
-                # 计算新增的PCM数据 - 使用更精确的方法
-                if hasattr(self, 'last_pcm_size') and self.last_pcm_size > 0:
-                    # 直接从上次的PCM数据长度开始截取
-                    if len(full_pcm_data) > self.last_pcm_size:
-                        new_pcm_data = full_pcm_data[self.last_pcm_size:]
-                        # 更新已解码的PCM数据长度
-                        self.last_pcm_size = len(full_pcm_data)
-
-                        if len(new_pcm_data) > 0:
-                            # 验证音频数据质量
-                            validated_data = self._validate_pcm_data(new_pcm_data)
-                            if len(validated_data) > 0:
-                                self.stats['pcm_bytes_decoded'] += len(validated_data)
-                                logger.debug(f"🎵 解码音频: {len(validated_data)}字节")
-                                return validated_data
-                    else:
-                        # 没有新数据
-                        return b''
-                else:
-                    # 第一次解码
-                    self.last_pcm_size = len(full_pcm_data)
-                    # 验证音频数据质量
-                    validated_data = self._validate_pcm_data(full_pcm_data)
-                    if len(validated_data) > 0:
-                        self.stats['pcm_bytes_decoded'] += len(validated_data)
-                        logger.debug(f"🎵 首次解码: {len(validated_data)}字节")
-                        return validated_data
-
-        except Exception as e:
-            # 解码失败，记录统计
-            self.stats['decoding_errors'] += 1
-            # 检查是否是因为缓冲区数据不完整导致的失败
-            if len(self.ogg_buffer) < 1000:  # 如果缓冲区很小，可能需要更多数据
-                logger.debug("等待更多OGG数据进行解码")
-            else:
-                # 缓冲区较大但解码失败，可能是数据损坏
-                logger.debug(f"OGG解码失败，缓冲区大小: {len(self.ogg_buffer)}")
-
-        # 缓冲区管理：如果过大则保留最近的有效OGG数据
-        max_buffer_size = 200000  # 200KB
-        if len(self.ogg_buffer) > max_buffer_size:
-            # 寻找最后一个完整的OGG页面边界
-            last_ogg_start = self.ogg_buffer.rfind(b'OggS')
-            if last_ogg_start > 0:
-                # 从最后一个OGG页面开始保留
-                self.ogg_buffer = self.ogg_buffer[last_ogg_start:]
-                # 重置PCM计数，因为缓冲区被截断了
-                self.last_pcm_size = 0
-                logger.debug(f"OGG缓冲区过大，从最后页面保留 {len(self.ogg_buffer)} 字节")
-            else:
-                # 清空缓冲区重新开始
-                self.ogg_buffer.clear()
-                self.last_pcm_size = 0
-                logger.debug("OGG缓冲区过大且无有效页面，重置缓冲区")
-
-        # 返回空数据，等待更多OGG页面
-        return b''
-
-    def _validate_pcm_data(self, pcm_data: bytes) -> bytes:
-        """验证和过滤PCM数据，防止爆炸嗞音"""
-        if len(pcm_data) == 0:
-            return b''
-
-        # 检查数据长度是否为样本大小的倍数
-        sample_size = 2  # int16 = 2 bytes
-        if len(pcm_data) % sample_size != 0:
-            # 截断到最近的样本边界
-            pcm_data = pcm_data[:len(pcm_data) - (len(pcm_data) % sample_size)]
-
-        if len(pcm_data) < sample_size:
-            return b''
-
-        # 转换为numpy数组进行分析
-        try:
-            audio_array = np.frombuffer(pcm_data, dtype=np.int16)
-
-            # 检查是否有异常大的音量峰值（可能的爆炸音）
-            max_amplitude = np.max(np.abs(audio_array))
-            if max_amplitude > 25000:  # 接近int16最大值32767的阈值
-                logger.debug(f"检测到异常音量峰值: {max_amplitude}，进行音量限制")
-                # 进行音量限制
-                audio_array = np.clip(audio_array, -25000, 25000)
-
-            # 检查是否有大量的零值（可能的静音段）
-            zero_ratio = np.count_nonzero(audio_array == 0) / len(audio_array)
-            if zero_ratio > 0.95:  # 95%以上都是零值
-                logger.debug("检测到大量静音数据，跳过播放")
-                return b''
-
-            # 返回处理后的数据
-            return audio_array.tobytes()
-
-        except Exception as e:
-            logger.error(f"PCM数据验证失败: {e}")
-            return pcm_data  # 验证失败时返回原始数据
-
-    def _debug_audio_data(self, audio_data: bytes) -> None:
-        """调试音频数据格式"""
-        # 简化调试输出，避免过多信息
-        if len(audio_data) >= 4 and audio_data[:4] == b'OggS':
-            logger.debug(f"检测到OGG页面: {len(audio_data)}字节")
-
     def handle_server_response(self, response: Dict[str, Any]) -> None:
         """处理服务器响应"""
         if response == {}:
             return
-        
+
         if response['message_type'] == 'SERVER_ACK':
             # 检查事件类型，特别处理TTSResponse事件(352)的二进制音频数据
             event = response.get('event', 0)
-            
+
             # 检查是否包含音频数据
             if isinstance(response.get('payload_msg'), bytes):
                 audio_data = response['payload_msg']
@@ -315,17 +129,17 @@ class DialogSession:
                 # 特殊处理TTSResponse事件的音频数据
                 if event == ServerEvent.TTS_RESPONSE:
                     logger.debug(f"🎵 收到TTSResponse音频数据: {len(audio_data)}字节")
-                
+
                 # 调试：分析音频数据
-                self._debug_audio_data(audio_data)
+                debug_audio_data(audio_data)
 
                 # 检测音频格式
-                audio_format = self._detect_audio_format(audio_data)
+                audio_format = detect_audio_format(audio_data)
 
                 # logger.info(f"format: {audio_format}")
                 # 如果是 OGG 格式，处理流式数据
                 if audio_format == "ogg":
-                    audio_data = self.ogg2pcm(audio_data)
+                    audio_data = self.ogg_converter.convert(audio_data)
 
                 try:
                     self.audio_queue.put(audio_data, timeout=0.1)
@@ -350,10 +164,10 @@ class DialogSession:
             payload_msg = response.get('payload_msg', {})
 
             # 记录重要服务器事件，过滤调试噪音
-            connection_events = [ServerEvent.CONNECTION_STARTED, ServerEvent.CONNECTION_FAILED, 
-                               ServerEvent.CONNECTION_FINISHED, ServerEvent.SESSION_STARTED, 
-                               ServerEvent.SESSION_FINISHED, ServerEvent.SESSION_FAILED]
-            
+            connection_events = [ServerEvent.CONNECTION_STARTED, ServerEvent.CONNECTION_FAILED,
+                                 ServerEvent.CONNECTION_FINISHED, ServerEvent.SESSION_STARTED,
+                                 ServerEvent.SESSION_FINISHED, ServerEvent.SESSION_FAILED]
+
             if event in connection_events:
                 logger.info(f"📡 {ServerEvent(event).name}")
             else:
@@ -382,8 +196,7 @@ class DialogSession:
             elif event == ServerEvent.TTS_SENTENCE_START:
                 tts_type = payload_msg.get('tts_type', 'default')
                 text = payload_msg.get('text', '')
-                logger.debug(f"🎵 TTS开始: {tts_type} - '{text[:30]}...'")
-                # TTS开始时不清空AI文本，因为CHAT_RESPONSE可能还在继续
+                logger.debug(f"🎵 TTS开始: {tts_type} - '{text[:30]}...'")  # TTS开始时不清空AI文本，因为CHAT_RESPONSE可能还在继续
             elif event == ServerEvent.TTS_SENTENCE_END:
                 logger.debug("🎵 TTS句子结束")
             elif event == ServerEvent.TTS_RESPONSE:
@@ -400,9 +213,8 @@ class DialogSession:
                         self.audio_queue.get_nowait()
                     except queue.Empty:
                         break
-                # 清空OGG缓冲区
-                self.ogg_buffer.clear()
-                self.last_pcm_size = 0
+                # 重置OGG转换器
+                self.ogg_converter.reset()
                 logger.debug("已清空音频缓冲区 (用户打断)")
                 # 开始用户说话状态
                 self.is_user_speaking = True
@@ -433,7 +245,9 @@ class DialogSession:
                         self.last_displayed_ai_text = ""  # 重置显示记录
                     self.current_ai_text += content
                     # 限制更新频率，避免过度刷新
-                    if len(self.current_ai_text) - len(self.last_displayed_ai_text) >= 5 or content.endswith(('。', '！', '？', '，', '、')):
+                    if len(self.current_ai_text) - len(self.last_displayed_ai_text) >= 5 or content.endswith(('。', '！',
+                                                                                                              '？', '，',
+                                                                                                              '、')):
                         self._update_console_display()
                     logger.debug(f"🤖 AI文本回复: '{content}' → 总计: '{self.current_ai_text[:50]}...'")
             elif event == ServerEvent.CHAT_ENDED:
@@ -481,18 +295,20 @@ class DialogSession:
                 print(f"🤖 AI: {self.current_ai_text}")
                 self.last_displayed_ai_text = self.current_ai_text  # 记录已显示的文本
                 return
-            
+
             # 实时更新逻辑
             if self.is_user_speaking and self.current_user_text:
                 # 用户正在说话，实时更新
                 self._clear_current_line()
-                display_text = self.current_user_text[:150] + "..." if len(self.current_user_text) > 150 else self.current_user_text
+                display_text = self.current_user_text[
+                               :150] + "..." if len(self.current_user_text) > 150 else self.current_user_text
                 print(f"👤 用户: {display_text}", end="", flush=True)
             elif self.is_ai_responding and self.current_ai_text:
                 # AI正在回复，实时更新 - 只有当文本真正改变时才更新
                 if self.current_ai_text != self.last_displayed_ai_text:
                     self._clear_current_line()
-                    display_text = self.current_ai_text[:150] + "..." if len(self.current_ai_text) > 150 else self.current_ai_text
+                    display_text = self.current_ai_text[
+                                   :150] + "..." if len(self.current_ai_text) > 150 else self.current_ai_text
                     print(f"🤖 AI: {display_text}", end="", flush=True)
                     self.last_displayed_ai_text = self.current_ai_text
             elif not self.is_user_speaking and not self.is_ai_responding:
@@ -508,7 +324,7 @@ class DialogSession:
                 if self.current_ai_text and self.current_ai_text != self.last_displayed_ai_text:
                     self._clear_current_line()
                     print(f"🤖 AI: {self.current_ai_text}")
-                
+
                 # 保存到对话历史
                 self.conversation_history.append({
                     'user': self.current_user_text,
@@ -527,7 +343,7 @@ class DialogSession:
                 print(f"\n{'─' * 50}")
                 print(f"📊 第{len(self.conversation_history)}轮对话 | ⏰ {time.strftime('%H:%M:%S')}")
                 print(f"{'─' * 50}\n")
-                
+
                 # 显示等待状态
                 print("🎙️ 请说话...", end="", flush=True)
 
@@ -535,13 +351,17 @@ class DialogSession:
         """输出统计信息"""
         if self.stats_logged:
             return  # 避免重复输出
-        
+
         self.stats_logged = True
         logger.info("=== 音频处理统计 ===")
-        logger.info(f"接收OGG页面数: {self.stats['ogg_pages_received']}")
-        logger.info(f"解码PCM字节数: {self.stats['pcm_bytes_decoded']}")
+
+        # 获取OGG转换器统计信息
+        converter_stats = self.ogg_converter.get_stats()
+        logger.info(f"接收OGG页面数: {converter_stats['ogg_pages_received']}")
+        logger.info(f"解码PCM字节数: {converter_stats['pcm_bytes_decoded']}")
+        logger.info(f"解码错误次数: {converter_stats['decoding_errors']}")
+
         logger.info(f"队列溢出次数: {self.stats['audio_queue_overflows']}")
-        logger.info(f"解码错误次数: {self.stats['decoding_errors']}")
         logger.info(f"对话轮次: {len(self.conversation_history)}")
         logger.info("==================")
 
@@ -557,7 +377,8 @@ class DialogSession:
             while True:
                 response = await self.client.receive_server_response()
                 self.handle_server_response(response)
-                if 'event' in response and (response['event'] == ServerEvent.SESSION_FINISHED or response['event'] == ServerEvent.SESSION_FAILED):
+                if 'event' in response and (response['event'] == ServerEvent.SESSION_FINISHED or response[
+                    'event'] == ServerEvent.SESSION_FAILED):
                     logger.info(f"接收到会话结束事件: {ServerEvent(response['event']).name}({response['event']})")
                     self.is_session_finished = True
                     break
@@ -590,17 +411,17 @@ class DialogSession:
         try:
             # 建立WebSocket连接
             await self.client.connect()
-            
+
             # 启动接收循环
             receive_task = asyncio.create_task(self.receive_loop())
-            
+
             # 发送连接和会话初始化请求
             await self.client.start_connection()
             await self.client.start_session()
-            
+
             # 等待一下确保连接事件被处理
             await asyncio.sleep(0.1)
-            
+
             # 启动麦克风输入
             asyncio.create_task(self.process_microphone_input())
 

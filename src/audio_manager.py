@@ -5,38 +5,8 @@ import pyaudio
 from dataclasses import dataclass
 
 from . import config
+from .logger import setup_logging, logger
 
-
-# 配置日志
-def setup_logging(level=logging.INFO):
-    """配置日志系统"""
-    # Python 3.7兼容性：移除已有的handlers
-    for handler in logging.root.handlers[:]:
-        logging.root.removeHandler(handler)
-    
-    logging.basicConfig(
-        level=level,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.StreamHandler(),
-        ]
-    )
-
-# 设置默认日志级别
-setup_logging(logging.INFO)
-
-# 创建音频管理器专用日志器
-logger = logging.getLogger('AudioManager')
-
-# 为不同模块设置不同的日志级别
-def set_debug_mode(debug=False):
-    """设置调试模式"""
-    if debug:
-        logger.setLevel(logging.DEBUG)
-        setup_logging(logging.DEBUG)
-    else:
-        logger.setLevel(logging.INFO)
-        setup_logging(logging.INFO)
 
 
 @dataclass

@@ -3,7 +3,7 @@ import uuid
 
 import pyaudio
 
-from src.audio_manager import logger
+from src.logger import logger
 
 # 配置信息
 ws_connect_config = {

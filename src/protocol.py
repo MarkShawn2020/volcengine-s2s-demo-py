@@ -1,5 +1,6 @@
 import gzip
 import json
+from enum import IntEnum
 
 PROTOCOL_VERSION = 0b0001
 DEFAULT_HEADER_SIZE = 0b0001
@@ -133,3 +134,31 @@ def parse_response(res):
     result['payload_msg'] = payload_msg
     result['payload_size'] = payload_size
     return result
+
+
+class ServerEvent(IntEnum):
+    """服务端事件类型枚举"""
+    # Connect类事件
+    CONNECTION_STARTED = 50
+    CONNECTION_FAILED = 51
+    CONNECTION_FINISHED = 52
+
+    # Session类事件
+    SESSION_STARTED = 150
+    SESSION_FINISHED = 152
+    SESSION_FAILED = 153
+
+    # TTS类事件
+    TTS_SENTENCE_START = 350
+    TTS_SENTENCE_END = 351
+    TTS_RESPONSE = 352
+    TTS_ENDED = 359
+
+    # ASR类事件
+    ASR_INFO = 450
+    ASR_RESPONSE = 451
+    ASR_ENDED = 459
+
+    # Chat类事件
+    CHAT_RESPONSE = 550
+    CHAT_ENDED = 559
