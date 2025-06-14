@@ -21,7 +21,7 @@ class RealtimeDialogClient:
         print(f"url: {self.config['base_url']}, headers: {self.config['headers']}")
         self.ws = await websockets.connect(
             self.config['base_url'],
-            extra_headers=self.config['headers'],
+            additional_headers=self.config['headers'],
             ping_interval=None
         )
         self.logid = self.ws.response_headers.get("X-Tt-Logid")

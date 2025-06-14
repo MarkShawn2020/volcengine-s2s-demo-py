@@ -1,0 +1,21 @@
+[project]
+name = "volcengine-s2s-demo-py"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "markshawn2020",email = "shawninjuly@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pyaudio (>=0.2.14,<0.3.0)",
+    "websockets (>=15.0.1,<16.0.0)",
+    "typing-extensions (>=4.14.0,<5.0.0)",
+    "pydub (>=0.25.1,<0.26.0)",
+    "numpy (>=2.3.0,<3.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

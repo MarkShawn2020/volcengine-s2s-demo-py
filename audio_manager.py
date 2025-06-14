@@ -151,6 +151,12 @@ class DialogSession:
             'audio_queue_overflows': 0,
             'decoding_errors': 0
         }
+        
+        # 实时字幕显示
+        self.current_user_text = ""  # 当前用户说话内容
+        self.current_ai_text = ""    # 当前AI回复内容
+        self.conversation_history = []  # 对话历史
+        self.subtitle_lock = threading.Lock()  # 字幕显示线程锁
 
     def _audio_player_thread(self):
         """音频播放线程 - 改进的错误处理"""
@@ -345,39 +351,53 @@ class DialogSession:
         if response == {}:
             return
         """处理服务器响应"""
-        if response['message_type'] == 'SERVER_ACK' and isinstance(response.get('payload_msg'), bytes):
-            audio_data = response['payload_msg']
-            
-            if len(audio_data) == 0:
-                return
-            
-            # 调试：分析音频数据
-            self._debug_audio_data(audio_data)
-            
-            # 检测音频格式
-            audio_format = self._detect_audio_format(audio_data)
-            
-            # 如果是 OGG 格式，处理流式数据
-            if audio_format == "ogg":
-                processed_audio = self._convert_ogg_to_pcm(audio_data)
-                if len(processed_audio) > 0:
-                    # 将处理后的PCM数据加入播放队列
+        if response['message_type'] == 'SERVER_ACK':
+            # 检查是否包含音频数据
+            if isinstance(response.get('payload_msg'), bytes):
+                audio_data = response['payload_msg']
+                
+                if len(audio_data) == 0:
+                    return
+                
+                # 调试：分析音频数据
+                self._debug_audio_data(audio_data)
+                
+                # 检测音频格式
+                audio_format = self._detect_audio_format(audio_data)
+                
+                # 如果是 OGG 格式，处理流式数据
+                if audio_format == "ogg":
+                    processed_audio = self._convert_ogg_to_pcm(audio_data)
+                    if len(processed_audio) > 0:
+                        # 将处理后的PCM数据加入播放队列
+                        try:
+                            self.audio_queue.put(processed_audio, timeout=0.1)
+                        except queue.Full:
+                            self.stats['audio_queue_overflows'] += 1
+                            if self.stats['audio_queue_overflows'] % 10 == 1:  # 每10次溢出才输出一次警告
+                                logger.warning(f"⚠️ 音频队列溢出 (第{self.stats['audio_queue_overflows']}次)")
+                else:
+                    # PCM格式直接播放
                     try:
-                        self.audio_queue.put(processed_audio, timeout=0.1)
+                        self.audio_queue.put(audio_data, timeout=0.1)
                     except queue.Full:
                         self.stats['audio_queue_overflows'] += 1
                         if self.stats['audio_queue_overflows'] % 10 == 1:  # 每10次溢出才输出一次警告
                             logger.warning(f"⚠️ 音频队列溢出 (第{self.stats['audio_queue_overflows']}次)")
-            else:
-                # PCM格式直接播放
-                try:
-                    self.audio_queue.put(audio_data, timeout=0.1)
-                except queue.Full:
-                    self.stats['audio_queue_overflows'] += 1
-                    if self.stats['audio_queue_overflows'] % 10 == 1:  # 每10次溢出才输出一次警告
-                        logger.warning(f"⚠️ 音频队列溢出 (第{self.stats['audio_queue_overflows']}次)")
+            
+            # 检查是否包含AI文本回复
+            elif isinstance(response.get('payload_msg'), dict):
+                ai_content = response.get('payload_msg', {}).get('content', '')
+                if ai_content:
+                    # AI实时文本回复
+                    logger.debug(f"🤖 AI文本回复: '{ai_content}'")
+                    self._display_subtitle(ai_text=ai_content, is_final=False)
         elif response['message_type'] == 'SERVER_FULL_RESPONSE':
             event = response.get('event', 'unknown')
+            payload_msg = response.get('payload_msg', {})
+            
+            # 记录服务器事件（简化版）
+            logger.debug(f"📡 服务器事件: {event}")
             
             # 只记录重要事件，过滤噪音
             if event == 450:
@@ -393,20 +413,45 @@ class DialogSession:
                 self.last_pcm_size = 0
                 logger.debug("已清空音频缓冲区")
             elif event == 350:
-                logger.info("🎤 开始语音识别")
+                logger.debug("🎤 开始语音识别")
+                print("🎤 正在识别...", end="", flush=True)  # 显示识别状态
+                # 清空上一轮的用户文本
+                self.current_user_text = ""
             elif event == 351:
-                logger.info("🎤 语音识别结束")
+                logger.debug("🎤 语音识别结束")
             elif event == 550:
-                # ASR实时结果，只在debug模式下显示
+                # ASR实时结果 - 显示用户实时语音识别（逐字）
                 content = response.get('payload_msg', {}).get('content', '')
-                if content:
-                    logger.debug(f"📝 识别文本: {content}")
+                if content and content.strip():
+                    # 逐字累积识别结果
+                    if content not in self.current_user_text:
+                        self.current_user_text += content
+                        logger.debug(f"👤 用户语音逐字: '{content}' → '{self.current_user_text}'")
+                    self._display_subtitle(user_text=self.current_user_text, is_final=False)
             elif event == 559:
-                logger.info("📝 语音识别完成")
+                logger.debug("📝 语音识别完成")
+                # 确认用户文本最终结果
+                if self.current_user_text and self.current_user_text.strip():
+                    self._display_subtitle(user_text=self.current_user_text, is_final=True)
+                else:
+                    logger.debug("语音识别完成但内容为空")
             elif event == 359:
-                logger.info("🤖 AI响应完成")
-            elif event in [451, 459]:
-                # 音频数据事件，在debug模式下显示
+                logger.debug("🤖 AI响应完成")
+                # AI响应完成，结束这轮对话
+                if self.current_ai_text:
+                    self._display_subtitle(ai_text=self.current_ai_text, is_final=True)
+                self._finalize_conversation_turn()
+            elif event == 451:
+                # ASR识别结果事件 - 这是用户语音识别的主要结果
+                results = payload_msg.get('results', [])
+                if results and len(results) > 0:
+                    text = results[0].get('text', '')
+                    if text and text.strip():
+                        self.current_user_text = text
+                        self._display_subtitle(user_text=self.current_user_text, is_final=False)
+                        logger.debug(f"👤 用户语音识别: '{text}'")
+            elif event == 459:
+                # 其他音频事件
                 logger.debug(f"🔊 音频事件: {event}")
             elif event in [50, 150]:
                 # 连接和会话事件
@@ -418,6 +463,71 @@ class DialogSession:
             logger.error(f"服务器错误: {response['payload_msg']}")
             raise Exception("服务器错误")
 
+    def _display_welcome_screen(self):
+        """显示欢迎界面"""
+        print("\n" + "=" * 80)
+        print("🎙️ 🤖  实时语音对话系统  🤖 🎙️")
+        print("=" * 80)
+        print("💡 使用说明:")
+        print("   • 🎤 直接说话，系统会实时识别您的语音")
+        print("   • 🤖 AI助手会语音回复，同时显示文字")
+        print("   • 📝 所有对话内容都会实时显示在屏幕上")
+        print("   • ⚡ 支持中断对话，按 Ctrl+C 退出")
+        print("=" * 80)
+        print("🚀 系统已就绪，请开始说话...")
+        print("=" * 80 + "\n")
+
+    def _clear_line(self):
+        """清除当前行"""
+        print("\r" + " " * 120 + "\r", end="", flush=True)
+    
+    def _display_subtitle(self, user_text: str = None, ai_text: str = None, is_final: bool = False):
+        """显示实时字幕"""
+        with self.subtitle_lock:
+            if user_text is not None:
+                self.current_user_text = user_text
+            if ai_text is not None:
+                self.current_ai_text = ai_text
+            
+            # 清除当前行
+            self._clear_line()
+            
+            # 显示字幕
+            if self.current_user_text:
+                if is_final:
+                    print(f"💬 【用户】{self.current_user_text}")
+                else:
+                    # 限制显示长度，避免换行
+                    display_text = self.current_user_text[:80] + "..." if len(self.current_user_text) > 80 else self.current_user_text
+                    print(f"🎤 【用户】{display_text}", end="", flush=True)
+            elif self.current_ai_text:
+                if is_final:
+                    print(f"🤖 【AI助手】{self.current_ai_text}")
+                else:
+                    # 限制显示长度，避免换行  
+                    display_text = self.current_ai_text[:80] + "..." if len(self.current_ai_text) > 80 else self.current_ai_text
+                    print(f"🤖 【AI助手】{display_text}", end="", flush=True)
+    
+    def _finalize_conversation_turn(self):
+        """完成一轮对话"""
+        with self.subtitle_lock:
+            if self.current_user_text or self.current_ai_text:
+                # 保存到对话历史
+                self.conversation_history.append({
+                    'user': self.current_user_text,
+                    'ai': self.current_ai_text,
+                    'timestamp': time.time()
+                })
+                
+                # 清空当前内容
+                self.current_user_text = ""
+                self.current_ai_text = ""
+                
+                # 显示简洁的分隔线
+                print(f"\n{'─' * 50}")
+                print(f"📊 第{len(self.conversation_history)}轮对话 | ⏰ {time.strftime('%H:%M:%S')}")
+                print(f"{'─' * 50}")
+
     def log_stats(self):
         """输出统计信息"""
         logger.info("=== 音频处理统计 ===")
@@ -425,6 +535,7 @@ class DialogSession:
         logger.info(f"解码PCM字节数: {self.stats['pcm_bytes_decoded']}")
         logger.info(f"队列溢出次数: {self.stats['audio_queue_overflows']}")
         logger.info(f"解码错误次数: {self.stats['decoding_errors']}")
+        logger.info(f"对话轮次: {len(self.conversation_history)}")
         logger.info("==================")
 
     def _keyboard_signal(self, sig, frame):
@@ -452,6 +563,9 @@ class DialogSession:
         """处理麦克风输入"""
         stream = self.audio_device.open_input_stream()
         logger.info("🎙️ 麦克风已就绪，开始监听...")
+        
+        # 显示欢迎界面
+        self._display_welcome_screen()
 
         while self.is_recording:
             try:
