@@ -54,3 +54,23 @@ ENABLE_OOG_AUDIO_FROM_SERVER = os.getenv("ENABLE_OGG", False)
 logger.info(f"OGG Enabled: {ENABLE_OOG_AUDIO_FROM_SERVER}")
 if ENABLE_OOG_AUDIO_FROM_SERVER:
     start_session_req.pop("tts")
+
+# Socket模式配置
+ENABLE_SOCKET_MODE = os.getenv("ENABLE_SOCKET_MODE", False)
+socket_config = {
+    "host": os.getenv("SOCKET_HOST", "localhost"),
+    "port": int(os.getenv("SOCKET_PORT", "8888")),
+}
+logger.info(f"Socket Mode Enabled: {ENABLE_SOCKET_MODE}")
+if ENABLE_SOCKET_MODE:
+    logger.info(f"Socket Config: {socket_config['host']}:{socket_config['port']}")
+
+# WebRTC模式配置
+ENABLE_WEBRTC_MODE = os.getenv("ENABLE_WEBRTC_MODE", False)
+webrtc_config = {
+    "signaling_host": os.getenv("WEBRTC_SIGNALING_HOST", "localhost"),
+    "signaling_port": int(os.getenv("WEBRTC_SIGNALING_PORT", "8765")),
+}
+logger.info(f"WebRTC Mode Enabled: {ENABLE_WEBRTC_MODE}")
+if ENABLE_WEBRTC_MODE:
+    logger.info(f"WebRTC Config: {webrtc_config['signaling_host']}:{webrtc_config['signaling_port']}")

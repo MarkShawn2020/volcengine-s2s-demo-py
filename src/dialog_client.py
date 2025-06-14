@@ -5,6 +5,7 @@ import json
 from typing import Dict, Any
 
 from . import protocol, config
+from .logger import logger
 
 
 class RealtimeDialogClient:
@@ -16,14 +17,14 @@ class RealtimeDialogClient:
 
     async def connect(self) -> None:
         """建立WebSocket连接"""
-        print(f"url: {self.config['base_url']}, headers: {self.config['headers']}")
+        logger.info(f"url: {self.config['base_url']}, headers: {self.config['headers']}")
         self.ws = await websockets.connect(
             self.config['base_url'],
             additional_headers=self.config['headers'],
             ping_interval=None
         )
         self.logid = self.ws.response_headers.get("X-Tt-Logid") if hasattr(self.ws, 'response_headers') else None
-        print(f"dialog server response logid: {self.logid}")
+        logger.info(f"dialog server response logid: {self.logid}")
 
     async def start_connection(self) -> None:
         """发送StartConnection请求"""
@@ -34,7 +35,7 @@ class RealtimeDialogClient:
         start_connection_request.extend((len(payload_bytes)).to_bytes(4, 'big'))
         start_connection_request.extend(payload_bytes)
         await self.ws.send(start_connection_request)
-        print("StartConnection request sent")
+        logger.info("StartConnection request sent")
 
     async def start_session(self) -> None:
         """发送StartSession请求"""
@@ -48,7 +49,7 @@ class RealtimeDialogClient:
         start_session_request.extend((len(payload_bytes)).to_bytes(4, 'big'))
         start_session_request.extend(payload_bytes)
         await self.ws.send(start_session_request)
-        print("StartSession request sent")
+        logger.info("StartSession request sent")
 
     async def say_hello(self, content: str = "你好") -> None:
         """发送SayHello事件"""
@@ -63,19 +64,27 @@ class RealtimeDialogClient:
         say_hello_request.extend((len(payload_bytes)).to_bytes(4, 'big'))
         say_hello_request.extend(payload_bytes)
         await self.ws.send(say_hello_request)
-        print(f"SayHello sent: {content}")
+        logger.info(f"SayHello sent: {content}")
 
     async def task_request(self, audio: bytes) -> None:
-        task_request = bytearray(
-            protocol.generate_header(message_type=protocol.CLIENT_AUDIO_ONLY_REQUEST,
-                                     serial_method=protocol.NO_SERIALIZATION))
-        task_request.extend(int(200).to_bytes(4, 'big'))
-        task_request.extend((len(self.session_id)).to_bytes(4, 'big'))
-        task_request.extend(str.encode(self.session_id))
-        payload_bytes = gzip.compress(audio)
-        task_request.extend((len(payload_bytes)).to_bytes(4, 'big'))  # payload size(4 bytes)
-        task_request.extend(payload_bytes)
-        await self.ws.send(task_request)
+        try:
+            if not self.ws or (hasattr(self.ws, 'closed') and self.ws.closed):
+                logger.warning("WebSocket连接不可用，跳过音频请求")
+                return
+                
+            task_request = bytearray(
+                protocol.generate_header(message_type=protocol.CLIENT_AUDIO_ONLY_REQUEST,
+                                         serial_method=protocol.NO_SERIALIZATION))
+            task_request.extend(int(200).to_bytes(4, 'big'))
+            task_request.extend((len(self.session_id)).to_bytes(4, 'big'))
+            task_request.extend(str.encode(self.session_id))
+            payload_bytes = gzip.compress(audio)
+            task_request.extend((len(payload_bytes)).to_bytes(4, 'big'))  # payload size(4 bytes)
+            task_request.extend(payload_bytes)
+            await self.ws.send(task_request)
+        except Exception as e:
+            logger.debug(f"发送音频请求失败: {e}")
+            # 不抛出异常，避免中断WebRTC处理
 
     async def receive_server_response(self) -> Dict[str, Any]:
         try:
@@ -107,10 +116,10 @@ class RealtimeDialogClient:
         finish_connection_request.extend(payload_bytes)
         await self.ws.send(finish_connection_request)
         response = await self.ws.recv()
-        print(f"FinishConnection response: {protocol.parse_response(response)}")
+        logger.info(f"FinishConnection response: {protocol.parse_response(response)}")
 
     async def close(self) -> None:
         """关闭WebSocket连接"""
         if self.ws:
-            print(f"Closing WebSocket connection...")
+            logger.info(f"Closing WebSocket connection...")
             await self.ws.close()

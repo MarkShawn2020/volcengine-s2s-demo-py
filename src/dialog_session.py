@@ -9,6 +9,8 @@ from typing import Dict, Any
 from src import config
 from src.audio_converter import OggToPcmConverter, detect_audio_format, debug_audio_data
 from src.audio_manager import AudioDeviceManager, AudioConfig, save_pcm_to_wav
+from src.socket_manager import SocketAudioManager, SocketConfig
+from src.webrtc_manager import WebRTCManager
 from src.logger import logger, set_debug_mode
 from src.protocol import ServerEvent
 from src.dialog_client import RealtimeDialogClient
@@ -17,7 +19,7 @@ from src.dialog_client import RealtimeDialogClient
 class DialogSession:
     """对话会话管理类"""
 
-    def __init__(self, ws_config: Dict[str, Any], debug_mode: bool = False):
+    def __init__(self, ws_config: Dict[str, Any], debug_mode: bool = False, socket_mode: bool = False, webrtc_mode: bool = False):
         # 设置调试模式
         set_debug_mode(debug_mode)
 
@@ -25,6 +27,8 @@ class DialogSession:
         logger.info(f"🚀 启动对话会话 (ID: {self.session_id[:8]}...)")
 
         self.client = RealtimeDialogClient(config=ws_config, session_id=self.session_id)
+        self.socket_mode = socket_mode
+        self.webrtc_mode = webrtc_mode
 
         output_audio_config = config.ogg_output_audio_config
 
@@ -35,8 +39,28 @@ class DialogSession:
             if tts_audio_config:
                 output_audio_config = tts_audio_config  # output_audio_config['channels'] = tts_audio_config.pop("channel")  # output_audio_config['chunk'] = 3200
 
-        self.audio_device = AudioDeviceManager(AudioConfig(**config.input_audio_config),
-            AudioConfig(**output_audio_config))
+        if self.webrtc_mode:
+            # WebRTC模式
+            self.webrtc_manager = WebRTCManager(
+                signaling_host=config.webrtc_config['signaling_host'],
+                signaling_port=config.webrtc_config['signaling_port']
+            )
+            self.webrtc_manager.set_audio_input_callback(self._handle_webrtc_audio_input)
+            self.audio_device = None
+            self.socket_manager = None
+        elif self.socket_mode:
+            # Socket模式
+            self.socket_manager = SocketAudioManager(SocketConfig(**config.socket_config))
+            self.socket_manager.set_audio_input_callback(self._handle_socket_audio_input)
+            self.audio_device = None
+            self.webrtc_manager = None
+        else:
+            # 传统音频设备模式
+            self.audio_device = AudioDeviceManager(AudioConfig(**config.input_audio_config),
+                AudioConfig(**output_audio_config))
+            self.socket_manager = None
+            self.webrtc_manager = None
+            
         self.output_config = AudioConfig(**config.ogg_output_audio_config)
 
         self.is_running = True
@@ -45,13 +69,20 @@ class DialogSession:
         signal.signal(signal.SIGINT, self._keyboard_signal)
         # 初始化音频队列和输出流 - 限制队列大小防止延迟累积
         self.audio_queue = queue.Queue(maxsize=50)
-        self.output_stream = self.audio_device.open_output_stream()
-        # 启动播放线程
-        self.is_recording = True
-        self.is_playing = True
-        self.player_thread = threading.Thread(target=self._audio_player_thread)
-        self.player_thread.daemon = True
-        self.player_thread.start()
+        
+        if not self.socket_mode and not self.webrtc_mode:
+            self.output_stream = self.audio_device.open_output_stream()
+            # 启动播放线程
+            self.is_recording = True
+            self.is_playing = True
+            self.player_thread = threading.Thread(target=self._audio_player_thread)
+            self.player_thread.daemon = True
+            self.player_thread.start()
+        else:
+            self.output_stream = None
+            self.is_recording = True
+            self.is_playing = False
+            self.player_thread = None
 
         # 音频转换器
         self.ogg_converter = OggToPcmConverter(sample_rate=self.output_config.sample_rate,
@@ -141,12 +172,25 @@ class DialogSession:
                 if audio_format == "ogg":
                     audio_data = self.ogg_converter.convert(audio_data)
 
-                try:
-                    self.audio_queue.put(audio_data, timeout=0.1)
-                except queue.Full:
-                    self.stats['audio_queue_overflows'] += 1
-                    if self.stats['audio_queue_overflows'] % 10 == 1:  # 每10次溢出才输出一次警告
-                        logger.debug(f"⚠️ 音频队列溢出 (第{self.stats['audio_queue_overflows']}次)")
+                if self.webrtc_mode:
+                    # WebRTC模式：暂时禁用音频输出，避免爆音问题
+                    # TODO: 修复音频格式兼容性后重新启用
+                    # if self.webrtc_manager:
+                    #     self.webrtc_manager.send_audio_to_all_clients(audio_data)
+                    logger.debug(f"🔇 跳过音频输出 (WebRTC模式): {len(audio_data)}字节")
+                elif self.socket_mode:
+                    # Socket模式：直接发送给客户端
+                    format_type = "ogg" if audio_format == "ogg" else "pcm"
+                    if self.socket_manager:
+                        self.socket_manager.send_audio_output(audio_data, format_type)
+                else:
+                    # 传统模式：加入播放队列
+                    try:
+                        self.audio_queue.put(audio_data, timeout=0.1)
+                    except queue.Full:
+                        self.stats['audio_queue_overflows'] += 1
+                        if self.stats['audio_queue_overflows'] % 10 == 1:  # 每10次溢出才输出一次警告
+                            logger.debug(f"⚠️ 音频队列溢出 (第{self.stats['audio_queue_overflows']}次)")
 
             # 检查是否包含AI文本回复 (这应该通过ChatResponse事件550处理)
             elif isinstance(response.get('payload_msg'), dict):
@@ -276,6 +320,40 @@ class DialogSession:
         print("=" * 80)
         print("🚀 系统已就绪，请开始说话...")
         print("=" * 80 + "\n")
+        
+    def _display_welcome_screen_socket(self):
+        """显示Socket模式欢迎界面"""
+        # 清屏
+        print("\033[2J\033[H", end="")
+        print("\n" + "=" * 80)
+        print("🔌 🤖  实时语音对话系统 (Socket模式)  🤖 🔌")
+        print("=" * 80)
+        print("💡 使用说明:")
+        print("   • 🔌 通过Socket接收客户端音频输入")
+        print("   • 🤖 AI助手会通过Socket返回音频回复")
+        print("   • 📝 所有对话内容都会实时显示在屏幕上")
+        print("   • ⚡ 支持中断对话，按 Ctrl+C 退出")
+        print("=" * 80)
+        print(f"🚀 Socket服务器已启动: {config.socket_config['host']}:{config.socket_config['port']}")
+        print("等待客户端连接...")
+        print("=" * 80 + "\n")
+        
+    def _display_welcome_screen_webrtc(self):
+        """显示WebRTC模式欢迎界面"""
+        # 清屏
+        print("\033[2J\033[H", end="")
+        print("\n" + "=" * 80)
+        print("🌐 🤖  实时语音对话系统 (WebRTC模式)  🤖 🌐")
+        print("=" * 80)
+        print("💡 使用说明:")
+        print("   • 🌐 通过WebRTC接收浏览器音频输入")
+        print("   • 🤖 AI助手会通过WebRTC返回音频回复")
+        print("   • 📝 所有对话内容都会实时显示在屏幕上")
+        print("   • ⚡ 支持中断对话，按 Ctrl+C 退出")
+        print("=" * 80)
+        print(f"🚀 WebRTC信令服务器已启动: {config.webrtc_config['signaling_host']}:{config.webrtc_config['signaling_port']}")
+        print("请在浏览器中打开测试页面进行连接...")
+        print("=" * 80 + "\n")
 
     def _clear_current_line(self):
         """清除当前行"""
@@ -371,6 +449,23 @@ class DialogSession:
         self.is_recording = False
         self.is_playing = False
         self.is_running = False
+        
+        # 强制退出WebRTC相关资源
+        if self.webrtc_mode and self.webrtc_manager:
+            try:
+                # 在后台异步停止WebRTC管理器
+                import asyncio
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    asyncio.create_task(self.webrtc_manager.stop())
+                else:
+                    loop.run_until_complete(self.webrtc_manager.stop())
+            except Exception as e:
+                logger.error(f"停止WebRTC管理器错误: {e}")
+        
+        # 强制退出
+        import os
+        os._exit(0)
 
     async def receive_loop(self):
         try:
@@ -387,6 +482,36 @@ class DialogSession:
         except Exception as e:
             logger.error(f"接收消息错误: {e}")
 
+    def _handle_socket_audio_input(self, audio_data: bytes) -> None:
+        """处理Socket音频输入"""
+        try:
+            # 创建异步任务发送音频数据
+            asyncio.create_task(self.client.task_request(audio_data))
+        except Exception as e:
+            logger.error(f"处理Socket音频输入错误: {e}")
+    
+    def _handle_webrtc_audio_input(self, audio_data: bytes) -> None:
+        """处理WebRTC音频输入"""
+        try:
+            # 检查是否仍在运行
+            if not self.is_running or not self.is_recording:
+                return
+                
+            # 检查WebSocket连接状态
+            if not self.client.ws or hasattr(self.client.ws, 'closed') and self.client.ws.closed:
+                logger.warning("WebSocket连接已关闭，停止音频处理")
+                self.is_running = False
+                self.is_recording = False
+                return
+                
+            # 创建异步任务发送音频数据
+            asyncio.create_task(self.client.task_request(audio_data))
+        except Exception as e:
+            logger.error(f"处理WebRTC音频输入错误: {e}")
+            # 如果发送失败，停止处理
+            self.is_running = False
+            self.is_recording = False
+    
     async def process_microphone_input(self) -> None:
         """处理麦克风输入"""
         stream = self.audio_device.open_input_stream()
@@ -405,6 +530,41 @@ class DialogSession:
             except Exception as e:
                 logger.error(f"读取麦克风数据出错: {e}")
                 await asyncio.sleep(0.1)  # 给系统一些恢复时间
+    
+    async def process_socket_input(self) -> None:
+        """处理Socket输入模式"""
+        if not self.socket_manager:
+            logger.error("Socket管理器未初始化")
+            return
+            
+        logger.info("🔌 启动Socket服务器...")
+        await self.socket_manager.start_server()
+        
+        # 显示欢迎界面
+        self._display_welcome_screen_socket()
+        
+        # 等待连接和处理
+        while self.is_recording:
+            if not self.socket_manager.is_connected:
+                await asyncio.sleep(0.1)  # 等待客户端连接
+            else:
+                await asyncio.sleep(0.01)  # 保持活跃
+    
+    async def process_webrtc_input(self) -> None:
+        """处理WebRTC输入模式"""
+        if not self.webrtc_manager:
+            logger.error("WebRTC管理器未初始化")
+            return
+            
+        logger.info("🌐 启动WebRTC服务器...")
+        await self.webrtc_manager.start()
+        
+        # 显示欢迎界面
+        self._display_welcome_screen_webrtc()
+        
+        # 等待连接和处理
+        while self.is_recording:
+            await asyncio.sleep(0.1)  # 保持活跃
 
     async def start(self) -> None:
         """启动对话会话"""
@@ -422,11 +582,23 @@ class DialogSession:
             # 等待一下确保连接事件被处理
             await asyncio.sleep(0.1)
 
-            # 启动麦克风输入
-            asyncio.create_task(self.process_microphone_input())
+            # 启动音频输入处理
+            if self.webrtc_mode:
+                asyncio.create_task(self.process_webrtc_input())
+            elif self.socket_mode:
+                asyncio.create_task(self.process_socket_input())
+            else:
+                asyncio.create_task(self.process_microphone_input())
 
+            # 保持主循环运行，监控连接状态
             while self.is_running:
-                await asyncio.sleep(0.1)
+                # 检查WebSocket连接状态
+                if not self.client.ws or (hasattr(self.client.ws, 'closed') and self.client.ws.closed):
+                    logger.error("🔴 WebSocket连接断开，程序即将退出...")
+                    self.is_running = False
+                    break
+                
+                await asyncio.sleep(0.5)  # 每500ms检查一次
 
             await self.client.finish_session()
             while not self.is_session_finished:
@@ -439,4 +611,9 @@ class DialogSession:
         except Exception as e:
             logger.error(f"会话错误: {e}")
         finally:
-            self.audio_device.cleanup()
+            if self.webrtc_mode and self.webrtc_manager:
+                await self.webrtc_manager.stop()
+            elif self.socket_mode and self.socket_manager:
+                self.socket_manager.cleanup()
+            elif self.audio_device:
+                self.audio_device.cleanup()
