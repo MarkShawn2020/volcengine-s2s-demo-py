@@ -503,8 +503,23 @@ class AudioStreamTrack(MediaStreamTrack):
                 # 生成静音帧
                 samples = np.zeros(self._samples_per_frame, dtype=np.int16)
             else:
-                # 转换音频数据为numpy array
-                samples = np.frombuffer(audio_data, dtype=np.int16)
+                # 检测音频数据格式并转换为numpy array
+                # 火山引擎TTS返回的是24kHz float32格式
+                if len(audio_data) % 4 == 0:  # float32 = 4 bytes per sample
+                    # 尝试作为float32解析
+                    try:
+                        samples = np.frombuffer(audio_data, dtype=np.float32)
+                        # 转换float32到int16
+                        samples = (samples * 32767).astype('int16')
+                        source_sample_rate = 24000  # 火山引擎TTS输出采样率
+                    except:
+                        # 如果float32解析失败，尝试int16
+                        samples = np.frombuffer(audio_data, dtype=np.int16)
+                        source_sample_rate = 16000  # 假设int16格式为16kHz
+                else:
+                    # 数据长度不是4的倍数，按int16处理
+                    samples = np.frombuffer(audio_data[:len(audio_data)//2*2], dtype=np.int16)
+                    source_sample_rate = 16000
 
                 # 首先检查是否有音频数据
                 if len(samples) == 0:
@@ -513,8 +528,8 @@ class AudioStreamTrack(MediaStreamTrack):
                     # 适度降低音量避免爆音，但保持可听性
                     samples = (samples * 0.3).astype('int16')
 
-                    # 重采样从16kHz到48kHz（如果需要）
-                    target_length = int(len(samples) * 48000 / 16000)
+                    # 重采样到48kHz（根据实际输入采样率）
+                    target_length = int(len(samples) * 48000 / source_sample_rate)
                     if target_length > 0:
                         indices = np.linspace(0, len(samples) - 1, target_length)
                         samples = np.interp(indices, range(len(samples)), samples).astype('int16')
