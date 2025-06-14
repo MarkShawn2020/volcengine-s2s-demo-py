@@ -100,6 +100,10 @@ class DialogSession:
         self.is_ai_responding = False  # AI正在回复状态
         self.last_displayed_ai_text = ""  # 上次显示的AI文本，避免重复显示
         self.stats_logged = False  # 统计信息是否已输出，避免重复
+        
+        # 重连控制
+        self._reconnecting = False  # 重连进行中标志
+        self._reconnect_lock = None  # 在start()方法中初始化
 
     def _audio_player_thread(self):
         """音频播放线程 - 改进的错误处理"""
@@ -171,11 +175,10 @@ class DialogSession:
                     audio_data = self.ogg_converter.convert(audio_data)
 
                 if self.webrtc_mode:
-                    # WebRTC模式：暂时禁用音频输出进行调试
-                    logger.info(f"🔇 收到AI音频回复 ({audio_format}): {len(audio_data)}字节，暂时跳过播放")
-                    # TODO: 修复爆音问题后重新启用
-                    # if self.webrtc_manager:
-                    #     self.webrtc_manager.send_audio_to_all_clients(audio_data)
+                    # WebRTC模式：发送音频给所有连接的客户端
+                    logger.debug(f"🎵 发送AI音频回复 ({audio_format}): {len(audio_data)}字节")
+                    if self.webrtc_manager:
+                        self.webrtc_manager.send_audio_to_all_clients(audio_data)
                 elif self.socket_mode:
                     # Socket模式：直接发送给客户端
                     format_type = "ogg" if audio_format == "ogg" else "pcm"
@@ -488,6 +491,24 @@ class DialogSession:
         except Exception as e:
             logger.error(f"处理Socket音频输入错误: {e}")
     
+    def _is_websocket_connected(self) -> bool:
+        """检查WebSocket连接状态"""
+        if not self.client or not self.client.ws:
+            return False
+        
+        # 检查WebSocket状态
+        try:
+            import websockets
+            if hasattr(self.client.ws, 'state'):
+                return self.client.ws.state == websockets.protocol.State.OPEN
+            elif hasattr(self.client.ws, 'closed'):
+                return not self.client.ws.closed
+            else:
+                return True
+        except Exception as e:
+            logger.debug(f"检查WebSocket状态时出错: {e}")
+            return False
+    
     def _handle_webrtc_audio_input(self, audio_data: bytes) -> None:
         """处理WebRTC音频输入"""
         try:
@@ -495,10 +516,15 @@ class DialogSession:
             if not self.is_running or not self.is_recording:
                 return
                 
+            # 如果正在重连中，暂时跳过音频数据
+            if self._reconnecting:
+                logger.debug("⏸️ 重连进行中，跳过音频数据")
+                return
+                
             # 检查WebSocket连接状态
-            if not self.client.ws or (hasattr(self.client.ws, 'closed') and self.client.ws.closed):
-                logger.warning("🔴 WebSocket连接已断开，尝试重连...")
-                # 尝试重新连接
+            if not self._is_websocket_connected():
+                logger.warning("🔴 WebSocket连接状态异常，尝试重连...")
+                # 尝试重新连接，但不阻塞当前音频数据
                 asyncio.create_task(self._reconnect_and_process_audio(audio_data))
                 return
                 
@@ -507,28 +533,126 @@ class DialogSession:
         except Exception as e:
             logger.error(f"处理WebRTC音频输入错误: {e}")
             # 尝试重连而不是直接停止
-            asyncio.create_task(self._reconnect_and_process_audio(audio_data))
+            if not self._reconnecting:
+                asyncio.create_task(self._reconnect_and_process_audio(audio_data))
     
     async def _reconnect_and_process_audio(self, audio_data: bytes) -> None:
         """重连WebSocket并处理音频数据"""
+        # 检查是否已经在重连中
+        if self._reconnecting:
+            logger.debug("⏸️ 重连已在进行中，跳过重复重连")
+            return
+            
+        # 尝试获取锁，如果获取不到说明有其他任务在重连
+        if self._reconnect_lock:
+            try:
+                async with self._reconnect_lock:
+                    if self._reconnecting:
+                        return
+                    self._reconnecting = True
+                    await self._do_reconnect(audio_data)
+            finally:
+                self._reconnecting = False
+        else:
+            # 如果没有锁，使用标志控制
+            if self._reconnecting:
+                return
+            self._reconnecting = True
+            try:
+                await self._do_reconnect(audio_data)
+            finally:
+                self._reconnecting = False
+
+    async def _do_reconnect(self, audio_data: bytes) -> None:
+        """执行实际的重连逻辑"""
+        max_retries = 3
+        retry_delay = 1.0
+        
+        for attempt in range(max_retries):
+            try:
+                logger.info(f"🔄 正在重新建立WebSocket连接... (尝试 {attempt + 1}/{max_retries})")
+                
+                # 关闭旧连接
+                if self.client.ws:
+                    try:
+                        await self.client.close()
+                    except:
+                        pass
+                
+                # 重新连接
+                await asyncio.wait_for(self.client.connect(), timeout=10.0)
+                await asyncio.wait_for(self.client.start_connection(), timeout=5.0)
+                await asyncio.wait_for(self.client.start_session(), timeout=5.0)
+                
+                logger.info("✅ WebSocket重连成功，继续处理音频")
+                
+                # 处理当前音频数据
+                if audio_data and len(audio_data) > 0:
+                    await self.client.task_request(audio_data)
+                
+                return  # 成功重连，退出重试循环
+                
+            except asyncio.TimeoutError:
+                logger.warning(f"⏰ WebSocket重连超时 (尝试 {attempt + 1}/{max_retries})")
+            except Exception as e:
+                logger.warning(f"⚠️ WebSocket重连失败 (尝试 {attempt + 1}/{max_retries}): {e}")
+            
+            # 如果不是最后一次尝试，等待一段时间再重试
+            if attempt < max_retries - 1:
+                await asyncio.sleep(retry_delay)
+                retry_delay *= 2  # 指数退避
+        
+        logger.error(f"❌ WebSocket重连失败，已尝试 {max_retries} 次")
+        # 重连失败，暂时跳过这个音频数据，但不停止整个系统
+        logger.warning("⚠️ 跳过当前音频数据，等待下次重连")
+    
+    async def _background_reconnect(self) -> None:
+        """后台重连WebSocket，不处理音频数据"""
+        # 检查是否已经在重连中
+        if self._reconnecting:
+            logger.debug("⏸️ 重连已在进行中，跳过后台重连")
+            return
+            
+        # 尝试获取锁
+        if self._reconnect_lock:
+            try:
+                async with self._reconnect_lock:
+                    if self._reconnecting:
+                        return
+                    self._reconnecting = True
+                    await self._do_background_reconnect()
+            finally:
+                self._reconnecting = False
+        else:
+            if self._reconnecting:
+                return
+            self._reconnecting = True
+            try:
+                await self._do_background_reconnect()
+            finally:
+                self._reconnecting = False
+
+    async def _do_background_reconnect(self) -> None:
+        """执行后台重连逻辑"""
         try:
-            logger.info("🔄 正在重新建立WebSocket连接...")
+            logger.info("🔄 开始后台重连WebSocket...")
+            
+            # 关闭旧连接
+            if self.client.ws:
+                try:
+                    await self.client.close()
+                except:
+                    pass
             
             # 重新连接
-            await self.client.connect()
-            await self.client.start_connection()
-            await self.client.start_session()
+            await asyncio.wait_for(self.client.connect(), timeout=15.0)
+            await asyncio.wait_for(self.client.start_connection(), timeout=10.0)
+            await asyncio.wait_for(self.client.start_session(), timeout=10.0)
             
-            logger.info("✅ WebSocket重连成功，继续处理音频")
-            
-            # 处理当前音频数据
-            await self.client.task_request(audio_data)
+            logger.info("✅ 后台WebSocket重连成功")
             
         except Exception as e:
-            logger.error(f"❌ WebSocket重连失败: {e}")
-            # 重连失败，停止处理
-            self.is_running = False
-            self.is_recording = False
+            logger.error(f"❌ 后台WebSocket重连失败: {e}")
     
     async def process_microphone_input(self) -> None:
         """处理麦克风输入"""
@@ -587,6 +711,9 @@ class DialogSession:
     async def start(self) -> None:
         """启动对话会话"""
         try:
+            # 初始化重连锁
+            self._reconnect_lock = asyncio.Lock()
+            
             # 建立WebSocket连接
             await self.client.connect()
 
@@ -609,12 +736,23 @@ class DialogSession:
                 asyncio.create_task(self.process_microphone_input())
 
             # 保持主循环运行，监控连接状态
+            connection_check_interval = 0
             while self.is_running:
-                # 检查WebSocket连接状态
-                if not self.client.ws or (hasattr(self.client.ws, 'closed') and self.client.ws.closed):
-                    logger.error("🔴 WebSocket连接断开，程序即将退出...")
-                    self.is_running = False
-                    break
+                # 每10秒检查一次WebSocket连接状态
+                connection_check_interval += 1
+                if connection_check_interval >= 20:  # 20 * 0.5s = 10s
+                    if not self._is_websocket_connected():
+                        logger.warning("🔴 定期检查发现WebSocket连接异常")
+                        if self.webrtc_mode:
+                            # WebRTC模式下尝试重连
+                            logger.info("🔄 WebRTC模式下尝试后台重连...")
+                            asyncio.create_task(self._background_reconnect())
+                        else:
+                            # 非WebRTC模式下退出
+                            logger.error("🔴 非WebRTC模式下WebSocket断开，程序即将退出...")
+                            self.is_running = False
+                            break
+                    connection_check_interval = 0
                 
                 await asyncio.sleep(0.5)  # 每500ms检查一次
 
