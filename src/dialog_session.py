@@ -95,6 +95,7 @@ class DialogSession:
         self.console_lines = []  # 控制台显示缓存
         self.is_user_speaking = False  # 用户正在说话状态
         self.is_ai_responding = False  # AI正在回复状态
+        self.last_displayed_ai_text = ""  # 上次显示的AI文本，避免重复显示
 
     def _audio_player_thread(self):
         """音频播放线程 - 改进的错误处理"""
@@ -425,8 +426,11 @@ class DialogSession:
                     if not self.is_ai_responding:
                         self.is_ai_responding = True
                         self.current_ai_text = ""  # 只在第一次CHAT_RESPONSE时清空
+                        self.last_displayed_ai_text = ""  # 重置显示记录
                     self.current_ai_text += content
-                    self._update_console_display()
+                    # 限制更新频率，避免过度刷新
+                    if len(self.current_ai_text) - len(self.last_displayed_ai_text) >= 5 or content.endswith(('。', '！', '？', '，', '、')):
+                        self._update_console_display()
                     logger.debug(f"🤖 AI文本回复: '{content}' → 总计: '{self.current_ai_text[:50]}...'")
             elif event == ServerEvent.CHAT_ENDED:
                 logger.debug("🤖 AI文本回复结束")
@@ -462,31 +466,45 @@ class DialogSession:
     def _update_console_display(self, final_user: bool = False, final_ai: bool = False):
         """更新控制台显示"""
         with self.subtitle_lock:
-            # 清除当前行
-            self._clear_current_line()
-            
             if final_user and self.current_user_text:
                 # 用户说话完成，显示最终结果
+                self._clear_current_line()
                 print(f"👤 用户: {self.current_user_text}")
+                return
             elif final_ai and self.current_ai_text:
                 # AI回复完成，显示最终结果
+                self._clear_current_line()
                 print(f"🤖 AI: {self.current_ai_text}")
-            elif self.is_user_speaking and self.current_user_text:
-                # 用户正在说话，实时更新 - 保持一致的显示格式
-                display_text = self.current_user_text[:100] + "..." if len(self.current_user_text) > 100 else self.current_user_text
+                self.last_displayed_ai_text = self.current_ai_text  # 记录已显示的文本
+                return
+            
+            # 实时更新逻辑
+            if self.is_user_speaking and self.current_user_text:
+                # 用户正在说话，实时更新
+                self._clear_current_line()
+                display_text = self.current_user_text[:150] + "..." if len(self.current_user_text) > 150 else self.current_user_text
                 print(f"👤 用户: {display_text}", end="", flush=True)
             elif self.is_ai_responding and self.current_ai_text:
-                # AI正在回复，实时更新
-                display_text = self.current_ai_text[:100] + "..." if len(self.current_ai_text) > 100 else self.current_ai_text
-                print(f"🤖 AI: {display_text}", end="", flush=True)
+                # AI正在回复，实时更新 - 只有当文本真正改变时才更新
+                if self.current_ai_text != self.last_displayed_ai_text:
+                    self._clear_current_line()
+                    display_text = self.current_ai_text[:150] + "..." if len(self.current_ai_text) > 150 else self.current_ai_text
+                    print(f"🤖 AI: {display_text}", end="", flush=True)
+                    self.last_displayed_ai_text = self.current_ai_text
             elif not self.is_user_speaking and not self.is_ai_responding:
                 # 等待状态
+                self._clear_current_line()
                 print("🎙️ 请说话...", end="", flush=True)
 
     def _finalize_conversation_turn(self):
         """完成一轮对话"""
         with self.subtitle_lock:
             if self.current_user_text or self.current_ai_text:
+                # 确保最终AI文本被显示
+                if self.current_ai_text and self.current_ai_text != self.last_displayed_ai_text:
+                    self._clear_current_line()
+                    print(f"🤖 AI: {self.current_ai_text}")
+                
                 # 保存到对话历史
                 self.conversation_history.append({
                     'user': self.current_user_text,
@@ -497,6 +515,7 @@ class DialogSession:
                 # 清空当前内容
                 self.current_user_text = ""
                 self.current_ai_text = ""
+                self.last_displayed_ai_text = ""
                 self.is_user_speaking = False
                 self.is_ai_responding = False
 
