@@ -273,6 +273,15 @@ class Orchestrator:
         logger.info("👋 收到退出信号，正在优雅关闭...")
         self.is_running = False
 
+        # 立即停止音频IO，避免继续产生错误
+        if self.audio_io and hasattr(self.audio_io, 'is_running'):
+            self.audio_io.is_running = False
+            
+        # 如果是WebRTC模式，立即停止WebRTC管理器
+        if self.io_mode == "webrtc" and self.audio_io and hasattr(self.audio_io, 'webrtc_manager'):
+            if self.audio_io.webrtc_manager:
+                self.audio_io.webrtc_manager.is_running = False
+
         # 创建一个新的事件循环来处理清理操作
         try:
             loop = asyncio.get_event_loop()

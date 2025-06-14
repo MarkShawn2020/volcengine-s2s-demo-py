@@ -50,6 +50,8 @@ class WebRTCIO(IOBase):
         self.is_running = False
         
         if self.webrtc_manager:
+            # 确保WebRTC管理器也停止
+            self.webrtc_manager.is_running = False
             await self.webrtc_manager.stop()
             
     async def send_audio_output(self, audio_data: bytes, format_type: str = "pcm") -> None:
