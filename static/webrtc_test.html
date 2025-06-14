@@ -283,6 +283,16 @@
                 peerConnection = null;
             }
             
+            // 清理远程音频元素
+            if (window.remoteAudio) {
+                window.remoteAudio.pause();
+                window.remoteAudio.srcObject = null;
+                if (window.remoteAudio.parentNode) {
+                    window.remoteAudio.parentNode.removeChild(window.remoteAudio);
+                }
+                window.remoteAudio = null;
+            }
+            
             stopAudio();
             updateConnectionStatus('disconnected', '🔴 未连接');
             log('已断开连接');
@@ -341,9 +351,40 @@
             // 接收远程音频流
             peerConnection.ontrack = (event) => {
                 log('接收到远程音频流', 'success');
-                const remoteAudio = new Audio();
+                
+                // 创建音频元素并播放
+                const remoteAudio = document.createElement('audio');
                 remoteAudio.srcObject = event.streams[0];
                 remoteAudio.autoplay = true;
+                remoteAudio.volume = 0.5; // 设置音量为50%避免过响
+                
+                // 添加错误处理
+                remoteAudio.onerror = (error) => {
+                    log(`音频播放错误: ${error}`, 'error');
+                };
+                
+                remoteAudio.onloadedmetadata = () => {
+                    log('音频元数据加载完成', 'success');
+                };
+                
+                remoteAudio.oncanplay = () => {
+                    log('音频可以播放', 'success');
+                    remoteAudio.play().catch(error => {
+                        log(`播放失败: ${error.message}`, 'error');
+                        // 如果自动播放失败，提示用户手动播放
+                        if (error.name === 'NotAllowedError') {
+                            log('浏览器阻止自动播放，请手动点击播放', 'warning');
+                            // 可以在这里添加一个播放按钮
+                        }
+                    });
+                };
+                
+                // 将音频元素添加到页面（隐藏）
+                remoteAudio.style.display = 'none';
+                document.body.appendChild(remoteAudio);
+                
+                // 保存引用用于后续清理
+                window.remoteAudio = remoteAudio;
             };
             
             return peerConnection;

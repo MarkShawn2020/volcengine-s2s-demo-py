@@ -19,10 +19,8 @@ from src.dialog_client import RealtimeDialogClient
 class DialogSession:
     """对话会话管理类"""
 
-    def __init__(self, ws_config: Dict[str, Any], debug_mode: bool = False, socket_mode: bool = False, webrtc_mode: bool = False):
+    def __init__(self, ws_config: Dict[str, Any], socket_mode: bool = False, webrtc_mode: bool = False):
         # 设置调试模式
-        set_debug_mode(debug_mode)
-
         self.session_id = str(uuid.uuid4())
         logger.info(f"🚀 启动对话会话 (ID: {self.session_id[:8]}...)")
 
@@ -173,11 +171,11 @@ class DialogSession:
                     audio_data = self.ogg_converter.convert(audio_data)
 
                 if self.webrtc_mode:
-                    # WebRTC模式：暂时禁用音频输出，避免爆音问题
-                    # TODO: 修复音频格式兼容性后重新启用
+                    # WebRTC模式：暂时禁用音频输出进行调试
+                    logger.info(f"🔇 收到AI音频回复 ({audio_format}): {len(audio_data)}字节，暂时跳过播放")
+                    # TODO: 修复爆音问题后重新启用
                     # if self.webrtc_manager:
                     #     self.webrtc_manager.send_audio_to_all_clients(audio_data)
-                    logger.debug(f"🔇 跳过音频输出 (WebRTC模式): {len(audio_data)}字节")
                 elif self.socket_mode:
                     # Socket模式：直接发送给客户端
                     format_type = "ogg" if audio_format == "ogg" else "pcm"
@@ -498,17 +496,37 @@ class DialogSession:
                 return
                 
             # 检查WebSocket连接状态
-            if not self.client.ws or hasattr(self.client.ws, 'closed') and self.client.ws.closed:
-                logger.warning("WebSocket连接已关闭，停止音频处理")
-                self.is_running = False
-                self.is_recording = False
+            if not self.client.ws or (hasattr(self.client.ws, 'closed') and self.client.ws.closed):
+                logger.warning("🔴 WebSocket连接已断开，尝试重连...")
+                # 尝试重新连接
+                asyncio.create_task(self._reconnect_and_process_audio(audio_data))
                 return
                 
             # 创建异步任务发送音频数据
             asyncio.create_task(self.client.task_request(audio_data))
         except Exception as e:
             logger.error(f"处理WebRTC音频输入错误: {e}")
-            # 如果发送失败，停止处理
+            # 尝试重连而不是直接停止
+            asyncio.create_task(self._reconnect_and_process_audio(audio_data))
+    
+    async def _reconnect_and_process_audio(self, audio_data: bytes) -> None:
+        """重连WebSocket并处理音频数据"""
+        try:
+            logger.info("🔄 正在重新建立WebSocket连接...")
+            
+            # 重新连接
+            await self.client.connect()
+            await self.client.start_connection()
+            await self.client.start_session()
+            
+            logger.info("✅ WebSocket重连成功，继续处理音频")
+            
+            # 处理当前音频数据
+            await self.client.task_request(audio_data)
+            
+        except Exception as e:
+            logger.error(f"❌ WebSocket重连失败: {e}")
+            # 重连失败，停止处理
             self.is_running = False
             self.is_recording = False
     

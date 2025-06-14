@@ -1,21 +1,11 @@
 import asyncio
-import json
-from typing import Dict, Any, Optional, Callable
-import threading
 import queue
+from typing import Dict, Any, Optional, Callable
 
-try:
-    from aiortc import RTCPeerConnection, RTCSessionDescription, RTCIceCandidate
-    from aiortc.contrib.media import MediaPlayer, MediaRelay
-    from aiortc import MediaStreamTrack
-    import numpy as np
-    AIORTC_AVAILABLE = True
-except ImportError:
-    AIORTC_AVAILABLE = False
-    RTCPeerConnection = None
-    RTCSessionDescription = None
-    RTCIceCandidate = None
-    MediaStreamTrack = None
+import numpy as np
+from aiortc import RTCPeerConnection, RTCSessionDescription, RTCIceCandidate, MediaStreamTrack
+
+AIORTC_AVAILABLE = True
 
 from .webrtc_signaling import WebRTCSignalingServer
 from .logger import logger
@@ -23,50 +13,53 @@ from .logger import logger
 
 class AudioStreamTrack(MediaStreamTrack):
     """自定义音频流轨道，用于发送音频数据给浏览器"""
-    
+
     kind = "audio"
-    
+
     def __init__(self):
         super().__init__()
         self.audio_queue = queue.Queue(maxsize=50)  # 限制队列大小
         self._timestamp = 0
         self._sample_rate = 48000  # 48kHz，与浏览器匹配
         self._samples_per_frame = int(self._sample_rate * 0.02)  # 20ms frames
-    
+
     async def recv(self):
         """接收音频帧"""
         try:
             # 从队列获取音频数据
-            audio_data = await asyncio.get_event_loop().run_in_executor(
-                None, self.audio_queue.get, True, 1.0
-            )
-            
+            audio_data = await asyncio.get_event_loop().run_in_executor(None, self.audio_queue.get, True, 1.0)
+
             if audio_data is None:
                 # 生成静音帧
                 samples = np.zeros(self._samples_per_frame, dtype=np.int16)
             else:
                 # 转换音频数据为numpy array
                 samples = np.frombuffer(audio_data, dtype=np.int16)
-                
-                # 重采样从16kHz到48kHz（如果需要）
-                if len(samples) > 0:
-                    # 假设输入是16kHz，需要上采样到48kHz
+
+                # 首先检查是否有音频数据
+                if len(samples) == 0:
+                    samples = np.zeros(self._samples_per_frame, dtype=np.int16)
+                else:
+                    # 极大降低音量，避免爆音
+                    samples = (samples * 0.1).astype('int16')
+
+                    # 重采样从16kHz到48kHz（如果需要）
                     target_length = int(len(samples) * 48000 / 16000)
                     if target_length > 0:
                         indices = np.linspace(0, len(samples) - 1, target_length)
                         samples = np.interp(indices, range(len(samples)), samples).astype('int16')
-                
-                # 如果数据不够一帧，用零填充
-                if len(samples) < self._samples_per_frame:
-                    padding = np.zeros(self._samples_per_frame - len(samples), dtype=np.int16)
-                    samples = np.concatenate([samples, padding])
-                elif len(samples) > self._samples_per_frame:
-                    # 如果数据太多，截取前面部分
-                    samples = samples[:self._samples_per_frame]
-                
-                # 降低音量避免爆音
-                samples = (samples * 0.3).astype('int16')
-            
+
+                    # 如果数据不够一帧，用零填充
+                    if len(samples) < self._samples_per_frame:
+                        padding = np.zeros(self._samples_per_frame - len(samples), dtype=np.int16)
+                        samples = np.concatenate([samples, padding])
+                    elif len(samples) > self._samples_per_frame:
+                        # 如果数据太多，截取前面部分
+                        samples = samples[:self._samples_per_frame]
+
+                    # 再次降低音量确保安全
+                    samples = (samples * 0.5).astype('int16')
+
             # 创建音频帧
             from av import AudioFrame
             from fractions import Fraction
@@ -74,13 +67,13 @@ class AudioStreamTrack(MediaStreamTrack):
             frame.sample_rate = self._sample_rate
             frame.pts = self._timestamp
             frame.time_base = Fraction(1, self._sample_rate)
-            
+
             # 填充音频数据
             frame.planes[0].update(samples.tobytes())
-            
+
             self._timestamp += self._samples_per_frame
             return frame
-            
+
         except queue.Empty:
             # 如果队列为空，生成静音帧
             samples = np.zeros(self._samples_per_frame, dtype=np.int16)
@@ -106,7 +99,7 @@ class AudioStreamTrack(MediaStreamTrack):
             frame.planes[0].update(samples.tobytes())
             self._timestamp += self._samples_per_frame
             return frame
-    
+
     def add_audio_data(self, audio_data: bytes):
         """添加音频数据到发送队列"""
         try:
@@ -116,7 +109,7 @@ class AudioStreamTrack(MediaStreamTrack):
                     self.audio_queue.get_nowait()
                 except queue.Empty:
                     break
-            
+
             self.audio_queue.put_nowait(audio_data)
         except queue.Full:
             logger.warning("⚠️ 音频发送队列已满，丢弃数据")
@@ -124,127 +117,119 @@ class AudioStreamTrack(MediaStreamTrack):
 
 class WebRTCManager:
     """WebRTC管理器，处理与浏览器的WebRTC连接"""
-    
+
     def __init__(self, signaling_host: str = "localhost", signaling_port: int = 8765):
         if not AIORTC_AVAILABLE:
             raise ImportError("aiortc库未安装，请运行: pip install aiortc")
-        
+
         self.signaling_server = WebRTCSignalingServer(signaling_host, signaling_port)
         self.peer_connections: Dict[str, RTCPeerConnection] = {}
         self.audio_tracks: Dict[str, AudioStreamTrack] = {}
-        
+
         # 音频处理回调
         self.audio_input_callback: Optional[Callable[[bytes], None]] = None
-        
+
         # 设置信令服务器回调
-        self.signaling_server.set_callbacks(
-            on_offer=self.handle_offer,
+        self.signaling_server.set_callbacks(on_offer=self.handle_offer,
             on_answer=self.handle_answer,
             on_ice_candidate=self.handle_ice_candidate,
             on_client_connected=self.handle_client_connected,
-            on_client_disconnected=self.handle_client_disconnected
-        )
-    
+            on_client_disconnected=self.handle_client_disconnected)
+
     async def start(self):
         """启动WebRTC管理器"""
         logger.info("🚀 启动WebRTC管理器")
         await self.signaling_server.start()
-    
+
     async def stop(self):
         """停止WebRTC管理器"""
         logger.info("🛑 停止WebRTC管理器")
-        
+
         # 关闭所有peer connections
         for pc in self.peer_connections.values():
             await pc.close()
-        
+
         await self.signaling_server.stop()
-    
+
     def handle_client_connected(self, client_id: str):
         """处理客户端连接"""
         logger.info(f"🔗 WebRTC客户端连接: {client_id}")
-        
+
         # 创建新的RTCPeerConnection
         pc = RTCPeerConnection()
         self.peer_connections[client_id] = pc
-        
+
         # 创建音频轨道用于发送音频给浏览器
         audio_track = AudioStreamTrack()
         self.audio_tracks[client_id] = audio_track
         pc.addTrack(audio_track)
-        
+
         # 设置连接状态变化回调
         @pc.on("connectionstatechange")
         async def on_connectionstatechange():
             logger.info(f"🔄 连接状态变化: {client_id} -> {pc.connectionState}")
-        
+
         # 设置接收音频轨道回调
         @pc.on("track")
         def on_track(track):
             logger.info(f"🎤 接收到音频轨道: {client_id} -> {track.kind}")
             if track.kind == "audio":
                 asyncio.create_task(self.process_audio_track(client_id, track))
-    
+
     def handle_client_disconnected(self, client_id: str):
         """处理客户端断开连接"""
         logger.info(f"🔌 WebRTC客户端断开: {client_id}")
-        
+
         # 清理资源
         if client_id in self.peer_connections:
             asyncio.create_task(self.peer_connections[client_id].close())
             del self.peer_connections[client_id]
-        
+
         if client_id in self.audio_tracks:
             del self.audio_tracks[client_id]
-    
+
     async def handle_offer(self, client_id: str, data: Dict[str, Any]):
         """处理WebRTC Offer"""
         logger.info(f"📨 收到Offer: {client_id}")
-        
+
         if client_id not in self.peer_connections:
             logger.error(f"❌ 客户端连接不存在: {client_id}")
             return
-        
+
         pc = self.peer_connections[client_id]
-        
+
         try:
             # 设置远程描述
-            offer = RTCSessionDescription(
-                sdp=data["sdp"]["sdp"],
-                type=data["sdp"]["type"]
-            )
+            offer = RTCSessionDescription(sdp=data["sdp"]["sdp"], type=data["sdp"]["type"])
             await pc.setRemoteDescription(offer)
-            
+
             # 创建答案
             answer = await pc.createAnswer()
             await pc.setLocalDescription(answer)
-            
+
             # 发送答案给客户端
-            await self.signaling_server.send_answer(client_id, {
-                "type": answer.type,
-                "sdp": answer.sdp
+            await self.signaling_server.send_answer(client_id, {"type": answer.type, "sdp": answer.sdp
             })
-            
+
             logger.info(f"📤 发送Answer: {client_id}")
-            
+
         except Exception as e:
             logger.error(f"❌ 处理Offer错误: {e}")
-    
+
     async def handle_answer(self, client_id: str, data: Dict[str, Any]):
         """处理WebRTC Answer"""
-        logger.info(f"📨 收到Answer: {client_id}")
-        # 通常服务器端不需要处理Answer
-    
+        logger.info(f"📨 收到Answer: {client_id}")  # 通常服务器端不需要处理Answer
+
     async def handle_ice_candidate(self, client_id: str, data: Dict[str, Any]):
         """处理ICE候选"""
         logger.debug(f"📨 收到ICE候选: {client_id}")
-        
+
         if client_id not in self.peer_connections:
             logger.error(f"❌ 客户端连接不存在: {client_id}")
             return
-        
+
         pc = self.peer_connections[client_id]
-        
+
         try:
             candidate_data = data["candidate"]
             if candidate_data and candidate_data.get("candidate"):
@@ -252,7 +237,7 @@ class WebRTCManager:
                 candidate_string = candidate_data["candidate"]
                 sdp_mid = candidate_data.get("sdpMid")
                 sdp_mline_index = candidate_data.get("sdpMLineIndex")
-                
+
                 # 手动解析候选字符串 (例如: "candidate:1 1 UDP 2113667326 192.168.1.1 54400 typ host")
                 parts = candidate_string.split()
                 if len(parts) >= 8:
@@ -263,10 +248,9 @@ class WebRTCManager:
                     ip = parts[4]
                     port = int(parts[5])
                     typ = parts[7] if len(parts) > 7 else "host"
-                    
+
                     # 创建RTCIceCandidate对象
-                    candidate = RTCIceCandidate(
-                        foundation=foundation,
+                    candidate = RTCIceCandidate(foundation=foundation,
                         component=component,
                         protocol=protocol,
                         priority=priority,
@@ -274,9 +258,8 @@ class WebRTCManager:
                         port=port,
                         type=typ,
                         sdpMid=sdp_mid,
-                        sdpMLineIndex=sdp_mline_index
-                    )
-                    
+                        sdpMLineIndex=sdp_mline_index)
+
                     await pc.addIceCandidate(candidate)
                 else:
                     logger.warning(f"⚠️ 无效的ICE候选格式: {candidate_string}")
@@ -285,20 +268,20 @@ class WebRTCManager:
                 await pc.addIceCandidate(None)
         except Exception as e:
             logger.error(f"❌ 添加ICE候选错误: {e}")
-    
+
     async def process_audio_track(self, client_id: str, track):
         """处理接收到的音频轨道"""
         logger.info(f"🎵 开始处理音频轨道: {client_id}")
-        
+
         try:
             while True:
                 frame = await track.recv()
-                logger.debug(f"🎤 收到音频帧: {frame.format}, 采样率: {frame.sample_rate}, 样本数: {frame.samples}")
-                
+                # logger.debug(f"🎤 收到音频帧: {frame.format}, 采样率: {frame.sample_rate}, 样本数: {frame.samples}")
+
                 # 转换音频帧为numpy数组
                 audio_array = frame.to_ndarray()
-                logger.debug(f"🎤 音频数组形状: {audio_array.shape}, 数据类型: {audio_array.dtype}")
-                
+                # logger.debug(f"🎤 音频数组形状: {audio_array.shape}, 数据类型: {audio_array.dtype}")
+
                 # 如果是多维数组，展平为一维（通道在第一维）
                 if len(audio_array.shape) > 1:
                     # 如果是多通道，取第一个通道或平均
@@ -306,9 +289,9 @@ class WebRTCManager:
                         audio_array = audio_array[0]  # 取第一个通道
                     else:
                         audio_array = audio_array.flatten()
-                
-                logger.debug(f"🎤 展平后音频数组形状: {audio_array.shape}")
-                
+
+                # logger.debug(f"🎤 展平后音频数组形状: {audio_array.shape}")
+
                 # 转换为16位PCM格式（火山引擎需要的格式）
                 if audio_array.dtype != 'int16':
                     # 如果是浮点格式，转换为int16
@@ -316,48 +299,47 @@ class WebRTCManager:
                         audio_array = (audio_array * 32767).astype('int16')
                     else:
                         audio_array = audio_array.astype('int16')
-                
+
                 # 重采样到16kHz（如果需要）
                 if frame.sample_rate != 16000:
                     # 简单的重采样（生产环境建议使用更好的重采样算法）
                     target_length = int(len(audio_array) * 16000 / frame.sample_rate)
-                    import numpy as np
                     if target_length > 0:
                         indices = np.linspace(0, len(audio_array) - 1, target_length)
                         audio_array = np.interp(indices, range(len(audio_array)), audio_array).astype('int16')
-                        logger.debug(f"🎤 重采样: {frame.sample_rate}Hz -> 16000Hz, 长度: {len(audio_array)}")
+                        # logger.debug(f"🎤 重采样: {frame.sample_rate}Hz -> 16000Hz, 长度: {len(audio_array)}")
                     else:
-                        logger.warning(f"⚠️ 重采样长度为0: 原长度={len(audio_array)}, 目标长度={target_length}")
+                        # logger.debug(f"⚠️ 重采样长度为0: 原长度={len(audio_array)}, 目标长度={target_length}")
                         continue
-                
+
                 audio_data = audio_array.tobytes()
-                logger.debug(f"🎤 处理后音频数据长度: {len(audio_data)} 字节")
-                
+                # logger.debug(f"🎤 received audio data: {len(audio_data)} 字节")
+
                 # 调用音频输入回调
                 if self.audio_input_callback and len(audio_data) > 0:
                     self.audio_input_callback(audio_data)
-                    
+
         except Exception as e:
             logger.error(f"❌ 处理音频轨道错误: {e}")
             import traceback
             logger.error(traceback.format_exc())
-    
+
     def send_audio_to_client(self, client_id: str, audio_data: bytes):
         """发送音频数据给指定客户端"""
         if client_id in self.audio_tracks:
             self.audio_tracks[client_id].add_audio_data(audio_data)
         else:
             logger.warning(f"⚠️ 客户端音频轨道不存在: {client_id}")
-    
+
     def send_audio_to_all_clients(self, audio_data: bytes):
         """发送音频数据给所有客户端"""
         for client_id in self.audio_tracks:
             self.send_audio_to_client(client_id, audio_data)
-    
+
     def set_audio_input_callback(self, callback: Callable[[bytes], None]):
         """设置音频输入回调函数"""
         self.audio_input_callback = callback
-    
+
     def get_client_count(self) -> int:
         """获取当前连接的客户端数量"""
         return len(self.peer_connections)
