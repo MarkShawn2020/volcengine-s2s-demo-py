@@ -96,6 +96,7 @@ class DialogSession:
         self.is_user_speaking = False  # 用户正在说话状态
         self.is_ai_responding = False  # AI正在回复状态
         self.last_displayed_ai_text = ""  # 上次显示的AI文本，避免重复显示
+        self.stats_logged = False  # 统计信息是否已输出，避免重复
 
     def _audio_player_thread(self):
         """音频播放线程 - 改进的错误处理"""
@@ -522,6 +523,10 @@ class DialogSession:
 
     def log_stats(self):
         """输出统计信息"""
+        if self.stats_logged:
+            return  # 避免重复输出
+        
+        self.stats_logged = True
         logger.info("=== 音频处理统计 ===")
         logger.info(f"接收OGG页面数: {self.stats['ogg_pages_received']}")
         logger.info(f"解码PCM字节数: {self.stats['pcm_bytes_decoded']}")
