@@ -572,8 +572,8 @@ class DialogSession:
         """启动对话会话"""
         try:
             await self.client.connect()
-            asyncio.create_task(self.process_microphone_input())
             asyncio.create_task(self.receive_loop())
+            asyncio.create_task(self.process_microphone_input())
 
             while self.is_running:
                 await asyncio.sleep(0.1)

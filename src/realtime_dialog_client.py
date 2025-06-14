@@ -49,6 +49,24 @@ class RealtimeDialogClient:
         await self.ws.send(start_session_request)
         response = await self.ws.recv()
         print(f"StartSession response: {protocol.parse_response(response)}")
+        
+        # 会话启动成功后发送SayHello
+        await self.say_hello("你好，我是你的语音助手，有什么可以帮助你的吗？")
+
+    async def say_hello(self, content: str = "你好") -> None:
+        """发送SayHello事件"""
+        say_hello_request = bytearray(protocol.generate_header())
+        say_hello_request.extend(int(300).to_bytes(4, 'big'))  # SayHello事件ID: 300
+        say_hello_request.extend((len(self.session_id)).to_bytes(4, 'big'))
+        say_hello_request.extend(str.encode(self.session_id))
+        
+        payload_data = {"content": content}
+        payload_bytes = str.encode(json.dumps(payload_data, ensure_ascii=False))
+        payload_bytes = gzip.compress(payload_bytes)
+        say_hello_request.extend((len(payload_bytes)).to_bytes(4, 'big'))
+        say_hello_request.extend(payload_bytes)
+        await self.ws.send(say_hello_request)
+        print(f"SayHello sent: {content}")
 
     async def task_request(self, audio: bytes) -> None:
         task_request = bytearray(
