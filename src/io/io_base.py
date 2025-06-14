@@ -11,10 +11,15 @@ class IOBase(ABC):
         self.config = config
         self.is_running = False
         self.audio_input_callback: Optional[Callable[[bytes], None]] = None
+        self.prepared_callback: Optional[Callable[[], None]] = None
         
     def set_audio_input_callback(self, callback: Callable[[bytes], None]) -> None:
         """设置音频输入回调函数"""
         self.audio_input_callback = callback
+        
+    def set_prepared_callback(self, callback: Callable[[], None]) -> None:
+        """设置准备就绪回调函数"""
+        self.prepared_callback = callback
         
     @abstractmethod
     async def start(self) -> None:
@@ -48,3 +53,11 @@ class IOBase(ABC):
                 self.audio_input_callback(audio_data)
             except Exception as e:
                 logger.error(f"音频输入回调处理错误: {e}")
+                
+    def _on_prepared(self) -> None:
+        """触发准备就绪回调"""
+        if self.prepared_callback:
+            try:
+                self.prepared_callback()
+            except Exception as e:
+                logger.error(f"准备就绪回调处理错误: {e}")

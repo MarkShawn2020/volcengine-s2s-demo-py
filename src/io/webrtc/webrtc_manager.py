@@ -22,6 +22,7 @@ class WebRTCManager:
 
         # 音频处理回调
         self.audio_input_callback: Optional[Callable[[bytes], None]] = None
+        self.client_connected_callback: Optional[Callable[[str], None]] = None
         
         # 管理器运行状态
         self.is_running = True
@@ -123,6 +124,9 @@ class WebRTCManager:
                 self._cleanup_client_resources(client_id)
             elif state == "connected":
                 logger.info(f"✅ WebRTC连接已建立: {client_id}")
+                # 触发客户端连接回调
+                if self.client_connected_callback:
+                    self.client_connected_callback(client_id)
 
         # 设置接收音频轨道回调
         @pc.on("track")
@@ -468,6 +472,10 @@ class WebRTCManager:
     def set_audio_input_callback(self, callback: Callable[[bytes], None]):
         """设置音频输入回调函数"""
         self.audio_input_callback = callback
+    
+    def set_client_connected_callback(self, callback: Callable[[str], None]):
+        """设置客户端连接回调函数"""
+        self.client_connected_callback = callback
 
     def get_client_count(self) -> int:
         """获取当前连接的客户端数量"""

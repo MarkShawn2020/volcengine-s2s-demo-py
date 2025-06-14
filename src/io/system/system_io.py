@@ -64,6 +64,9 @@ class SystemIO(IOBase):
         # 显示欢迎界面
         self.display_welcome_screen()
         
+        # 系统音频立即就绪，触发prepared回调
+        self._on_prepared()
+        
         # 启动音频输入处理
         await self._process_microphone_input()
         

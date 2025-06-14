@@ -28,8 +28,14 @@ class WebRTCIO(IOBase):
         # 设置音频输入回调
         self.webrtc_manager.set_audio_input_callback(self._handle_webrtc_audio_input)
         
+        # 设置客户端连接回调
+        self.webrtc_manager.set_client_connected_callback(self._handle_client_connected)
+        
         # 初始化OGG转PCM转换器
         self.ogg_converter = OggToPcmConverter(sample_rate=24000, channels=1)
+        
+        # 标记是否已经触发过prepared回调
+        self._prepared_triggered = False
         
     async def start(self) -> None:
         """启动WebRTC音频输入输出"""
@@ -116,3 +122,13 @@ class WebRTCIO(IOBase):
                 logger.debug(f"🔄 OGG数据缓冲中: {len(ogg_data)}字节")
         except Exception as e:
             logger.error(f"❌ OGG音频处理失败: {e}")
+    
+    def _handle_client_connected(self, client_id: str) -> None:
+        """处理WebRTC客户端连接"""
+        logger.info(f"🔗 WebRTC客户端已连接: {client_id}")
+        
+        # 第一个客户端连接时触发prepared回调
+        if not self._prepared_triggered:
+            self._prepared_triggered = True
+            logger.info("🎯 WebRTC已准备就绪，触发prepared回调")
+            self._on_prepared()

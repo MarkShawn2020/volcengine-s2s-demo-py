@@ -35,6 +35,7 @@ class Orchestrator:
         # 初始化音频IO
         self.audio_io = self._create_audio_io(io_mode)
         self.audio_io.set_audio_input_callback(self._handle_audio_input)
+        self.audio_io.set_prepared_callback(self._on_audio_io_prepared)
 
         # 会话控制
         self.is_running = True
@@ -86,6 +87,12 @@ class Orchestrator:
 
         # 创建异步任务发送音频数据
         asyncio.create_task(self.client.task_request(audio_data))
+    
+    def _on_audio_io_prepared(self) -> None:
+        """音频IO准备就绪回调"""
+        logger.info("🎯 音频IO已准备就绪，发送SayHello")
+        # 创建异步任务发送SayHello
+        asyncio.create_task(self.client.say_hello("你好，我是你的语音助手，有什么可以帮助你的吗？"))
 
     def _is_websocket_connected(self) -> bool:
         """检查WebSocket连接状态"""
@@ -162,7 +169,7 @@ class Orchestrator:
             elif event == ServerEvent.SESSION_STARTED:
                 dialog_id = payload_msg.get('dialog_id', '')
                 logger.info(f"🚀 会话已启动 (Dialog ID: {dialog_id[:8]}...)")
-                asyncio.create_task(self.client.say_hello("你好，我是你的语音助手，有什么可以帮助你的吗？"))
+                # SayHello将在音频IO准备就绪时发送
             elif event == ServerEvent.SESSION_FINISHED:
                 logger.info("✅ 会话已结束")
             elif event == ServerEvent.TTS_ENDED:

@@ -25,6 +25,9 @@ class WebsocketIO(IOBase):
         # 设置音频输入回调
         self.socket_manager.set_audio_input_callback(self._handle_socket_audio_input)
         
+        # 标记是否已经触发过prepared回调
+        self._prepared_triggered = False
+        
     async def start(self) -> None:
         """启动Websocket音频输入输出"""
         logger.info("🔌 启动Websocket音频输入输出...")
@@ -42,6 +45,11 @@ class WebsocketIO(IOBase):
             if not self.socket_manager.is_connected:
                 await asyncio.sleep(0.1)  # 等待客户端连接
             else:
+                # 第一次连接时触发prepared回调
+                if not self._prepared_triggered:
+                    self._prepared_triggered = True
+                    logger.info("🎯 Websocket已准备就绪，触发prepared回调")
+                    self._on_prepared()
                 await asyncio.sleep(0.01)  # 保持活跃
                 
     async def stop(self) -> None:
