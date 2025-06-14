@@ -6,10 +6,10 @@ import os
 ws_connect_config = {
     "base_url": "wss://openspeech.bytedance.com/api/v3/realtime/dialogue",
     "headers": {
-        "X-Api-App-ID": os.getenv("VOLC_APP_ID"),
-        "X-Api-Access-Key": os.getenv("VOLC_ACCESS_KEY"),
+        "X-Api-App-ID": os.getenv("VOLCENGINE_APP_ID"),
+        "X-Api-Access-Key": os.getenv("VOLCENGINE_ACCESS_TOKEN"),
         "X-Api-Resource-Id": "volc.speech.dialog",
-        "X-Api-App-Key": os.getenv("VOLC_APP_KEY"),
+        "X-Api-App-Key": "PlgvMymc7f3tQnJ6",
         "X-Api-Connect-Id": str(uuid.uuid4()),
     }
 }
@@ -28,7 +28,7 @@ start_session_req = {
 }
 
 input_audio_config = {
-    "chunk": 3200,
+    "chunk": 160,  # Match Go version: 160 samples = 10ms at 16kHz
     "format": "pcm",
     "channels": 1,
     "sample_rate": 16000,

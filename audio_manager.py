@@ -39,23 +39,32 @@ class AudioDeviceManager:
     def open_input_stream(self) -> pyaudio.Stream:
         """打开音频输入流"""
         # p = pyaudio.PyAudio()
+        default_input_device = self.pyaudio.get_default_input_device_info()
+        print(f"⭐️ default_input_device: {default_input_device}")
         self.input_stream = self.pyaudio.open(
-            format=self.input_config.bit_size,
+            input_device_index=default_input_device['index'],
             channels=self.input_config.channels,
             rate=self.input_config.sample_rate,
+            frames_per_buffer=self.input_config.chunk,
+            format=self.input_config.bit_size,
             input=True,
-            frames_per_buffer=self.input_config.chunk
+            # Add low latency settings for AirPods compatibility
+            input_host_api_specific_stream_info=None,
         )
+        print(f"⭐️ input_stream: {self.input_stream}")
         return self.input_stream
 
     def open_output_stream(self) -> pyaudio.Stream:
         """打开音频输出流"""
+        default_output_device = self.pyaudio.get_default_output_device_info()
+        print(f"⭐️ default_output_device: {default_output_device}")
         self.output_stream = self.pyaudio.open(
             format=self.output_config.bit_size,
             channels=self.output_config.channels,
             rate=self.output_config.sample_rate,
             output=True,
-            frames_per_buffer=self.output_config.chunk
+            frames_per_buffer=self.output_config.chunk,
+            output_device_index=default_output_device['index'],
         )
         return self.output_stream
 
