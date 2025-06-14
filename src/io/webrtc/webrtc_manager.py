@@ -494,7 +494,7 @@ class AudioStreamTrack(MediaStreamTrack):
 
     def __init__(self):
         super().__init__()
-        self.audio_queue = queue.Queue(maxsize=10)  # 适中的队列大小，避免音频丢失
+        self.audio_queue = queue.Queue(maxsize=200)  # 适中的队列大小，避免音频丢失
         self._timestamp = 0
         self._sample_rate = 48000  # 48kHz，与浏览器匹配
         self._samples_per_frame = int(self._sample_rate * 0.02)  # 20ms frames
@@ -519,16 +519,16 @@ class AudioStreamTrack(MediaStreamTrack):
         try:
             # 从队列获取预处理的OPUS帧数据
             frame_data = await asyncio.get_event_loop().run_in_executor(None, self.audio_queue.get, True, 1.0)
-            logger.debug(f"🎧 从队列获取OPUS帧数据: {len(frame_data) if frame_data else 0}字节")
+            # logger.debug(f"🎧 从队列获取OPUS帧数据: {len(frame_data) if frame_data else 0}字节")
 
             if frame_data is None or len(frame_data) == 0:
                 # 生成静音帧
                 samples = np.zeros(960, dtype=np.int16)
-                logger.debug(f"🔇 生成静音帧: 960样本")
+                # logger.debug(f"🔇 生成静音帧: 960样本")
             else:
                 # 直接使用预处理的int16数据
                 samples = np.frombuffer(frame_data, dtype=np.int16)
-                logger.debug(f"🎵 使用预处理帧: {len(samples)}样本")
+                # logger.debug(f"🎵 使用预处理帧: {len(samples)}样本")
             
             # 创建音频帧
             from av import AudioFrame
@@ -557,7 +557,7 @@ class AudioStreamTrack(MediaStreamTrack):
             frame.planes[0].update(samples.tobytes())
             self._timestamp += 960
             
-            logger.debug(f"🎵 创建OPUS帧: 960样本, PTS={frame.pts}")
+            # logger.debug(f"🎵 创建OPUS帧: 960样本, PTS={frame.pts}")
             return frame
 
         except queue.Empty:
@@ -643,18 +643,18 @@ class AudioStreamTrack(MediaStreamTrack):
             frame_bytes = frame_samples.tobytes()
             
             # 清理旧数据避免延迟累积
-            while self.audio_queue.qsize() > 8:
+            while self.audio_queue.qsize() > 100:
                 try:
                     self.audio_queue.get_nowait()
-                    logger.debug("清理旧音频数据以减少延迟")
+                    # logger.debug("清理旧音频数据以减少延迟")
                 except queue.Empty:
                     break
             
             try:
                 self.audio_queue.put_nowait(frame_bytes)
-                logger.debug(f"添加OPUS帧到队列: {len(frame_bytes)}字节，队列大小: {self.audio_queue.qsize()}")
+                # logger.debug(f"添加OPUS帧到队列: {len(frame_bytes)}字节，队列大小: {self.audio_queue.qsize()}")
             except queue.Full:
-                logger.warning("⚠️ 音频发送队列已满，丢弃数据")
+                logger.debug("⚠️ 音频发送队列已满，丢弃数据")
                 break
 
 
