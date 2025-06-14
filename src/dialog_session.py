@@ -137,6 +137,7 @@ class DialogSession:
                     time.sleep(0.2)
 
     def _detect_audio_format(self, audio_data: bytes) -> str:
+
         """检测音频格式"""
         if len(audio_data) < 4:
             return "pcm"
@@ -313,6 +314,7 @@ class DialogSession:
                 # 检测音频格式
                 audio_format = self._detect_audio_format(audio_data)
 
+                logger.info(f"format: {audio_format}")
                 # 如果是 OGG 格式，处理流式数据
                 if audio_format == "ogg":
                     audio_data = self._convert_ogg_to_pcm(audio_data)

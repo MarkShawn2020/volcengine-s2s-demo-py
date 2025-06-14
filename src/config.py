@@ -15,13 +15,13 @@ ws_connect_config = {
 }
 
 start_session_req = {
-    # "tts": {
-    #     "audio_config": {
-    #         "channel": 1,
-    #         "format": "pcm",
-    #         "sample_rate": 24000
-    #     },
-    # },
+    "tts": {
+        "audio_config": {
+            "channel": 1,
+            "format": "pcm",
+            "sample_rate": 24000
+        },
+    },
     "dialog": {
         "bot_name": "小塔",
     }
