@@ -15,6 +15,7 @@ def setup_logging(level=logging.INFO):
     # 生成基于时间戳的日志文件名
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     log_filename = f'logs/webrtc_dialog_{timestamp}.log'
+    latest_log_link = 'logs/latest.log'
     
     # 配置格式
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -35,7 +36,26 @@ def setup_logging(level=logging.INFO):
     root_logger.addHandler(console_handler)
     root_logger.addHandler(file_handler)
     
-    print(f"📝 日志文件: {log_filename}")
+    # 创建或更新符号链接指向最新的日志文件
+    try:
+        # 如果符号链接已存在，先删除
+        if os.path.islink(latest_log_link):
+            os.unlink(latest_log_link)
+        elif os.path.exists(latest_log_link):
+            os.remove(latest_log_link)
+        
+        # 创建相对路径的符号链接
+        # 使用相对路径避免绝对路径问题
+        relative_log_path = os.path.basename(log_filename)
+        os.symlink(relative_log_path, latest_log_link)
+        
+        print(f"📝 日志文件: {log_filename}")
+        print(f"🔗 最新日志链接: {latest_log_link}")
+    except OSError as e:
+        # 在某些系统上可能无法创建符号链接（如Windows），静默处理
+        print(f"📝 日志文件: {log_filename}")
+        print(f"⚠️ 无法创建符号链接: {e}")
+    
     return log_filename
 
 
@@ -57,9 +77,10 @@ current_log_file = setup_logging(log_level)
 
 def set_debug_mode(debug=False):
     """设置调试模式"""
+    global current_log_file
     if debug:
         logger.setLevel(logging.DEBUG)
-        setup_logging(logging.DEBUG)
+        current_log_file = setup_logging(logging.DEBUG)
     else:
         logger.setLevel(logging.INFO)
-        setup_logging(logging.INFO)
+        current_log_file = setup_logging(logging.INFO)
