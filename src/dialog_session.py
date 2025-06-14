@@ -55,11 +55,23 @@ class DialogSession:
         logger.info(f"🚀 启动对话会话 (ID: {self.session_id[:8]}...)")
 
         self.client = RealtimeDialogClient(config=ws_config, session_id=self.session_id)
+
+        output_audio_config = config.ogg_output_audio_config
+
+        # override output config using tts_audio_config
+        tts_config = config.start_session_req.get("tts")
+        if tts_config:
+            tts_audio_config = tts_config.get("audio_config")
+            if tts_audio_config:
+                output_audio_config = tts_audio_config
+                # output_audio_config['channels'] = tts_audio_config.pop("channel")
+                # output_audio_config['chunk'] = 3200
+
         self.audio_device = AudioDeviceManager(
             AudioConfig(**config.input_audio_config),
-            AudioConfig(**config.output_audio_config)
+            AudioConfig(**output_audio_config)
         )
-        self.output_config = AudioConfig(**config.output_audio_config)
+        self.output_config = AudioConfig(**config.ogg_output_audio_config)
 
         self.is_running = True
         self.is_session_finished = False
@@ -314,7 +326,7 @@ class DialogSession:
                 # 检测音频格式
                 audio_format = self._detect_audio_format(audio_data)
 
-                logger.info(f"format: {audio_format}")
+                # logger.info(f"format: {audio_format}")
                 # 如果是 OGG 格式，处理流式数据
                 if audio_format == "ogg":
                     audio_data = self._convert_ogg_to_pcm(audio_data)
