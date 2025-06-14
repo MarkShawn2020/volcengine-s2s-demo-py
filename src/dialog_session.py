@@ -361,6 +361,8 @@ class DialogSession:
             elif event == ServerEvent.SESSION_STARTED:
                 dialog_id = payload_msg.get('dialog_id', '')
                 logger.info(f"🚀 会话已启动 (Dialog ID: {dialog_id[:8]}...)")
+                # 会话启动成功后发送SayHello
+                asyncio.create_task(self.client.say_hello("你好，我是你的语音助手，有什么可以帮助你的吗？"))
             elif event == ServerEvent.SESSION_FINISHED:
                 logger.info("✅ 会话已结束")
             elif event == ServerEvent.SESSION_FAILED:
@@ -571,8 +573,20 @@ class DialogSession:
     async def start(self) -> None:
         """启动对话会话"""
         try:
+            # 建立WebSocket连接
             await self.client.connect()
-            asyncio.create_task(self.receive_loop())
+            
+            # 启动接收循环
+            receive_task = asyncio.create_task(self.receive_loop())
+            
+            # 发送连接和会话初始化请求
+            await self.client.start_connection()
+            await self.client.start_session()
+            
+            # 等待一下确保连接事件被处理
+            await asyncio.sleep(0.1)
+            
+            # 启动麦克风输入
             asyncio.create_task(self.process_microphone_input())
 
             while self.is_running:

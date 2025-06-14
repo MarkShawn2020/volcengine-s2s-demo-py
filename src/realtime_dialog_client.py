@@ -25,7 +25,8 @@ class RealtimeDialogClient:
         self.logid = self.ws.response_headers.get("X-Tt-Logid") if hasattr(self.ws, 'response_headers') else None
         print(f"dialog server response logid: {self.logid}")
 
-        # StartConnection request
+    async def start_connection(self) -> None:
+        """发送StartConnection请求"""
         start_connection_request = bytearray(protocol.generate_header())
         start_connection_request.extend(int(1).to_bytes(4, 'big'))
         payload_bytes = str.encode("{}")
@@ -33,10 +34,10 @@ class RealtimeDialogClient:
         start_connection_request.extend((len(payload_bytes)).to_bytes(4, 'big'))
         start_connection_request.extend(payload_bytes)
         await self.ws.send(start_connection_request)
-        response = await self.ws.recv()
-        print(f"StartConnection response: {protocol.parse_response(response)}")
+        print("StartConnection request sent")
 
-        # StartSession request
+    async def start_session(self) -> None:
+        """发送StartSession请求"""
         request_params = config.start_session_req
         payload_bytes = str.encode(json.dumps(request_params))
         payload_bytes = gzip.compress(payload_bytes)
@@ -47,11 +48,7 @@ class RealtimeDialogClient:
         start_session_request.extend((len(payload_bytes)).to_bytes(4, 'big'))
         start_session_request.extend(payload_bytes)
         await self.ws.send(start_session_request)
-        response = await self.ws.recv()
-        print(f"StartSession response: {protocol.parse_response(response)}")
-        
-        # 会话启动成功后发送SayHello
-        await self.say_hello("你好，我是你的语音助手，有什么可以帮助你的吗？")
+        print("StartSession request sent")
 
     async def say_hello(self, content: str = "你好") -> None:
         """发送SayHello事件"""
@@ -82,6 +79,8 @@ class RealtimeDialogClient:
 
     async def receive_server_response(self) -> Dict[str, Any]:
         try:
+            if self.ws is None:
+                raise Exception("WebSocket connection not established")
             response = await self.ws.recv()
             data = protocol.parse_response(response)
             return data
