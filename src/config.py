@@ -23,7 +23,7 @@ start_session_req = {
     #     },
     # },
     "dialog": {
-        "bot_name": "豆包",
+        "bot_name": "小塔",
     }
 }
 

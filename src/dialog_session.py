@@ -117,7 +117,7 @@ class DialogSession:
 
             except Exception as e:
                 consecutive_errors += 1
-                logger.warning(f"音频播放错误 ({consecutive_errors}/{max_consecutive_errors}): {e}")
+                logger.debug(f"音频播放错误 ({consecutive_errors}/{max_consecutive_errors}): {e}")
 
                 if consecutive_errors >= max_consecutive_errors:
                     logger.error("连续播放错误过多，尝试重新初始化音频流")
@@ -228,12 +228,12 @@ class DialogSession:
                 self.ogg_buffer = self.ogg_buffer[last_ogg_start:]
                 # 重置PCM计数，因为缓冲区被截断了
                 self.last_pcm_size = 0
-                logger.warning(f"OGG缓冲区过大，从最后页面保留 {len(self.ogg_buffer)} 字节")
+                logger.debug(f"OGG缓冲区过大，从最后页面保留 {len(self.ogg_buffer)} 字节")
             else:
                 # 清空缓冲区重新开始
                 self.ogg_buffer.clear()
                 self.last_pcm_size = 0
-                logger.warning("OGG缓冲区过大且无有效页面，重置缓冲区")
+                logger.debug("OGG缓冲区过大且无有效页面，重置缓冲区")
 
         # 返回空数据，等待更多OGG页面
         return b''
@@ -259,7 +259,7 @@ class DialogSession:
             # 检查是否有异常大的音量峰值（可能的爆炸音）
             max_amplitude = np.max(np.abs(audio_array))
             if max_amplitude > 25000:  # 接近int16最大值32767的阈值
-                logger.warning(f"检测到异常音量峰值: {max_amplitude}，进行音量限制")
+                logger.debug(f"检测到异常音量峰值: {max_amplitude}，进行音量限制")
                 # 进行音量限制
                 audio_array = np.clip(audio_array, -25000, 25000)
 
@@ -314,23 +314,14 @@ class DialogSession:
 
                 # 如果是 OGG 格式，处理流式数据
                 if audio_format == "ogg":
-                    processed_audio = self._convert_ogg_to_pcm(audio_data)
-                    if len(processed_audio) > 0:
-                        # 将处理后的PCM数据加入播放队列
-                        try:
-                            self.audio_queue.put(processed_audio, timeout=0.1)
-                        except queue.Full:
-                            self.stats['audio_queue_overflows'] += 1
-                            if self.stats['audio_queue_overflows'] % 10 == 1:  # 每10次溢出才输出一次警告
-                                logger.warning(f"⚠️ 音频队列溢出 (第{self.stats['audio_queue_overflows']}次)")
-                else:
-                    # PCM格式直接播放
-                    try:
-                        self.audio_queue.put(audio_data, timeout=0.1)
-                    except queue.Full:
-                        self.stats['audio_queue_overflows'] += 1
-                        if self.stats['audio_queue_overflows'] % 10 == 1:  # 每10次溢出才输出一次警告
-                            logger.warning(f"⚠️ 音频队列溢出 (第{self.stats['audio_queue_overflows']}次)")
+                    audio_data = self._convert_ogg_to_pcm(audio_data)
+
+                try:
+                    self.audio_queue.put(audio_data, timeout=0.1)
+                except queue.Full:
+                    self.stats['audio_queue_overflows'] += 1
+                    if self.stats['audio_queue_overflows'] % 10 == 1:  # 每10次溢出才输出一次警告
+                        logger.debug(f"⚠️ 音频队列溢出 (第{self.stats['audio_queue_overflows']}次)")
 
             # 检查是否包含AI文本回复 (这应该通过ChatResponse事件550处理)
             elif isinstance(response.get('payload_msg'), dict):
