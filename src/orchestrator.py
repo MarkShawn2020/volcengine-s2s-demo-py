@@ -11,13 +11,10 @@ import src.volcengine.config
 from src import config
 from src.client import RealtimeDialogClient
 from src.io.io_base import IOBase
-from src.io.system.system_io import SystemIO
-from src.io.webrtc.webrtc_io import WebRTCIO
-from src.io.websocket.websocket_io import WebsocketIO
+from src.utils.audio.audio_converter import OggToPcmConverter
+from src.utils.audio.detect_audio_format import detect_audio_format
 from src.utils.logger import logger
 from src.volcengine.protocol import ServerEvent
-from src.utils.audio.detect_audio_format import detect_audio_format
-from src.utils.audio.audio_converter import OggToPcmConverter
 
 
 class Orchestrator:
@@ -55,7 +52,7 @@ class Orchestrator:
                 output_config = tts_audio_config
 
         self.ogg_converter = OggToPcmConverter(sample_rate=output_config['sample_rate'],
-            channels=output_config['channels'])
+                                               channels=output_config['channels'])
 
         # 实时字幕显示
         self.current_user_text = ""
@@ -73,10 +70,13 @@ class Orchestrator:
     def _create_audio_io(self, io_mode: str) -> IOBase:
         """创建音频IO实例"""
         if io_mode == "webrtc":
+            from src.io.webrtc.webrtc_io import WebRTCIO
             return WebRTCIO(src.io.webrtc.config.webrtc_config)
         elif io_mode == "websocket":
+            from src.io.websocket.websocket_io import WebsocketIO
             return WebsocketIO(src.io.websocket.config.socket_config)
         else:  # system
+            from src.io.system.system_io import SystemIO
             return SystemIO({})
 
     def _handle_audio_input(self, audio_data: bytes) -> None:
@@ -90,7 +90,6 @@ class Orchestrator:
 
         # 创建异步任务发送音频数据
         asyncio.create_task(self.client.task_request(audio_data))
-
 
     def _is_websocket_connected(self) -> bool:
         """检查WebSocket连接状态"""
