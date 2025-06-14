@@ -3,8 +3,8 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-import config
-from audio_manager import DialogSession
+from src import config
+from src.audio_manager import DialogSession
 
 def test_with_tts_config():
     """测试配置了 TTS 的情况（返回 PCM）"""

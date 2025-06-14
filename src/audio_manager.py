@@ -571,7 +571,7 @@ class DialogSession:
             try:
                 # 添加exception_on_overflow=False参数来忽略溢出错误
                 audio_data = stream.read(config.input_audio_config["chunk"], exception_on_overflow=False)
-                save_pcm_to_wav(audio_data, "output.wav")
+                save_pcm_to_wav(audio_data, "../output.wav")
                 await self.client.task_request(audio_data)
                 await asyncio.sleep(0.01)  # 避免CPU过度使用
             except Exception as e:

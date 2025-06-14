@@ -1,7 +1,6 @@
 import websockets
 import gzip
 import json
-import asyncio
 
 from typing import Dict, Any
 
