@@ -85,9 +85,6 @@ class Orchestrator:
                 seq += 1
                 logger.debug(f"handing receiver ({seq})")
                 response = await self.volcengine_client.on_response()
-                if response == {}:
-                    return
-
                 event = response.get('event', 'unknown')
                 payload_msg = response.get('payload_msg')
                 logger.debug(
@@ -119,6 +116,7 @@ class Orchestrator:
                     elif event == ServerEvent.SESSION_STARTED:
                         dialog_id = payload_msg.get('dialog_id', '')
                         logger.info(f"🚀 会话已启动 (Dialog ID: {dialog_id[:8]}...)")  # SayHello将在音频IO准备就绪时发送
+                        await self.volcengine_client.request_say_hello(VOLCENGINE_WELCOME)
 
                     elif event == ServerEvent.SESSION_FINISHED:
                         logger.info("✅ 会话已结束")
@@ -174,7 +172,7 @@ class Orchestrator:
                     logger.error(f"服务器错误: {response['payload_msg']}")
                     raise Exception("服务器错误")
 
-                await asyncio.sleep(1)
+                await asyncio.sleep(0)
 
         except Exception as e:
             logger.warning(f"failed to receive, reason: {e}")

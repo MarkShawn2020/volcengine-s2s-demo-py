@@ -144,8 +144,9 @@ class VoicengineClient:
         payload_bytes = gzip.compress(payload_bytes)
         say_hello_request.extend((len(payload_bytes)).to_bytes(4, 'big'))
         say_hello_request.extend(payload_bytes)
+        logger.info(f"requesting say-hello, content: {content}")
         await self.ws.send(say_hello_request)
-        logger.info(f"SayHello sent: {content}")
+        logger.info(f"requested say-hello")
 
     async def upload_audio(self, audio: bytes) -> None:
         if not self.is_active: return
@@ -171,6 +172,7 @@ class VoicengineClient:
         if not self.is_active: return None
 
         try:
+            logger.debug("waiting for response")
             response = await self.ws.recv()
             data = protocol.parse_response(response)
             logger.debug(f"on parsed-response: {data}")
