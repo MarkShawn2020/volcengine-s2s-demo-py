@@ -92,18 +92,8 @@ class WebRTCManager:
         audio_track = AudioStreamTrack()
         self.audio_tracks[client_id] = audio_track
 
-        # 明确指定音频轨道参数，确保与OPUS编码器兼容
-        transceiver = pc.addTransceiver(audio_track, direction="sendrecv")
-
-        # 设置OPUS编码器参数 - 通过SDP协商来配置
-        try:
-            # aiortc会自动选择OPUS编码器，我们只需要确保音频格式正确
-            logger.info(f"🎵 WebRTC轨道已添加，将使用OPUS编码")
-        except Exception as e:
-            logger.warning(f"⚠️ OPUS编码器配置失败: {e}")
-
-        # 日志记录WebRTC配置
-        logger.info(f"🎵 创建音频轨道: 48kHz, mono, s16 -> OPUS编码")
+        # 明确指定音频轨道参数
+        pc.addTransceiver(audio_track, direction="sendrecv")
 
         # 设置连接状态变化回调
         @pc.on("connectionstatechange")
@@ -226,7 +216,7 @@ class WebRTCManager:
                     }
                 )
 
-            logger.info(f"📤 发送Answer: {client_id}")
+            logger.debug(f"📤 发送Answer: {client_id}")
 
         except Exception as e:
             logger.error(f"❌ 处理Offer错误: {e}")

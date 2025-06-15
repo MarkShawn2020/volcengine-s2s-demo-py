@@ -22,7 +22,7 @@ class VoicengineClient:
         """建立WebSocket连接"""
         logger.info(f"url: {self.config['base_url']}, headers: {self.config['headers']}")
         self.ws = await websockets.connect(
-            self.config['base_url'], additional_headers=self.config['headers'], ping_interval=None
+            self.config['base_url'], additional_headers=self.config['headers'], ping_interval=5
             )
         self.logid = self.ws.response_headers.get("X-Tt-Logid") if hasattr(self.ws, 'response_headers') else None
         logger.info(f"dialog server response logid: {self.logid}")
@@ -76,7 +76,7 @@ class VoicengineClient:
                 return
 
             # logger.info(f"📤 VoicengineClient发送音频数据: {len(audio)} bytes")
-            
+
             task_request = bytearray(
                 protocol.generate_header(
                     message_type=protocol.CLIENT_AUDIO_ONLY_REQUEST, serial_method=protocol.NO_SERIALIZATION
@@ -89,7 +89,7 @@ class VoicengineClient:
             task_request.extend((len(payload_bytes)).to_bytes(4, 'big'))  # payload size(4 bytes)
             task_request.extend(payload_bytes)
             await self.ws.send(task_request)
-            logger.debug(f">> volcengine: {len(payload_bytes)} bytes")
+            logger.debug(f"🏠 --> 📡 {len(payload_bytes)} bytes")
         except Exception as e:
             logger.error(f"❌ 发送音频请求失败: {e}")
             raise

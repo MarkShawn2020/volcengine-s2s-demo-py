@@ -989,45 +989,45 @@
 
     // 开始推流
     async function startStreaming() {
-        if (!localStream) {
-            log('请先启用麦克风', 'warning');
-            return;
-        }
+            if (!localStream) {
+                log('请先启用麦克风', 'warning');
+                return;
+            }
 
-        if (!signalingSocket || signalingSocket.readyState !== WebSocket.OPEN) {
-            log('请先连接服务器', 'warning');
-            return;
-        }
+            if (!signalingSocket || signalingSocket.readyState !== WebSocket.OPEN) {
+                log('请先连接服务器', 'warning');
+                return;
+            }
 
-        if (!peerConnection) {
-            await createPeerConnection();
-        }
+            if (!peerConnection) {
+                await createPeerConnection();
+            }
 
-        try {
-            // 添加本地音频流
-            localStream.getTracks().forEach(track => {
-                peerConnection.addTrack(track, localStream);
-            });
+            try {
+                // 添加本地音频流
+                localStream.getTracks().forEach(track => {
+                    peerConnection.addTrack(track, localStream);
+                });
 
-            // 创建并发送Offer
-            const offer = await peerConnection.createOffer();
-            const modifiedOffer = new RTCSessionDescription({
-                type: offer.type,
-                sdp: offer.sdp
-            });
+                // 创建并发送Offer
+                const offer = await peerConnection.createOffer();
+                const modifiedOffer = new RTCSessionDescription({
+                    type: offer.type,
+                    sdp: offer.sdp
+                });
 
-            await peerConnection.setLocalDescription(modifiedOffer);
+                await peerConnection.setLocalDescription(modifiedOffer);
 
-            log('发送WebRTC Offer (16kHz)');
-            signalingSocket.send(JSON.stringify({
-                type: 'offer',
-                sdp: modifiedOffer
-            }));
+                log('发送WebRTC Offer (16kHz)');
+                signalingSocket.send(JSON.stringify({
+                    type: 'offer',
+                    sdp: modifiedOffer
+                }));
 
-            isStreaming = true;
-            streamPaused = false;
-            log('开始推流', 'success');
-            updateButtons();
+                isStreaming = true;
+                streamPaused = false;
+                log('开始推流', 'success');
+                updateButtons();
 
         } catch (error) {
             log(`开始推流失败: ${error.message}`, 'error');

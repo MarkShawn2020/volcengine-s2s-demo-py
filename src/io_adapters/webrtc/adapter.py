@@ -155,10 +155,10 @@ class WebRTCAdapter(AdapterBase):
 
     def _handle_client_connected(self, client_id: str) -> None:
         """处理WebRTC客户端连接"""
-        logger.info(f"🔗 WebRTC客户端已连接: {client_id}")
+        logger.debug(f"🔗 WebRTC客户端已连接: {client_id}")
 
         # 第一个客户端连接时触发prepared回调
         if not self._prepared_triggered:
             self._prepared_triggered = True
-            logger.info("🎯 WebRTC已准备就绪，触发prepared回调")
+            logger.debug("🎯 WebRTC已准备就绪，触发prepared回调")
             self._on_prepared()

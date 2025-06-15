@@ -1,4 +1,5 @@
 import asyncio
+import json
 import signal
 import threading
 import time
@@ -76,7 +77,7 @@ class Orchestrator:
             return
 
         # logger.info(f"🎤 Orchestrator接收到音频数据: {len(audio_data)} bytes")
-        
+
         # 创建异步任务发送音频数据
         task = asyncio.create_task(self.client.task_request(audio_data))
         task.add_done_callback(self._handle_task_request_exception)
@@ -84,8 +85,6 @@ class Orchestrator:
     def _on_audio_io_prepared(self) -> None:
         """音频IO准备就绪回调"""
         logger.info("🎯 音频IO已准备就绪，发送SayHello")
-        logger.info(f"🎯 WebSocket连接状态: {self._is_websocket_connected()}")
-        # 创建异步任务发送SayHello
         task = asyncio.create_task(self.client.say_hello(VOLCENGINE_WELCOME))
         task.add_done_callback(self._handle_general_task_exception)
 
@@ -129,46 +128,29 @@ class Orchestrator:
         if response == {}:
             return
 
-        logger.debug(f"📡 收到服务器响应: {response.get('message_type', 'unknown')}, event={response.get('event', 'none')}")
+        event = response.get('event', 'unknown')
+        payload_msg = response.get('payload_msg')
+        logger.debug(f"🏠 <-- 📡 [{ServerEvent(event).name}] Payload(type={type(payload_msg)}, size={len(payload_msg)})")
+        if isinstance(payload_msg, dict):
+            logger.debug(json.dumps(payload_msg, indent=2, ensure_ascii=False))
 
         if response['message_type'] == 'SERVER_ACK':
-            event = response.get('event', 0)
 
-            if isinstance(response.get('payload_msg'), bytes):
-                audio_data = response['payload_msg']
-
-                if len(audio_data) == 0:
-                    return
-
-                if event == ServerEvent.TTS_RESPONSE:
-                    logger.debug(f"🎵 收到TTSResponse音频数据: {len(audio_data)}字节")
+            if isinstance(payload_msg, bytes):
+                if len(payload_msg) == 0: return
 
                 # 通过音频IO发送输出
-                task = asyncio.create_task(self.audio_adapter.send_audio_output(audio_data, VOLCENGINE_AUDIO_TYPE))
+                task = asyncio.create_task(self.audio_adapter.send_audio_output(payload_msg, VOLCENGINE_AUDIO_TYPE))
                 task.add_done_callback(self._handle_general_task_exception)
 
-            elif isinstance(response.get('payload_msg'), dict):
-                ai_content = response.get('payload_msg', {}).get('content', '')
+            elif isinstance(payload_msg, dict):
+                ai_content = payload_msg.get('content', '')
                 if ai_content:
                     logger.debug(f"🤖 AI文本回复(SERVER_ACK): '{ai_content}'")
                     self.current_ai_text += ai_content
                     self._display_subtitle(ai_text=self.current_ai_text, is_final=False)
 
         elif response['message_type'] == 'SERVER_FULL_RESPONSE':
-            event = response.get('event', 'unknown')
-            if logger.level <= 10:
-                logger.debug(f'Event: {event}, Response: {response}\n')
-            payload_msg = response.get('payload_msg', {})
-
-            connection_events = [ServerEvent.CONNECTION_STARTED, ServerEvent.CONNECTION_FAILED,
-                                 ServerEvent.CONNECTION_FINISHED, ServerEvent.SESSION_STARTED,
-                                 ServerEvent.SESSION_FINISHED, ServerEvent.SESSION_FAILED]
-
-            if event in connection_events:
-                logger.info(f"📡 {ServerEvent(event).name}")
-            else:
-                event_name = ServerEvent(event).name if event in ServerEvent._value2member_map_ else f'Unknown({event})'
-                logger.debug(f"📡 {event_name}")
 
             # 处理各种服务器事件
             if event == ServerEvent.CONNECTION_STARTED:
@@ -353,9 +335,9 @@ class Orchestrator:
                     logger.info("WebSocket连接已关闭，退出接收循环")
                     self.is_running = False
                     break
-                    
+
                 response = await self.client.receive_server_response()
-                logger.debug(f"📡 接收到原始响应，开始处理...")
+                # logger.debug(f"📡 接收到原始响应，开始处理...")
                 self.handle_server_response(response)
                 if 'event' in response and (response['event'] == ServerEvent.SESSION_FINISHED or response[
                     'event'] == ServerEvent.SESSION_FAILED):
