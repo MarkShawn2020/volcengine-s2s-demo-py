@@ -66,14 +66,7 @@ class WebRTCAdapter(AdapterBase):
         if not audio_data or len(audio_data) == 0:
             return
 
-        logger.debug(f"🎵 发送AI音频回复 ({audio_type}): {len(audio_data)}字节")
-        if self.webrtc_manager:
-            if audio_type == "ogg":
-                # OGG格式需要解码为PCM再处理
-                self._handle_ogg_audio(audio_data)
-            else:
-                # PCM格式直接处理
-                self.webrtc_manager.send_audio_to_all_clients(audio_data, audio_type)
+        self.webrtc_manager.send_audio_to_all_clients(audio_data, audio_type)
 
     def display_welcome_screen(self) -> None:
         """显示WebRTC欢迎界面"""
@@ -108,20 +101,6 @@ class WebRTCAdapter(AdapterBase):
             return
 
         self._handle_audio_input(audio_data)
-
-    def _handle_ogg_audio(self, ogg_data: bytes) -> None:
-        """处理OGG格式音频数据"""
-        try:
-            # 使用OGG转PCM转换器
-            pcm_data = self.ogg_converter.convert(ogg_data)
-            if pcm_data and len(pcm_data) > 0:
-                # 将转换后的PCM数据发送给WebRTC客户端
-                self.webrtc_manager.send_audio_to_all_clients(pcm_data)
-                logger.debug(f"🎵 OGG转PCM成功: {len(ogg_data)}字节 → {len(pcm_data)}字节")
-            else:
-                logger.debug(f"🔄 OGG数据缓冲中: {len(ogg_data)}字节")
-        except Exception as e:
-            logger.error(f"❌ OGG音频处理失败: {e}")
 
     def _handle_client_connected(self, client_id: str) -> None:
         """处理WebRTC客户端连接"""
