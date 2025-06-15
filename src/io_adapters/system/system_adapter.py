@@ -5,7 +5,7 @@ import time
 from typing import Dict, Any
 
 from src.io_adapters.base import AdapterBase
-from src.io_adapters.system.audio_manager import AudioDeviceManager
+from src.io_adapters.system.system_audio_manager import SystemAudioManager
 from src.utils.logger import logger
 from src.volcengine.config import input_audio_config
 
@@ -17,7 +17,7 @@ class SystemAdapter(AdapterBase):
         super().__init__(io_config)
 
         # 初始化音频设备管理器
-        self.audio_device = AudioDeviceManager(self.input_audio_config, self.output_audio_config)
+        self.audio_device = SystemAudioManager(self.input_audio_config, self.output_audio_config)
 
         # 音频队列和播放流
         self.audio_queue = queue.Queue(maxsize=50)

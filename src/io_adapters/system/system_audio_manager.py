@@ -6,7 +6,7 @@ from src.types.audio import AudioConfig
 from src.utils.logger import logger
 
 
-class AudioDeviceManager:
+class SystemAudioManager:
     """音频设备管理类，处理音频输入输出"""
 
     def __init__(self, input_config: AudioConfig, output_config: AudioConfig):

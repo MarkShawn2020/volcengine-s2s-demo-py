@@ -5,7 +5,7 @@ import numpy as np
 from aiortc import RTCPeerConnection, RTCSessionDescription, RTCIceCandidate
 
 from src.io_adapters.webrtc.audio_stream_track import AudioStreamTrack
-from src.io_adapters.webrtc.webrtc_signaling import WebRTCSignalingServer
+from src.io_adapters.webrtc.webrtc_signaling_server import WebRTCSignalingServer
 from src.types.audio import AudioType
 from src.utils.logger import logger
 
@@ -388,35 +388,6 @@ class WebRTCManager:
         for client_id in active_clients:
             self.send_audio_to_client(client_id, audio_data, audio_type)
 
-    def send_test_audio(self):
-        """发送测试音频 - 440Hz正弦波（A4音符）"""
-        active_clients = list(self.audio_tracks.keys())
-        if not active_clients:
-            return
-
-        # 生成440Hz正弦波测试音频 (1秒)
-        import math
-        sample_rate = 24000  # 火山引擎格式
-        duration = 1.0  # 1秒
-        frequency = 440  # A4音符
-        num_samples = int(sample_rate * duration)
-
-        # 生成正弦波
-        samples = []
-        for i in range(num_samples):
-            t = i / sample_rate
-            amplitude = 0.3  # 30%音量
-            sample = amplitude * math.sin(2 * math.pi * frequency * t)
-            # 转换为24kHz float32格式（模拟火山引擎输出）
-            samples.append(sample)
-
-        # 转换为bytes格式
-        import struct
-        test_audio = b''.join(struct.pack('<f', sample) for sample in samples)
-
-        logger.info(f"🎵 发送测试音频: 440Hz正弦波, {len(test_audio)}字节")
-        self.send_audio_to_all_clients(test_audio)
-
     def set_audio_input_callback(self, callback: Callable[[bytes], None]):
         """设置音频输入回调函数"""
         self.audio_input_callback = callback
@@ -428,8 +399,3 @@ class WebRTCManager:
     def get_client_count(self) -> int:
         """获取当前连接的客户端数量"""
         return len(self.peer_connections)
-
-    def handle_test_audio_request(self, client_id: str):
-        """处理测试音频请求"""
-        logger.info(f"🎵 处理测试音频请求: {client_id}")
-        self.send_test_audio()
