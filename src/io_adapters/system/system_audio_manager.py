@@ -2,36 +2,28 @@ import json
 import logging
 
 import pyaudio
-from typing_extensions import Optional, TypedDict
+from typing_extensions import Optional
 
-from src.audio.type import AudioConfig
+from src.audio.type import AudioType
+from src.config import VOLCENGINE_AUDIO_TYPE
+from src.volcengine.config import input_audio_config, pcm_output_audio_config, ogg_output_audio_config
 
 logger = logging.getLogger(__name__)
-
-
-class SystemAudioConfig(TypedDict):
-    input: AudioConfig
-    output: AudioConfig
 
 
 class SystemAudioManager:
     """音频设备管理类，处理音频输入输出"""
 
-    def __init__(self, config: SystemAudioConfig):
+    def __init__(self):
         logger.info("initializing")
-        self.config = config
+        self.input_config = input_audio_config
+        self.output_config = ogg_output_audio_config
+        if VOLCENGINE_AUDIO_TYPE == AudioType.pcm:
+            self.output_config = pcm_output_audio_config
         self.pyaudio = pyaudio.PyAudio()
         self.input_stream: Optional[pyaudio.Stream] = None
         self.output_stream: Optional[pyaudio.Stream] = None
         logger.info("initialized")
-
-    @property
-    def input_config(self):
-        return self.config['input']
-
-    @property
-    def output_config(self):
-        return self.config['output']
 
     def open_input_stream(self) -> pyaudio.Stream:
         """打开音频输入流"""

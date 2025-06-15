@@ -203,11 +203,11 @@ class WebRTCManager:
 
             # 创建答案
             answer = await pc.createAnswer()
-            
+
             # 修改答案SDP以支持16000采样率
             modified_sdp = self._modify_sdp_for_16khz(answer.sdp)
             answer = RTCSessionDescription(sdp=modified_sdp, type=answer.type)
-            
+
             await pc.setLocalDescription(answer)
 
             # 发送答案给客户端
@@ -305,7 +305,8 @@ class WebRTCManager:
 
                 # --- 核心委托步骤 ---
                 processed_data = self.frame_processor.process_frame(frame)
-                # logger.debug(f"🎤 处理音频帧: 输入={len(frame.to_ndarray().tobytes()) if frame else 0} bytes, 输出={len(processed_data) if processed_data else 0} bytes")
+                # logger.debug(f"🎤 处理音频帧: 输入={len(frame.to_ndarray().tobytes()) if frame else 0} bytes,
+                # 输出={len(processed_data) if processed_data else 0} bytes")
 
                 if processed_data and self.audio_input_callback:
                     # logger.debug(f"🎯 调用音频输入回调: {len(processed_data)} bytes")
@@ -356,7 +357,7 @@ class WebRTCManager:
         """修改SDP以支持16000采样率"""
         lines = sdp.split('\n')
         modified_lines = []
-        
+
         for line in lines:
             modified_lines.append(line)
             # 在opus的a=fmtp行中添加maxplaybackrate=16000
@@ -370,7 +371,7 @@ class WebRTCManager:
                     else:
                         modified_lines[-1] = line + ' maxplaybackrate=16000'
                     logger.info(f"🎵 修改SDP支持16kHz采样率: {modified_lines[-1]}")
-        
+
         return '\n'.join(modified_lines)
 
     def get_client_count(self) -> int:

@@ -21,7 +21,7 @@ class Ogg2PcmProcessor(AudioProcessor):
         # 内部队列，用于存放解码后的PCM数据
         self.pcm_queue = queue.Queue()
         self._is_running = threading.Event()
-        
+
         # 输入缓冲区，用于积累足够的OGG数据再送给FFmpeg
         self._input_buffer = b''
         self._min_buffer_size = 1024  # 最小缓冲区大小
@@ -70,7 +70,7 @@ class Ogg2PcmProcessor(AudioProcessor):
             return b''
 
         self._feed_ogg_data(audio_data)
-        
+
         # 收集所有可用的解码数据
         output_data = b''
         while True:
@@ -78,7 +78,7 @@ class Ogg2PcmProcessor(AudioProcessor):
             if not chunk:
                 break
             output_data += chunk
-        
+
         return output_data
 
     def flush(self) -> bytes | None:
@@ -91,7 +91,7 @@ class Ogg2PcmProcessor(AudioProcessor):
                 self._input_buffer = b''
             except (BrokenPipeError, OSError):
                 pass
-        
+
         # 收集所有剩余的解码数据
         remaining_data = b''
         while True:
@@ -135,7 +135,7 @@ class Ogg2PcmProcessor(AudioProcessor):
 
         # 将数据添加到缓冲区
         self._input_buffer += ogg_data
-        
+
         # 如果缓冲区足够大，或者这是流的开始，就发送数据
         if len(self._input_buffer) >= self._min_buffer_size:
             try:

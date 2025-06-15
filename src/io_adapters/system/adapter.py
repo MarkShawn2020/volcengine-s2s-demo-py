@@ -1,97 +1,39 @@
-import asyncio
-import logging
-import queue
-
-from src.audio.processors import Ogg2PcmProcessor
-from src.audio.processors.base import AudioProcessor
-from src.audio.type import AudioType
-from src.config import VOLCENGINE_AUDIO_TYPE
 from src.io_adapters.base import AdapterBase
-from src.io_adapters.system.system_audio_manager import SystemAudioManager, SystemAudioConfig
+from src.io_adapters.system.system_audio_manager import SystemAudioManager
 from src.volcengine.config import input_audio_config
-
-logger = logging.getLogger(__name__)
 
 
 class SystemAdapter(AdapterBase):
-    """系统音频输入输出实现"""
+    """系统音频输入输出实现 - 声明式配置"""
 
     def __init__(self, config=None):
+        self._input_stream = None
+        self._output_stream = None
+        self._audio_queue = None
         super().__init__(config)
 
-        # 初始化音频设备管理器
-        config = SystemAudioConfig(input=self.input_audio_config, output=self.output_config)
-        self.audio_device = SystemAudioManager(config)
-
-        # 音频队列和播放流
-        self.audio_queue = queue.Queue(maxsize=50)
-        self.output_stream = None
-        self.is_recording = False
-        self.is_playing = False
-        self.player_thread = None
-
-        # 统计信息
-        self.stats = {
-            'audio_queue_overflows': 0
-            }
-
-    def _build_audio_pipeline(self):
-        """构建SystemAdapter的音频处理流水线"""
-
-        class SpeakerSink(AudioProcessor):
-            def __init__(self, adapter):
-                self.adapter = adapter
-
-            def process(self, audio_data: bytes) -> bytes:
-                if self.adapter.output_stream and not self.adapter.output_stream.is_stopped():
-                    self.adapter.output_stream.write(audio_data)
-                return b''  # 消费者不产生输出
-
-        pipeline = []
-
-        # 步骤1: 如果输入是OGG，添加解码器
-        if VOLCENGINE_AUDIO_TYPE == AudioType.ogg:
-            pipeline.append(Ogg2PcmProcessor(self.output_config))
-
-        # 步骤2: SystemAdapter 不需要额外的重采样，因为解码后的格式
-        #         就已经是它需要的播放格式了。
-
-        pipeline.append(SpeakerSink(self))
-        self.audio_pipeline = pipeline
-
-    async def start(self) -> None:
-        logger.info("starting")
+        self._audio_device = SystemAudioManager()
+        self._input_stream = self._audio_device.open_input_stream()
+        self._output_stream = self._audio_device.open_output_stream()
         self.is_running = True
-        self.is_recording = True
 
-        # 1. 启动音频输出流
-        self.output_stream = self.audio_device.open_output_stream()
+    async def on_push(self) -> bytes:
+        if self.is_running and self._input_stream.is_active():
+            return self._input_stream.read(
+                input_audio_config["chunk"], exception_on_overflow=False
+                )
+        return b''
 
-        # 2. 显示欢迎界面
-        self.display_welcome_screen()
-        self._on_prepared()
+    async def on_pull(self, chunk: bytes) -> None:
+        if self.is_running and self._output_stream.is_active():
+            self._output_stream.write(chunk)
 
-        # 3. 启动麦克风输入
-        await self._process_microphone_input()
-        logger.info("started")
-
-    async def stop(self) -> None:
-        """停止音频输入输出"""
-        logger.info("🛑 停止系统音频输入输出...")
-
+    async def stop(self):
         self.is_running = False
-        self.is_recording = False
-        self.is_playing = False
-
-        # 清理音频处理流水线
-        self._cleanup_pipeline()
-
-        # 可以向队列发送一个None来唤醒阻塞的get()
-        self.audio_queue.put(None)
-
-        # 等待播放线程结束
-        if self.player_thread and self.player_thread.is_alive():
-            self.player_thread.join(timeout=2.0)
+        if self._input_stream:
+            self._input_stream.close()
+        if self._output_stream:
+            self._output_stream.close()
 
     def display_welcome_screen(self) -> None:
         """显示欢迎界面"""
@@ -107,25 +49,3 @@ class SystemAdapter(AdapterBase):
         print("=" * 80)
         print("🚀 系统已就绪，请开始说话...")
         print("=" * 80 + "\n")
-
-    def cleanup(self) -> None:
-        """清理资源"""
-        logger.info("cleaning up")
-        self._cleanup_pipeline()
-        if self.audio_device:
-            self.audio_device.cleanup()
-        logger.info("cleaned up")
-
-    async def _process_microphone_input(self) -> None:
-        """处理麦克风输入"""
-        stream = self.audio_device.open_input_stream()
-        logger.info("🎙️ 麦克风已就绪，开始监听...")
-
-        while self.is_recording and stream.is_active():
-            try:
-                audio_data = stream.read(input_audio_config["chunk"], exception_on_overflow=False)
-                self._handle_audio_input(audio_data)
-                await asyncio.sleep(0.01)
-            except Exception as e:
-                logger.error(f"读取麦克风数据出错: {e}")
-                await asyncio.sleep(0.1)

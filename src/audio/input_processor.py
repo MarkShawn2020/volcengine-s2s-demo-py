@@ -15,11 +15,11 @@ class AudioFrameProcessor:
         self.target_sample_rate = target_sample_rate
         self.target_dtype = target_dtype
         self.buffer_duration_ms = buffer_duration_ms
-        
+
         # 音频缓冲区 - 累积小的音频块
         self.buffer = np.array([], dtype=np.int16)
         self.min_buffer_samples = int(target_sample_rate * buffer_duration_ms / 1000)  # 例如100ms的音频
-        
+
         logger.info(
             f"音频输入处理器已初始化: "
             f"目标采样率={target_sample_rate}Hz, 目标格式={target_dtype}, "
@@ -77,35 +77,36 @@ class AudioFrameProcessor:
 
         # 4. 添加到缓冲区
         self.buffer = np.concatenate([self.buffer, audio_array])
-        
+
         # 5. 检查是否有足够的数据输出
         if len(self.buffer) >= self.min_buffer_samples:
             # 输出缓冲区中的数据
             output_samples = self.buffer[:self.min_buffer_samples]
             self.buffer = self.buffer[self.min_buffer_samples:]  # 保留剩余部分
-            
+
             result = output_samples.tobytes()
             duration_ms = len(output_samples) / self.target_sample_rate * 1000
-            
+
             # 添加音频质量检查
             max_amplitude = np.max(np.abs(output_samples)) if len(output_samples) > 0 else 0
-            rms = np.sqrt(np.mean(output_samples.astype(np.float32)**2)) if len(output_samples) > 0 else 0
-            
+            rms = np.sqrt(np.mean(output_samples.astype(np.float32) ** 2)) if len(output_samples) > 0 else 0
+
             # logger.debug(f"🎤 AudioFrameProcessor输出(缓冲): RMS={rms:.1f}")
 
-            
             return result
         else:
             # 缓冲区数据不足，不输出
             # logger.debug(f"🎤 缓冲区累积中: {len(self.buffer)}/{self.min_buffer_samples} samples")
             return None
-    
+
     def flush(self) -> bytes | None:
         """刷新缓冲区，输出所有剩余的音频数据"""
         if len(self.buffer) > 0:
             result = self.buffer.tobytes()
             duration_ms = len(self.buffer) / self.target_sample_rate * 1000
-            logger.info(f"🎤 AudioFrameProcessor刷新: {len(result)} bytes, {len(self.buffer)} samples, {duration_ms:.1f}ms")
+            logger.info(
+                f"🎤 AudioFrameProcessor刷新: {len(result)} bytes, {len(self.buffer)} samples, {duration_ms:.1f}ms"
+                )
             self.buffer = np.array([], dtype=np.int16)  # 清空缓冲区
             return result
         return None

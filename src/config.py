@@ -7,7 +7,6 @@ from pydantic import BaseModel, Field
 from src.audio.type import AudioType
 from src.io_adapters.type import AdapterMode
 from src.io_adapters.webrtc.config import WebrtcConfig
-from src.io_adapters.websocket.config import WebsocketConfig
 
 logger = logging.getLogger(__name__)
 
@@ -24,10 +23,6 @@ webrtc_config = WebrtcConfig(
     host=os.getenv("WEBRTC_HOST", "localhost"), port=os.getenv("WEBRTC_PORT", 8765)
     )
 
-websocket_config = WebsocketConfig(
-    host=os.getenv("SOCKET_HOST", "localhost"), port=int(os.getenv("SOCKET_PORT", "8888"))
-    )
-
 
 def validate_config():
     class VolcengineConfig(
@@ -42,7 +37,6 @@ def validate_config():
     class AdaptersConfig(BaseModel):
         mode: AdapterMode
         webrtc: Optional[WebrtcConfig]
-        websocket: Optional[WebsocketConfig]
 
     class GlobalConfig(BaseModel):
         volcengine: VolcengineConfig
@@ -59,7 +53,7 @@ def validate_config():
                 ),
 
             adapter=AdaptersConfig(
-                mode=ADAPTER_MODE, webrtc=webrtc_config, websocket=websocket_config
+                mode=ADAPTER_MODE, webrtc=webrtc_config
                 )
             )
         logger.info(f"global_config: {global_config.model_dump_json(indent=2)}")
