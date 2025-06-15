@@ -173,6 +173,7 @@ class VoicengineClient:
         try:
             response = await self.ws.recv()
             data = protocol.parse_response(response)
+            logger.debug(f"on parsed-response: {data}")
             return data
         except Exception as e:
             logger.warning(f"failed to receive server response, reason: {e}")
