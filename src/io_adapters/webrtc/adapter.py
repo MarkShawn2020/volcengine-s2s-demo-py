@@ -1,16 +1,11 @@
 import asyncio
-from typing import TypedDict
 
 from src.io_adapters.base import AdapterBase
+from src.io_adapters.webrtc.config import WebrtcConfig
 from src.io_adapters.webrtc.webrtc_manager import WebRTCManager
-from src.types.audio import AudioType
-from src.utils.audio.audio_converter import OggToPcmConverter
+from src.audio.type import AudioType
+from src.audio.audio_converter import OggToPcmConverter
 from src.utils.logger import logger
-
-
-class WebrtcConfig(TypedDict):
-    host: str
-    port: int
 
 
 class WebRTCAdapter(AdapterBase):

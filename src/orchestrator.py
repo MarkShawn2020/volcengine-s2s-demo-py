@@ -1,38 +1,32 @@
 import asyncio
-import os
 import signal
 import threading
 import time
 import uuid
 from typing import Dict, Any
 
-import src.volcengine.config
-from src import config
-from src.client import RealtimeDialogClient
+from src.config import webrtc_config, websocket_config, ADAPTER_MODE
 from src.io_adapters.base import AdapterBase
-from src.utils.audio.audio_converter import OggToPcmConverter
+from src.io_adapters.type import AdapterMode
+from src.audio.audio_converter import OggToPcmConverter
 from src.utils.logger import logger
-from src.volcengine.config import audio_type
+from src.volcengine.client import VoicengineClient
+from src.volcengine.config import audio_type, ws_connect_config, start_session_req, ogg_output_audio_config
 from src.volcengine.protocol import ServerEvent
 
 
 class Orchestrator:
     """对话会话管理类 - 重构版本"""
 
-    def __init__(self, ws_config: Dict[str, Any], io_mode: str = None):
+    def __init__(self):
         self.session_id = str(uuid.uuid4())
         logger.info(f"🚀 启动对话会话 (ID: {self.session_id[:8]}...)")
 
-        # WebSocket客户端
-        self.client = RealtimeDialogClient(config=ws_config, session_id=self.session_id)
-
-        # 确定IO模式
-        if io_mode is None:
-            io_mode = config.IO_MODE
-        self.io_mode = io_mode
+        # WebSocket --> voicengine 客户端
+        self.client = VoicengineClient(config=ws_connect_config, session_id=self.session_id)
 
         # 初始化音频IO
-        self.audio_adapter = self._create_audio_adapter(io_mode)
+        self.audio_adapter = self._create_audio_adapter(ADAPTER_MODE)
         self.audio_adapter.set_audio_input_callback(self._handle_audio_input)
         self.audio_adapter.set_prepared_callback(self._on_audio_io_prepared)
 
@@ -44,8 +38,8 @@ class Orchestrator:
         signal.signal(signal.SIGINT, self._keyboard_signal)
 
         # 音频转换器
-        output_config = src.volcengine.config.ogg_output_audio_config
-        tts_config = src.volcengine.config.start_session_req.get("tts")
+        output_config = ogg_output_audio_config
+        tts_config = start_session_req.get("tts")
         if tts_config:
             tts_audio_config = tts_config.get("audio_config")
             if tts_audio_config:
@@ -68,25 +62,19 @@ class Orchestrator:
         self._reconnecting = False
         self._reconnect_lock = None
 
-    def _create_audio_adapter(self, io_mode: str) -> AdapterBase:
+    def _create_audio_adapter(self, adapter_mode: AdapterMode) -> AdapterBase:
         """创建音频IO实例"""
-        if io_mode == "webrtc":
-            from src.io_adapters.webrtc.webrtc_adapter import WebRTCAdapter, WebrtcConfig
-            webrtc_config = WebrtcConfig(
-                host=os.getenv("WEBRTC_HOST", "localhost"),
-                port=os.getenv("WEBRTC_PORT", 8765),
-                )
+        if adapter_mode == AdapterMode.webrtc:
+            from src.io_adapters.webrtc.adapter import WebRTCAdapter
             return WebRTCAdapter(webrtc_config)
-        elif io_mode == "websocket":
-            from src.io_adapters.websocket.websocket_io import WebsocketIO, SocketConfig
-            socket_config = SocketConfig(
-                host=os.getenv("SOCKET_HOST", "localhost"),
-                port=int(os.getenv("SOCKET_PORT", "8888"))
-                )
-            return WebsocketIO(socket_config)
-        else:  # system
-            from src.io_adapters.system.system_adapter import SystemAdapter
-            return SystemAdapter({})
+        elif adapter_mode == AdapterMode.websocket:
+            from src.io_adapters.websocket.adapter import WebsocketAdapter
+            return WebsocketAdapter(websocket_config)
+        elif adapter_mode == AdapterMode.system:
+            from src.io_adapters.system.adapter import SystemAdapter
+            return SystemAdapter()
+        else:
+            raise Exception(f"invalid adapter mode: {adapter_mode}")
 
     def _handle_audio_input(self, audio_data: bytes) -> None:
         """处理音频输入数据"""
@@ -264,9 +252,7 @@ class Orchestrator:
 
                 self.conversation_history.append(
                     {
-                        'user': self.current_user_text,
-                        'ai': self.current_ai_text,
-                        'timestamp': time.time()
+                        'user': self.current_user_text, 'ai': self.current_ai_text, 'timestamp': time.time()
                         }
                     )
 

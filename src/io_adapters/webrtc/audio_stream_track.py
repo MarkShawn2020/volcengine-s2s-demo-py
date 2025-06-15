@@ -4,7 +4,7 @@ import queue
 import numpy as np
 from aiortc import MediaStreamTrack
 
-from src.types.audio import AudioType
+from src.audio.type import AudioType
 from src.utils.logger import logger
 
 
@@ -138,7 +138,7 @@ class AudioStreamTrack(MediaStreamTrack):
                     samples = np.frombuffer(audio_data, dtype=np.int16)
                     logger.debug(
                         f"🔍 检测为int16格式: {len(audio_data)}字节, 最大值={np.max(np.abs(samples)) if len(samples) > 0 else 0}"
-                    )
+                        )
             except Exception:
                 # 解析失败，按int16处理
                 samples = np.frombuffer(audio_data[:len(audio_data) // 2 * 2], dtype=np.int16)
@@ -177,7 +177,7 @@ class AudioStreamTrack(MediaStreamTrack):
             try:
                 self.audio_queue.put_nowait(
                     frame_bytes
-                )
+                    )
                 # logger.debug(f"添加OPUS帧到队列: {len(frame_bytes)}字节，队列大小: {self.audio_queue.qsize()}")
             except queue.Full:
                 logger.debug("⚠️ 音频发送队列已满，丢弃数据")

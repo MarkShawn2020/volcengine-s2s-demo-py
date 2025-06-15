@@ -3,7 +3,7 @@ import uuid
 
 import pyaudio
 
-from src.types.audio import AudioType
+from src.audio.type import AudioType
 from src.utils.logger import logger
 
 ws_connect_config = {
@@ -14,8 +14,8 @@ ws_connect_config = {
         "X-Api-Resource-Id": "volc.speech.dialog",
         "X-Api-App-Key": "PlgvMymc7f3tQnJ6",
         "X-Api-Connect-Id": str(uuid.uuid4()),
+        }
     }
-}
 
 """
 【重要】
@@ -29,21 +29,21 @@ input_audio_config = {
     "format": "pcm",
     "channels": 1,
     "sample_rate": 16000,
-}
+    }
 ogg_output_audio_config = {
     "bit_size": pyaudio.paInt16,
     "chunk": 3200,
     "format": "pcm",
     "channels": 1,
     "sample_rate": 24000,
-}
+    }
 tts_output_audio_config = {
     "bit_size": pyaudio.paFloat32,
     "channels": 1,
     "format": "pcm",
     "sample_rate": 24000,
     "chunk": 3200
-}
+    }
 start_session_req = {"dialog": {"bot_name": "小塔"}, }
 VOLCENGINE_OGG_MODE = os.getenv("ENABLE_OGG", False)
 

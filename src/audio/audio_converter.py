@@ -29,7 +29,7 @@ class OggToPcmConverter:
             'ogg_pages_received': 0,
             'pcm_bytes_decoded': 0,
             'decoding_errors': 0
-        }
+            }
 
     def convert(self, ogg_page: bytes) -> bytes:
         """

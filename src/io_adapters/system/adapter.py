@@ -2,10 +2,9 @@ import asyncio
 import queue
 import threading
 import time
-from typing import Dict, Any
 
 from src.io_adapters.base import AdapterBase
-from src.io_adapters.system.system_audio_manager import SystemAudioManager
+from src.io_adapters.system.system_audio_manager import SystemAudioManager, SystemAudioConfig
 from src.utils.logger import logger
 from src.volcengine.config import input_audio_config
 
@@ -13,11 +12,12 @@ from src.volcengine.config import input_audio_config
 class SystemAdapter(AdapterBase):
     """系统音频输入输出实现"""
 
-    def __init__(self, io_config: Dict[str, Any]):
-        super().__init__(io_config)
+    def __init__(self, config=None):
+        super().__init__(config)
 
         # 初始化音频设备管理器
-        self.audio_device = SystemAudioManager(self.input_audio_config, self.output_audio_config)
+        config = SystemAudioConfig(input=self.input_audio_config, output=self.output_audio_config)
+        self.audio_device = SystemAudioManager(config)
 
         # 音频队列和播放流
         self.audio_queue = queue.Queue(maxsize=50)
@@ -27,7 +27,9 @@ class SystemAdapter(AdapterBase):
         self.player_thread = None
 
         # 统计信息
-        self.stats = {'audio_queue_overflows': 0}
+        self.stats = {
+            'audio_queue_overflows': 0
+            }
 
     async def start(self) -> None:
         """启动音频输入输出"""
@@ -66,7 +68,7 @@ class SystemAdapter(AdapterBase):
         if self.player_thread and self.player_thread.is_alive():
             self.player_thread.join(timeout=2.0)
 
-    async def send_audio_output(self, audio_data: bytes, format_type: str = "pcm") -> None:
+    async def send_audio_output(self, audio_data: bytes, audio_type: str = "pcm") -> None:
         """发送音频输出数据"""
         if not audio_data or len(audio_data) == 0:
             return

@@ -1,25 +1,18 @@
 import asyncio
-from typing import Dict, Any
 
 from src.io_adapters.base import AdapterBase
 from src.utils.logger import logger
-from .config import socket_config as _socket_config
-from .socket_manager import SocketConfig, SocketAudioManager
+from .config import WebsocketConfig
+from .websocket_audio_manager import WebsocketAudioManager
 
 
-class WebsocketIO(AdapterBase):
+class WebsocketAdapter(AdapterBase):
     """Websocket音频输入输出实现"""
 
-    def __init__(self, config: Dict[str, Any] = None):
+    def __init__(self, config: WebsocketConfig):
         super().__init__(config)
 
-        # Socket配置
-        socket_host = config.get('host', _socket_config['host'])
-        socket_port = config.get('port', _socket_config['port'])
-
-        # 初始化Socket管理器
-        socket_config = SocketConfig(host=socket_host, port=socket_port)
-        self.socket_manager = SocketAudioManager(socket_config)
+        self.socket_manager = WebsocketAudioManager(self.config)
 
         # 设置音频输入回调
         self.socket_manager.set_audio_input_callback(self._handle_socket_audio_input)
@@ -60,14 +53,14 @@ class WebsocketIO(AdapterBase):
         if self.socket_manager:
             self.socket_manager.cleanup()
 
-    async def send_audio_output(self, audio_data: bytes, format_type: str = "pcm") -> None:
+    async def send_audio_output(self, audio_data: bytes, audio_type: str = "pcm") -> None:
         """发送音频输出数据"""
         if not audio_data or len(audio_data) == 0:
             return
 
-        logger.debug(f"🔌 发送音频输出 ({format_type}): {len(audio_data)}字节")
+        logger.debug(f"🔌 发送音频输出 ({audio_type}): {len(audio_data)}字节")
         if self.socket_manager:
-            self.socket_manager.send_audio_output(audio_data, format_type)
+            self.socket_manager.send_audio_output(audio_data, audio_type)
 
     def display_welcome_screen(self) -> None:
         """显示Socket欢迎界面"""

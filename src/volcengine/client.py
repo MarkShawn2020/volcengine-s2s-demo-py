@@ -5,12 +5,12 @@ from typing import Dict, Any
 
 import websockets
 
-import src.volcengine.config
 from src.utils.logger import logger
-from .volcengine import protocol
+from src.volcengine import protocol
+from src.volcengine.config import start_session_req
 
 
-class RealtimeDialogClient:
+class VoicengineClient:
     def __init__(self, config: Dict[str, Any], session_id: str):
         self.config = config
         self.logid = ""
@@ -20,9 +20,9 @@ class RealtimeDialogClient:
     async def connect(self) -> None:
         """建立WebSocket连接"""
         logger.info(f"url: {self.config['base_url']}, headers: {self.config['headers']}")
-        self.ws = await websockets.connect(self.config['base_url'],
-            additional_headers=self.config['headers'],
-            ping_interval=None)
+        self.ws = await websockets.connect(
+            self.config['base_url'], additional_headers=self.config['headers'], ping_interval=None
+            )
         self.logid = self.ws.response_headers.get("X-Tt-Logid") if hasattr(self.ws, 'response_headers') else None
         logger.info(f"dialog server response logid: {self.logid}")
 
@@ -39,7 +39,7 @@ class RealtimeDialogClient:
 
     async def start_session(self) -> None:
         """发送StartSession请求"""
-        request_params = src.volcengine.config.start_session_req
+        request_params = start_session_req
         payload_bytes = str.encode(json.dumps(request_params))
         payload_bytes = gzip.compress(payload_bytes)
         start_session_request = bytearray(protocol.generate_header())
@@ -72,8 +72,11 @@ class RealtimeDialogClient:
                 logger.warning("WebSocket连接不可用，跳过音频请求")
                 return
 
-            task_request = bytearray(protocol.generate_header(message_type=protocol.CLIENT_AUDIO_ONLY_REQUEST,
-                                                              serial_method=protocol.NO_SERIALIZATION))
+            task_request = bytearray(
+                protocol.generate_header(
+                    message_type=protocol.CLIENT_AUDIO_ONLY_REQUEST, serial_method=protocol.NO_SERIALIZATION
+                    )
+                )
             task_request.extend(int(200).to_bytes(4, 'big'))
             task_request.extend((len(self.session_id)).to_bytes(4, 'big'))
             task_request.extend(str.encode(self.session_id))
@@ -100,7 +103,7 @@ class RealtimeDialogClient:
             if not self.ws or (hasattr(self.ws, 'closed') and self.ws.closed):
                 logger.info("WebSocket已关闭，跳过finish_session")
                 return
-                
+
             finish_session_request = bytearray(protocol.generate_header())
             finish_session_request.extend(int(102).to_bytes(4, 'big'))
             payload_bytes = str.encode("{}")
@@ -120,7 +123,7 @@ class RealtimeDialogClient:
             if not self.ws or (hasattr(self.ws, 'closed') and self.ws.closed):
                 logger.info("WebSocket已关闭，跳过finish_connection")
                 return
-                
+
             finish_connection_request = bytearray(protocol.generate_header())
             finish_connection_request.extend(int(2).to_bytes(4, 'big'))
             payload_bytes = str.encode("{}")
@@ -129,7 +132,7 @@ class RealtimeDialogClient:
             finish_connection_request.extend(payload_bytes)
             await self.ws.send(finish_connection_request)
             logger.info("FinishConnection request sent")
-            
+
             # 尝试接收响应，但设置超时
             try:
                 response = await asyncio.wait_for(self.ws.recv(), timeout=3.0)
@@ -138,7 +141,7 @@ class RealtimeDialogClient:
                 logger.warning("等待FinishConnection响应超时")
             except Exception as e:
                 logger.warning(f"接收FinishConnection响应失败: {e}")
-                
+
         except Exception as e:
             logger.warning(f"发送finish_connection请求失败: {e}")
 
@@ -147,7 +150,7 @@ class RealtimeDialogClient:
         if self.ws:
             try:
                 logger.info("正在优雅关闭WebSocket连接...")
-                
+
                 # 检查连接状态，如果仍然开放则尝试发送关闭帧
                 import websockets
                 if hasattr(self.ws, 'state') and self.ws.state == websockets.protocol.State.OPEN:
@@ -160,7 +163,7 @@ class RealtimeDialogClient:
                     logger.info("WebSocket连接已关闭")
                 else:
                     logger.info("WebSocket连接已经关闭")
-                    
+
             except Exception as e:
                 logger.warning(f"关闭WebSocket连接时出现错误: {e}")
                 try:
@@ -172,24 +175,24 @@ class RealtimeDialogClient:
             finally:
                 self.ws = None
                 logger.info("WebSocket连接清理完成")
-                
+
     async def graceful_shutdown(self) -> None:
         """优雅关闭WebSocket连接，包括发送结束请求"""
         try:
             logger.info("开始优雅关闭WebSocket连接...")
-            
+
             # 尝试发送结束会话请求
             await self.finish_session()
-            
+
             # 短暂等待，让服务器处理请求
             await asyncio.sleep(0.1)
-            
+
             # 尝试发送结束连接请求
             await self.finish_connection()
-            
+
             # 短暂等待，让服务器处理请求
             await asyncio.sleep(0.1)
-            
+
         except Exception as e:
             logger.warning(f"优雅关闭过程中出现错误: {e}")
         finally:

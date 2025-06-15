@@ -11,6 +11,9 @@ class AudioConfig:
     sample_rate: int
     chunk: int
 
+
 class AudioType(StrEnum):
     pcm = 'pcm'
     ogg = 'ogg'
+
+

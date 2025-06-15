@@ -3,21 +3,16 @@ import json
 import queue
 import socket
 import threading
-from typing import Optional, Callable, TypedDict
+from typing import Optional, Callable
 
+from src.io_adapters.websocket.config import WebsocketConfig
 from src.utils.logger import logger
 
 
-class SocketConfig(TypedDict):
-    """Socket配置数据类"""
-    host: str
-    port: int
-
-
-class SocketAudioManager:
+class WebsocketAudioManager:
     """Socket音频管理类，处理socket客户端的音频输入输出"""
 
-    def __init__(self, config: SocketConfig):
+    def __init__(self, config: WebsocketConfig):
         self.config = config
         self.server_socket: Optional[socket.socket] = None
         self.client_socket: Optional[socket.socket] = None

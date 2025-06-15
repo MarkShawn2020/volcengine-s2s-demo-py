@@ -1,10 +1,17 @@
 import os
 
+from src.io_adapters.webrtc.config import WebrtcConfig
+from src.io_adapters.websocket.config import WebsocketConfig
+from src.io_adapters.type import AdapterMode
 from src.utils.logger import logger
 
-IO_MODE = os.getenv("IO_MODE", "system").lower()
-if IO_MODE not in ["system", "webrtc", "websocket"]:
-    logger.warning(f"无效的IO_MODE: {IO_MODE}，使用默认值 'system'")
-    IO_MODE = "system"
+ADAPTER_MODE: AdapterMode = os.getenv("ADAPTER_MODE", AdapterMode.system)
+logger.info(f"Adapter Mode: {ADAPTER_MODE}")
 
-logger.info(f"IO Mode: {IO_MODE}")
+webrtc_config = WebrtcConfig(
+    host=os.getenv("WEBRTC_HOST", "localhost"), port=os.getenv("WEBRTC_PORT", 8765)
+    )
+
+websocket_config = WebsocketConfig(
+    host=os.getenv("SOCKET_HOST", "localhost"), port=int(os.getenv("SOCKET_PORT", "8888"))
+    )

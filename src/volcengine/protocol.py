@@ -42,14 +42,14 @@ CUSTOM_COMPRESSION = 0b1111
 
 
 def generate_header(
-        version=PROTOCOL_VERSION,
-        message_type=CLIENT_FULL_REQUEST,
-        message_type_specific_flags=MSG_WITH_EVENT,
-        serial_method=JSON,
-        compression_type=GZIP,
-        reserved_data=0x00,
-        extension_header=bytes()
-):
+    version=PROTOCOL_VERSION,
+    message_type=CLIENT_FULL_REQUEST,
+    message_type_specific_flags=MSG_WITH_EVENT,
+    serial_method=JSON,
+    compression_type=GZIP,
+    reserved_data=0x00,
+    extension_header=bytes()
+    ):
     """
     protocol_version(4 bits), header_size(4 bits),
     message_type(4 bits), message_type_specific_flags(4 bits)

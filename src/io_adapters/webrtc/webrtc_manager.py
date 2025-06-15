@@ -6,7 +6,7 @@ from aiortc import RTCPeerConnection, RTCSessionDescription, RTCIceCandidate
 
 from src.io_adapters.webrtc.audio_stream_track import AudioStreamTrack
 from src.io_adapters.webrtc.webrtc_signaling_server import WebRTCSignalingServer
-from src.types.audio import AudioType
+from src.audio.type import AudioType
 from src.utils.logger import logger
 
 
@@ -36,7 +36,7 @@ class WebRTCManager:
             on_ice_candidate=self.handle_ice_candidate,
             on_client_connected=self.handle_client_connected,
             on_client_disconnected=self.handle_client_disconnected,
-        )
+            )
 
     async def start(self):
         """启动WebRTC管理器"""
@@ -216,8 +216,8 @@ class WebRTCManager:
             await self.signaling_server.send_answer(
                 client_id, {
                     "type": answer.type, "sdp": answer.sdp
-                }
-            )
+                    }
+                )
 
             logger.info(f"📤 发送Answer: {client_id}")
 
@@ -268,7 +268,7 @@ class WebRTCManager:
                         type=typ,
                         sdpMid=sdp_mid,
                         sdpMLineIndex=sdp_mline_index
-                    )
+                        )
 
                     await pc.addIceCandidate(candidate)
                 else:
@@ -336,9 +336,9 @@ class WebRTCManager:
                         indices = np.linspace(0, len(audio_array) - 1, target_length)
                         audio_array = np.interp(
                             indices, range(len(audio_array)), audio_array
-                        ).astype(
+                            ).astype(
                             'int16'
-                        )  # logger.debug(f"🎤 重采样: {frame.sample_rate}Hz -> 16000Hz, 长度: {len(audio_array)}")
+                            )  # logger.debug(f"🎤 重采样: {frame.sample_rate}Hz -> 16000Hz, 长度: {len(audio_array)}")
                     else:
                         # logger.debug(f"⚠️ 重采样长度为0: 原长度={len(audio_array)}, 目标长度={target_length}")
                         continue
@@ -365,9 +365,13 @@ class WebRTCManager:
                 # 检查客户端连接状态
                 if client_id in self.peer_connections:
                     pc_state = self.peer_connections[
-                        client_id].connectionState  # logger.debug(f"📡 向客户端 {client_id} 发送音频: {len(audio_data)}字节, 连接状态: {pc_state}")
+                        client_id].connectionState  # logger.debug(f"📡 向客户端 {client_id} 发送音频: {len(audio_data)}字节,
+                        # 连接状态: {pc_state}")
 
-                self.audio_tracks[client_id].add_audio_data(audio_data, audio_type)  # logger.debug(f"✅ 音频数据已发送给客户端: {client_id}")
+                self.audio_tracks[client_id].add_audio_data(
+                    audio_data,
+                    audio_type
+                    )  # logger.debug(f"✅ 音频数据已发送给客户端: {client_id}")
             except Exception as e:
                 logger.error(f"❌ 发送音频数据给客户端失败 {client_id}: {e}")
         else:
@@ -399,3 +403,5 @@ class WebRTCManager:
     def get_client_count(self) -> int:
         """获取当前连接的客户端数量"""
         return len(self.peer_connections)
+
+

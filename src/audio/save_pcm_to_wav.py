@@ -1,7 +1,6 @@
 import wave
 
 import src.volcengine.config
-from src import config
 
 
 def save_pcm_to_wav(pcm_data: bytes, filename: str) -> None:

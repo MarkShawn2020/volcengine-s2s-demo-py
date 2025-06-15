@@ -1,20 +1,32 @@
-from typing import Optional
+from typing import Optional, TypedDict
 
 import pyaudio
 
-from src.types.audio import AudioConfig
+from src.audio.type import AudioConfig
 from src.utils.logger import logger
+
+
+class SystemAudioConfig(TypedDict):
+    input: AudioConfig
+    output: AudioConfig
 
 
 class SystemAudioManager:
     """音频设备管理类，处理音频输入输出"""
 
-    def __init__(self, input_config: AudioConfig, output_config: AudioConfig):
-        self.input_config = input_config
-        self.output_config = output_config
+    def __init__(self, config: SystemAudioConfig):
+        self.config = config
         self.pyaudio = pyaudio.PyAudio()
         self.input_stream: Optional[pyaudio.Stream] = None
         self.output_stream: Optional[pyaudio.Stream] = None
+
+    @property
+    def input_config(self):
+        return self.config['input']
+
+    @property
+    def output_config(self):
+        return self.config['output']
 
     def open_input_stream(self) -> pyaudio.Stream:
         """打开音频输入流"""
@@ -29,8 +41,7 @@ class SystemAudioManager:
             format=self.input_config.bit_size,
             input=True,
             # Add low latency settings for AirPods compatibility
-            input_host_api_specific_stream_info=None,
-        )
+            input_host_api_specific_stream_info=None, )
         logger.debug(f"输入音频流已打开: {self.input_stream}")
         return self.input_stream
 
@@ -44,8 +55,7 @@ class SystemAudioManager:
             rate=self.output_config.sample_rate,
             output=True,
             frames_per_buffer=self.output_config.chunk,
-            output_device_index=default_output_device['index'],
-        )
+            output_device_index=default_output_device['index'], )
         return self.output_stream
 
     def cleanup(self) -> None:

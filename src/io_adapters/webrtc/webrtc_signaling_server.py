@@ -28,7 +28,7 @@ class WebRTCSignalingServer:
         logger.info(f"🚀 启动WebRTC信令服务器: {self.host}:{self.port}")
         self.server = await websockets.serve(
             self.handle_client, self.host, self.port
-        )
+            )
         logger.info("✅ WebRTC信令服务器启动成功")
 
     async def handle_client(self, websocket: WebSocketServerProtocol):
@@ -122,21 +122,21 @@ class WebRTCSignalingServer:
         """发送WebRTC Offer给客户端"""
         message = {
             "type": "offer", "sdp": offer
-        }
+            }
         await self.send_to_client(client_id, message)
 
     async def send_answer(self, client_id: str, answer: Dict[str, Any]):
         """发送WebRTC Answer给客户端"""
         message = {
             "type": "answer", "sdp": answer
-        }
+            }
         await self.send_to_client(client_id, message)
 
     async def send_ice_candidate(self, client_id: str, candidate: Dict[str, Any]):
         """发送ICE候选给客户端"""
         message = {
             "type": "ice-candidate", "candidate": candidate
-        }
+            }
         await self.send_to_client(client_id, message)
 
     def set_callbacks(
