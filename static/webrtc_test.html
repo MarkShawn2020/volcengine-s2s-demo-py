@@ -652,6 +652,16 @@
                 if (peerConnection.connectionState === 'connected') {
                     startRTCStatsMonitoring();
                 }
+                
+                // 检测连接断开状态并自动停止推流
+                if (peerConnection.connectionState === 'disconnected' || 
+                    peerConnection.connectionState === 'failed' || 
+                    peerConnection.connectionState === 'closed') {
+                    if (isStreaming) {
+                        log(`WebRTC连接${peerConnection.connectionState}，自动停止推流`, 'warning');
+                        stopStreaming();
+                    }
+                }
             };
             
             // 接收远程音频流
