@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Callable, Optional, Any, Dict
 
-from src.audio.processor import OggDecodingStrategy, PcmPassThroughStrategy
+from src.audio.processors.base import AudioProcessor
 from src.audio.type import AudioConfig, AudioType
 from src.config import VOLCENGINE_AUDIO_TYPE
 from src.utils.logger import logger
@@ -30,30 +30,26 @@ class AdapterBase(ABC):
 
         self.output_config = AudioConfig(**output_audio_config)
 
-        self.processing_strategy = None # 新增成员
+        # 音频处理流水线
+        self.audio_pipeline: list[AudioProcessor] = []
+        self._build_audio_pipeline()
 
-    def _initialize_audio_processor(self, pcm_output_callback: Callable[[bytes], None]):
-        """根据配置初始化音频处理策略"""
-        if VOLCENGINE_AUDIO_TYPE == AudioType.ogg:
-            logger.info("初始化 OGG->PCM 解码策略。")
-            self.processing_strategy = OggDecodingStrategy(self.output_config, pcm_output_callback)
-        else:
-            logger.info("初始化 PCM 直通策略。")
-            self.processing_strategy = PcmPassThroughStrategy(self.output_config, pcm_output_callback)
-
-        # 启动策略
-        self.processing_strategy.start()
-
-    # send_audio_output 方法现在变得非常通用
+    @abstractmethod
+    def _build_audio_pipeline(self):
+        """由子类实现，用于构建自己的音频处理流水线。"""
+        pass
+    
     async def send_audio_output(self, audio_data: bytes, audio_type: AudioType) -> None:
-        """接收上游音频数据，并交由处理策略进行处理"""
-        if not audio_data or len(audio_data) == 0:
+        """将音频数据送入流水线进行处理。"""
+        if not audio_data:
             return
 
-        if self.processing_strategy:
-            self.processing_strategy.process_input(audio_data)
-        else:
-            logger.warning("音频处理策略未初始化，无法处理输出音频。")
+        # 依次通过流水线中的每个处理器
+        data = audio_data
+        for processor in self.audio_pipeline:
+            data = processor.process(data)
+            if not data:  # 如果某个环节没有输出，则中止
+                break
 
     def set_audio_input_callback(self, callback: Callable[[bytes], None]) -> None:
         """设置音频输入回调函数"""
@@ -82,6 +78,11 @@ class AdapterBase(ABC):
     def cleanup(self) -> None:
         """清理资源"""
         pass
+    
+    def _cleanup_pipeline(self) -> None:
+        """清理资源，包括流水线中的处理器。"""
+        for processor in self.audio_pipeline:
+            processor.close()
 
     def _handle_audio_input(self, audio_data: bytes) -> None:
         """处理音频输入数据"""

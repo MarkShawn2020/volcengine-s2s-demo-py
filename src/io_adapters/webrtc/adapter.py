@@ -3,8 +3,10 @@ import asyncio
 import numpy as np
 import pyaudio
 
-from src.audio.processor import PcmResamplerProcessor
+from src.audio.processors import OggDecoderProcessor, PcmResamplerProcessor
+from src.audio.processors.base import AudioProcessor
 from src.audio.type import AudioType
+from src.config import VOLCENGINE_AUDIO_TYPE
 from src.io_adapters.base import AdapterBase
 from src.io_adapters.webrtc.config import WebrtcConfig
 from src.io_adapters.webrtc.webrtc_manager import WebRTCManager
@@ -28,34 +30,47 @@ class WebRTCAdapter(AdapterBase):
 
         # 标记是否已经触发过prepared回调
         self._prepared_triggered = False
+    
+    def _build_audio_pipeline(self):
+        """构建WebRTCAdapter的音频处理流水线"""
+        loop = asyncio.get_event_loop()
 
+        class WebRTCSink(AudioProcessor):
+            def __init__(self, adapter):
+                self.adapter = adapter
+            
+            def process(self, audio_data: bytes) -> bytes:
+                asyncio.run_coroutine_threadsafe(
+                    self.adapter.webrtc_manager.send_audio_to_all_clients(audio_data, AudioType.pcm),
+                    loop
+                )
+                return b''
+
+        pipeline = []
+        
+        source_sr = self.output_config.sample_rate  # e.g., 24000
         source_dtype = np.float32 if self.output_config.bit_size == pyaudio.paFloat32 else np.int16
 
-        self.resample_processor = PcmResamplerProcessor(self.output_config.sample_rate, source_dtype, 48000, 'int16')
+        # 步骤1: 如果输入是OGG，添加解码器
+        if VOLCENGINE_AUDIO_TYPE == AudioType.ogg:
+            pipeline.append(OggDecoderProcessor(self.output_config))
+            
+        # 步骤2: 添加一个处理器，它负责将上一步的输出转换为WebRTC的格式
+        pipeline.append(PcmResamplerProcessor(
+            source_sr=source_sr,
+            source_dtype=source_dtype,
+            target_sr=48000,  # 硬性要求
+            target_dtype='int16'  # 硬性要求
+        ))
+
+        pipeline.append(WebRTCSink(self))
+        self.audio_pipeline = pipeline
 
     async def start(self) -> None:
         logger.info("🌐 启动WebRTC音频输入输出...")
         self.is_running = True
 
-        # 获取当前事件循环，用于跨线程调度
-        loop = asyncio.get_event_loop()
-
-        # 1. 定义处理PCM数据的回调
-        def pcm_to_webrtc(pcm_data: bytes):
-            # resample for webrtc
-            pcm_data = self.resample_processor.process(pcm_data)
-
-            # 使用 loop.call_soon_threadsafe 从其他线程安全地调度协程
-            # 这是从同步线程调用异步代码的标准方式
-            asyncio.run_coroutine_threadsafe(
-                self.webrtc_manager.send_audio_to_all_clients(pcm_data, AudioType.pcm),
-                loop
-                )
-
-        # 2. 初始化音频处理器
-        self._initialize_audio_processor(pcm_to_webrtc)
-
-        # 3. 启动WebRTC管理器 (它内部不应该有阻塞循环)
+        # 启动WebRTC管理器 (它内部不应该有阻塞循环)
         await self.webrtc_manager.start()
 
         # 显示欢迎界面
@@ -71,8 +86,8 @@ class WebRTCAdapter(AdapterBase):
 
         self.is_running = False
 
-        if self.processing_strategy:
-            self.processing_strategy.stop()
+        # 清理音频处理流水线
+        self._cleanup_pipeline()
 
         if self.webrtc_manager:
             # 确保WebRTC管理器也停止
@@ -100,6 +115,7 @@ class WebRTCAdapter(AdapterBase):
 
     def cleanup(self) -> None:
         """清理资源"""
+        self._cleanup_pipeline()
         if self.webrtc_manager:
             try:
                 asyncio.create_task(self.webrtc_manager.stop())

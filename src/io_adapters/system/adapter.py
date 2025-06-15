@@ -1,9 +1,10 @@
 import asyncio
 import queue
 import threading
+import pyaudio
 
-from src.audio.opus_stream_decoder import OpusStreamDecoder
-from src.audio.processor import OggDecodingStrategy, PcmPassThroughStrategy
+from src.audio.processors import OggDecoderProcessor
+from src.audio.processors.base import AudioProcessor
 from src.audio.type import AudioType
 from src.config import VOLCENGINE_AUDIO_TYPE
 from src.io_adapters.base import AdapterBase
@@ -33,6 +34,29 @@ class SystemAdapter(AdapterBase):
         self.stats = {
             'audio_queue_overflows': 0
             }
+    
+    def _build_audio_pipeline(self):
+        """构建SystemAdapter的音频处理流水线"""
+        class SpeakerSink(AudioProcessor):
+            def __init__(self, adapter):
+                self.adapter = adapter
+            
+            def process(self, audio_data: bytes) -> bytes:
+                if self.adapter.output_stream and not self.adapter.output_stream.is_stopped():
+                    self.adapter.output_stream.write(audio_data)
+                return b''  # 消费者不产生输出
+
+        pipeline = []
+        
+        # 步骤1: 如果输入是OGG，添加解码器
+        if VOLCENGINE_AUDIO_TYPE == AudioType.ogg:
+            pipeline.append(OggDecoderProcessor(self.output_config))
+        
+        # 步骤2: SystemAdapter 不需要额外的重采样，因为解码后的格式
+        #         就已经是它需要的播放格式了。
+        
+        pipeline.append(SpeakerSink(self))
+        self.audio_pipeline = pipeline
 
     async def start(self) -> None:
         logger.info("🎙️ 启动系统音频输入输出...")
@@ -42,15 +66,7 @@ class SystemAdapter(AdapterBase):
         # 1. 启动音频输出流
         self.output_stream = self.audio_device.open_output_stream()
 
-        # 2. 定义处理PCM数据的回调：写入系统扬声器
-        def pcm_to_speaker(pcm_data: bytes):
-            if self.output_stream and not self.output_stream.is_stopped():
-                self.output_stream.write(pcm_data)
-
-        # 3. 初始化并启动音频处理策略
-        self._initialize_audio_processor(pcm_to_speaker)
-
-        # ... (后续代码，如显示欢迎界面、启动麦克风输入) ...
+        # 2. 显示欢迎界面和启动麦克风输入
         self.display_welcome_screen()
         self._on_prepared()
         await self._process_microphone_input()
@@ -63,9 +79,8 @@ class SystemAdapter(AdapterBase):
         self.is_recording = False
         self.is_playing = False
 
-        # 告诉策略停止
-        if self.processing_strategy:
-            self.processing_strategy.stop()
+        # 清理音频处理流水线
+        self._cleanup_pipeline()
 
         # 可以向队列发送一个None来唤醒阻塞的get()
         self.audio_queue.put(None)
@@ -91,6 +106,7 @@ class SystemAdapter(AdapterBase):
 
     def cleanup(self) -> None:
         """清理资源"""
+        self._cleanup_pipeline()
         if self.audio_device:
             self.audio_device.cleanup()
 
