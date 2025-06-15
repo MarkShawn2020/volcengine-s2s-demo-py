@@ -3,7 +3,7 @@ import queue
 import threading
 import pyaudio
 
-from src.audio.processors import OggDecoderProcessor
+from src.audio.processors import Ogg2PcmProcessor
 from src.audio.processors.base import AudioProcessor
 from src.audio.type import AudioType
 from src.config import VOLCENGINE_AUDIO_TYPE
@@ -50,7 +50,7 @@ class SystemAdapter(AdapterBase):
         
         # 步骤1: 如果输入是OGG，添加解码器
         if VOLCENGINE_AUDIO_TYPE == AudioType.ogg:
-            pipeline.append(OggDecoderProcessor(self.output_config))
+            pipeline.append(Ogg2PcmProcessor(self.output_config))
         
         # 步骤2: SystemAdapter 不需要额外的重采样，因为解码后的格式
         #         就已经是它需要的播放格式了。

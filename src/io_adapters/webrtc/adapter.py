@@ -3,7 +3,7 @@ import asyncio
 import numpy as np
 import pyaudio
 
-from src.audio.processors import OggDecoderProcessor, PcmResamplerProcessor
+from src.audio.processors import Ogg2PcmProcessor, PcmResamplerProcessor
 from src.audio.processors.base import AudioProcessor
 from src.audio.type import AudioType
 from src.config import VOLCENGINE_AUDIO_TYPE
@@ -53,7 +53,7 @@ class WebRTCAdapter(AdapterBase):
 
         # 步骤1: 如果输入是OGG，添加解码器
         if VOLCENGINE_AUDIO_TYPE == AudioType.ogg:
-            pipeline.append(OggDecoderProcessor(self.output_config))
+            pipeline.append(Ogg2PcmProcessor(self.output_config))
             
         # 步骤2: 添加一个处理器，它负责将上一步的输出转换为WebRTC的格式
         pipeline.append(PcmResamplerProcessor(
