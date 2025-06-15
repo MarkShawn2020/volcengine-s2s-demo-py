@@ -90,8 +90,8 @@ class WebRTCManager:
         pc = RTCPeerConnection()
         self.peer_connections[client_id] = pc
 
-        # 创建音频轨道用于发送音频给浏览器
-        audio_track = AudioStreamTrack()
+        # 创建音频轨道用于发送音频给浏览器，使用16kHz采样率匹配WebRTC
+        audio_track = AudioStreamTrack(sample_rate=16000)
         self.audio_tracks[client_id] = audio_track
 
         # 明确指定音频轨道参数

@@ -15,12 +15,12 @@ class AudioStreamTrack(MediaStreamTrack):
     """
     kind = "audio"
 
-    def __init__(self):
+    def __init__(self, sample_rate: int = 24000):
         super().__init__()
         self._buffer = bytearray()
         self._buffer_lock = asyncio.Lock()
 
-        self.SAMPLE_RATE = 24000  # 匹配火山引擎TTS输出采样率
+        self.SAMPLE_RATE = sample_rate  # 可配置采样率
         self.SAMPLES_PER_FRAME = int(self.SAMPLE_RATE * 0.020)
         self.BYTES_PER_FRAME = self.SAMPLES_PER_FRAME * 2
 

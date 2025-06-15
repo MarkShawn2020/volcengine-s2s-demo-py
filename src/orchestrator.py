@@ -59,8 +59,8 @@ class Orchestrator:
                 # 根据官方代码经验
                 # receiver 里不要加任何的await，因为recv本来就在等
                 # sender里要加一点await，否则cpu会过高
-                tg.create_task(self.handle_receiver())
-                tg.create_task(self.handle_sender())
+                tg.create_task(self.handle_pull())
+                tg.create_task(self.handle_push())
                 logger.info("started tasks")
         except Exception as e:
             logger.error(f"failed to start, reason: {e}")
@@ -80,7 +80,7 @@ class Orchestrator:
         except Exception as e:
             logger.error(f"failed to stop, reason: {e}")
 
-    async def handle_receiver(self):
+    async def handle_pull(self):
         seq = 0
         try:
             while self.is_running and self.volcengine_client.is_active:
@@ -180,7 +180,7 @@ class Orchestrator:
         except Exception as e:
             logger.warning(f"failed to receive, reason: {e}")
 
-    async def handle_sender(self):
+    async def handle_push(self):
         seq = 0
         try:
             while self.is_running and self.audio_adapter.is_running:

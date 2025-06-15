@@ -1,7 +1,16 @@
+import asyncio
+from queue import Queue
+from threading import Thread
+
+import numpy as np
+from src.audio.processors import Ogg2PcmProcessor
 from src.audio.type import AudioType
+from src.config import VOLCENGINE_AUDIO_TYPE
 from src.io_adapters.base import AdapterBase
 from src.io_adapters.webrtc.config import WebrtcConfig
+from src.io_adapters.webrtc.webrtc_manager import WebRTCManager
 from src.utils.logger import logger
+from src.volcengine.config import ogg_output_audio_config
 
 
 class WebRTCAdapter(AdapterBase):
@@ -10,12 +19,40 @@ class WebRTCAdapter(AdapterBase):
     def __init__(self, config: WebrtcConfig):
         self._webrtc_manager = None
         self._prepared_triggered = False
+        self._audio_input_queue = Queue()
         super().__init__(config)
+        
+        # 初始化 WebRTC 管理器
+        self._webrtc_manager = WebRTCManager(
+            host=config.get('host', 'localhost'),
+            port=config.get('port', 8765)
+        )
+        
+        # 设置音频处理回调
+        self._webrtc_manager.set_audio_input_callback(self._handle_webrtc_audio_input)
+        self._webrtc_manager.set_client_connected_callback(self._handle_client_connected)
+        
+        # 初始化音频处理器
+        self.ogg2pcm = Ogg2PcmProcessor(ogg_output_audio_config)
+        
+        # 启动 WebRTC 管理器
+        self._start_webrtc_thread()
+        
+        self.is_running = True
 
-    def _handle_webrtc_input(self, audio_data: bytes) -> None:
-        """处理WebRTC音频输入"""
-        if self.is_running:
-            self._handle_audio_input(audio_data)
+    def _start_webrtc_thread(self) -> None:
+        """在单独线程中启动 WebRTC 管理器"""
+        def run_webrtc():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(self._webrtc_manager.start())
+                loop.run_forever()
+            finally:
+                loop.close()
+        
+        webrtc_thread = Thread(target=run_webrtc, daemon=True)
+        webrtc_thread.start()
 
     def _handle_client_connected(self, client_id: str) -> None:
         """处理WebRTC客户端连接"""
@@ -25,30 +62,71 @@ class WebRTCAdapter(AdapterBase):
         if not self._prepared_triggered:
             self._prepared_triggered = True
             logger.debug("🎯 WebRTC已准备就绪，触发prepared回调")
-            self._on_prepared()
+            if hasattr(self, '_on_prepared'):
+                self._on_prepared()
 
     def _send_webrtc_output(self, audio_data: bytes) -> None:
         """发送音频到WebRTC客户端"""
-        import asyncio
+        if not self._webrtc_manager or not audio_data:
+            return
+            
         try:
-            loop = asyncio.get_running_loop()
+            # 获取 WebRTC 线程的事件循环
+            import threading
+            for thread in threading.enumerate():
+                if hasattr(thread, '_target') and 'webrtc' in str(thread._target).lower():
+                    # 找到 WebRTC 线程，使用其事件循环
+                    break
+            
+            # 使用线程安全的方式发送音频
             asyncio.run_coroutine_threadsafe(
-                self._webrtc_manager.send_audio_to_all_clients(audio_data, AudioType.pcm), loop
-                )
+                self._webrtc_manager.send_audio_to_all_clients(audio_data, AudioType.pcm),
+                asyncio.get_event_loop()
+            )
         except Exception as e:
             logger.warning(f"发送WebRTC音频数据失败: {e}")
 
-    def _start_webrtc(self) -> None:
-        """启动WebRTC管理器"""
-        import asyncio
-        asyncio.create_task(self._webrtc_manager.start())
-
-    def _stop_webrtc(self) -> None:
-        """停止WebRTC管理器"""
+    async def on_push(self) -> bytes | None:
+        """获取用户音频输入"""
+        if not self.is_running:
+            return None
+            
+        try:
+            # 非阻塞获取音频数据
+            if not self._audio_input_queue.empty():
+                return self._audio_input_queue.get_nowait()
+        except Exception as e:
+            logger.debug(f"从音频队列获取数据失败: {e}")
+        
+        return None
+    
+    async def on_pull(self, chunk: bytes) -> None:
+        """播放AI回复音频"""
+        if not self.is_running or not chunk:
+            return
+            
+        try:
+            # 如果是 OGG 格式，转换为 PCM
+            if VOLCENGINE_AUDIO_TYPE == AudioType.ogg:
+                chunk = self.ogg2pcm.process(chunk)
+            
+            # 重采样：火山引擎TTS输出24kHz -> WebRTC需要16kHz
+            resampled_chunk = self._resample_audio(chunk, 24000, 16000)
+            
+            # 发送到WebRTC客户端
+            self._send_webrtc_output(resampled_chunk)
+        except Exception as e:
+            logger.error(f"处理音频输出失败: {e}")
+    
+    async def stop(self):
+        """停止适配器"""
+        self.is_running = False
         if self._webrtc_manager:
             self._webrtc_manager.is_running = False
-            import asyncio
-            asyncio.create_task(self._webrtc_manager.stop())
+            try:
+                await self._webrtc_manager.stop()
+            except Exception as e:
+                logger.error(f"停止WebRTC管理器失败: {e}")
 
     def display_welcome_screen(self) -> None:
         """显示WebRTC欢迎界面"""
@@ -69,6 +147,32 @@ class WebRTCAdapter(AdapterBase):
         print("请在浏览器中打开测试页面进行连接...")
         print("=" * 80 + "\n")
 
+    def _resample_audio(self, audio_data: bytes, source_rate: int, target_rate: int) -> bytes:
+        """重采样音频数据"""
+        if not audio_data or source_rate == target_rate:
+            return audio_data
+            
+        try:
+            # 将字节转换为numpy数组
+            samples = np.frombuffer(audio_data, dtype=np.int16)
+            
+            # 计算重采样后的长度
+            target_length = int(len(samples) * target_rate / source_rate)
+            
+            if target_length == 0:
+                return b''
+            
+            # 使用线性插值重采样
+            x_source = np.linspace(0, len(samples), len(samples))
+            x_target = np.linspace(0, len(samples), target_length)
+            resampled = np.interp(x_target, x_source, samples)
+            
+            # 转换回int16并返回字节
+            return resampled.astype(np.int16).tobytes()
+        except Exception as e:
+            logger.warning(f"音频重采样失败: {e}")
+            return audio_data
+
     def _handle_webrtc_audio_input(self, audio_data: bytes) -> None:
         """
         处理WebRTC音频输入
@@ -76,19 +180,11 @@ class WebRTCAdapter(AdapterBase):
         火山规定：客户端上传音频格式要求PCM（脉冲编码调制，未经压缩的的音频格式）、单声道、采样率16000、每个采样点用int16表示、字节序为小端序。
         浏览器已经配置为16kHz采样，无需重复采样
         """
-        if not self.is_running:
+        if not self.is_running or not audio_data:
             return
 
-        # 浏览器已配置为16kHz, int16, 单声道，直接使用
-        # 移除重复的重采样步骤以减少延迟
-        self._handle_audio_input(audio_data)
-
-    def _handle_client_connected(self, client_id: str) -> None:
-        """处理WebRTC客户端连接"""
-        logger.debug(f"🔗 WebRTC客户端已连接: {client_id}")
-
-        # 第一个客户端连接时触发prepared回调
-        if not self._prepared_triggered:
-            self._prepared_triggered = True
-            logger.debug("🎯 WebRTC已准备就绪，触发prepared回调")
-            self._on_prepared()
+        # 浏览器已配置为16kHz, int16, 单声道，直接放入队列
+        try:
+            self._audio_input_queue.put_nowait(audio_data)
+        except Exception as e:
+            logger.debug(f"音频输入队列已满，丢弃数据: {e}")
