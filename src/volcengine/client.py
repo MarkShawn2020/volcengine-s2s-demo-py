@@ -1,14 +1,16 @@
 import asyncio
 import gzip
 import json
+import logging
 from typing import Dict, Any
 
 import websockets
 from websockets import ClientConnection, ConnectionClosedOK
 
-from src.utils.logger import logger
 from src.volcengine import protocol
 from src.volcengine.config import start_session_req
+
+logger = logging.getLogger(__name__)
 
 
 class VoicengineClient:

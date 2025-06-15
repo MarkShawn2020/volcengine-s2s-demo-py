@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from typing import Dict, Optional, Callable, Any
 
 from aiortc import RTCPeerConnection, RTCSessionDescription, RTCIceCandidate
@@ -7,7 +8,8 @@ from src.audio.audio_stream_track import AudioStreamTrack
 from src.audio.input_processor import AudioFrameProcessor
 from src.audio.type import AudioType
 from src.io_adapters.webrtc.webrtc_signaling_server import WebRTCSignalingServer
-from src.utils.logger import logger
+
+logger = logging.getLogger(__name__)
 
 
 class WebRTCManager:

@@ -1,3 +1,4 @@
+import logging
 import os
 from typing import Optional
 
@@ -7,7 +8,8 @@ from src.audio.type import AudioType
 from src.io_adapters.type import AdapterMode
 from src.io_adapters.webrtc.config import WebrtcConfig
 from src.io_adapters.websocket.config import WebsocketConfig
-from src.utils.logger import logger
+
+logger = logging.getLogger(__name__)
 
 VOLCENGINE_APP_ID = os.environ["VOLCENGINE_APP_ID"]
 VOLCENGINE_ACCESS_TOKEN = os.environ["VOLCENGINE_ACCESS_TOKEN"]

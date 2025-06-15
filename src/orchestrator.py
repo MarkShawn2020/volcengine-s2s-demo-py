@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import signal
 import threading
 import time
@@ -11,10 +12,11 @@ from src.config import (
     )
 from src.io_adapters.base import AdapterBase
 from src.io_adapters.type import AdapterMode
-from src.utils.logger import logger
 from src.volcengine.client import VoicengineClient
 from src.volcengine.config import ws_connect_config
 from src.volcengine.protocol import ServerEvent
+
+logger = logging.getLogger(__name__)
 
 
 class Orchestrator:
@@ -130,7 +132,8 @@ class Orchestrator:
 
         event = response.get('event', 'unknown')
         payload_msg = response.get('payload_msg')
-        logger.debug(f"🏠 <-- 📡 [{ServerEvent(event).name}] Payload(type={type(payload_msg)}, size={len(payload_msg)})")
+        logger.debug(f"🏠 <-- 📡 [{ServerEvent(event).name}] Payload(type={type(payload_msg)}, size="
+                     f"{len(payload_msg)})")
         if isinstance(payload_msg, dict):
             logger.debug(json.dumps(payload_msg, indent=2, ensure_ascii=False))
 
