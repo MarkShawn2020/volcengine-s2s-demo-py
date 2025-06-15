@@ -31,6 +31,8 @@ class WebRTCAdapter(AdapterBase):
         # 标记是否已经触发过prepared回调
         self._prepared_triggered = False
 
+        # self.process
+
     def _build_audio_pipeline(self):
         """构建WebRTCAdapter的音频处理流水线"""
 
@@ -43,9 +45,8 @@ class WebRTCAdapter(AdapterBase):
                 try:
                     loop = asyncio.get_running_loop()
                     asyncio.run_coroutine_threadsafe(
-                        self.adapter.webrtc_manager.send_audio_to_all_clients(audio_data, AudioType.pcm),
-                        loop
-                    )
+                        self.adapter.webrtc_manager.send_audio_to_all_clients(audio_data, AudioType.pcm), loop
+                        )
                 except RuntimeError:
                     # 如果没有运行中的事件循环，记录警告
                     logger.warning("没有运行中的事件循环，无法发送WebRTC音频数据")
@@ -63,9 +64,7 @@ class WebRTCAdapter(AdapterBase):
         # 步骤2: 添加一个处理器，它负责将上一步的输出转换为WebRTC的格式
         pipeline.append(
             PcmResamplerProcessor(
-                source_sr=source_sr,
-                source_dtype=source_dtype,
-                target_sr=48000,  # 硬性要求
+                source_sr=source_sr, source_dtype=source_dtype, target_sr=48000,  # 硬性要求
                 target_dtype='int16'  # 硬性要求
                 )
             )
@@ -133,6 +132,15 @@ class WebRTCAdapter(AdapterBase):
         """处理WebRTC音频输入"""
         if not self.is_running:
             return
+
+        source_sr = self.output_config.sample_rate  # e.g., 24000
+        source_dtype = np.float32 if self.output_config.bit_size == pyaudio.paFloat32 else np.int16
+
+        processor = PcmResamplerProcessor(
+            source_sr=source_sr, source_dtype=source_dtype, target_sr=16000,  # 硬性要求
+            target_dtype='int16'  # 硬性要求
+            )
+        audio_data = processor.process(audio_data)
 
         # logger.debug(f"🎤 WebRTC接收到音频数据: {len(audio_data)} bytes")
         self._handle_audio_input(audio_data)
