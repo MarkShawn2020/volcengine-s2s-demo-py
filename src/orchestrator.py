@@ -56,6 +56,9 @@ class Orchestrator:
 
             async with asyncio.TaskGroup() as tg:
                 logger.info("starting tasks")
+                # 根据官方代码经验
+                # receiver 里不要加任何的await，因为recv本来就在等
+                # sender里要加一点await，否则cpu会过高
                 tg.create_task(self.handle_receiver())
                 tg.create_task(self.handle_sender())
                 logger.info("started tasks")
