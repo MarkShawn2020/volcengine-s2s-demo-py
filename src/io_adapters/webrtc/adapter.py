@@ -58,15 +58,8 @@ class WebRTCAdapter(AdapterBase):
         if VOLCENGINE_AUDIO_TYPE == AudioType.ogg:
             pipeline.append(Ogg2PcmProcessor(self.output_config))
 
-        # 步骤2: 添加一个处理器，它负责将上一步的输出转换为WebRTC的格式
-        source_sr = self.output_config.sample_rate  # e.g., 24000
-        source_dtype = np.float32 if self.output_config.bit_size == pyaudio.paFloat32 else np.int16
-        pipeline.append(
-            PcmResamplerProcessor(
-                source_sr=source_sr, source_dtype=source_dtype,  # 默认48k，修改成16k
-                target_sr=48000, target_dtype='int16'  # 硬性要求
-                )
-            )
+        # 步骤2: 火山引擎TTS输出24kHz，WebRTC输出也用24kHz，无需重采样
+        # 移除重采样步骤以减少延迟，AudioStreamTrack已调整为24kHz
 
         pipeline.append(WebRTCSink(self))
         self.audio_pipeline = pipeline
@@ -132,27 +125,13 @@ class WebRTCAdapter(AdapterBase):
         处理WebRTC音频输入
 
         火山规定：客户端上传音频格式要求PCM（脉冲编码调制，未经压缩的的音频格式）、单声道、采样率16000、每个采样点用int16表示、字节序为小端序。
-        基于 webrtc_test，已经是 16k int16了
+        浏览器已经配置为16kHz采样，无需重复采样
         """
         if not self.is_running:
             return
 
-        # # WebRTC客户端音频格式: PCM, 单声道, 48000Hz, int16, 小端序
-        # source_sr = 16000
-        # source_dtype = 'int16'
-        #
-        processor = PcmResamplerProcessor(
-            source_sr=48000,
-
-            source_dtype="int16",
-
-            target_sr=16000,  # 硬性要求
-
-            target_dtype='int16'  # 硬性要求
-            )
-        audio_data = processor.process(audio_data)
-        # logger.debug(f"🎤 WebRTC重采样后音频数据: {len(processed_audio)} bytes, RMS={processed_rms:.1f}")
-
+        # 浏览器已配置为16kHz, int16, 单声道，直接使用
+        # 移除重复的重采样步骤以减少延迟
         self._handle_audio_input(audio_data)
 
     def _handle_client_connected(self, client_id: str) -> None:

@@ -7,8 +7,6 @@ import time
 import uuid
 from typing import Dict, Any
 
-from cffi.model import void_type
-
 from src.config import (
     webrtc_config, websocket_config, ADAPTER_MODE, VOLCENGINE_AUDIO_TYPE, VOLCENGINE_WELCOME,
     )
@@ -282,34 +280,33 @@ class Orchestrator:
 
     def _keyboard_signal(self, sig, frame):
         logger.info("👋 收到退出信号，正在优雅关闭...")
-        asyncio.run(self._graceful_shutdown())
+        self._graceful_shutdown()
 
     async def _graceful_shutdown(self):
         """优雅关闭所有资源"""
-        try:
-            logger.info("开始优雅关闭...")
+        if self.is_running:
+            self.is_running = False
+            try:
+                logger.info("开始优雅关闭...")
 
-            # 停止音频IO
-            if self.audio_adapter:
-                try:
-                    await self.audio_adapter.stop()
-                    self.audio_adapter.cleanup()
-                except Exception as e:
-                    logger.warning(f"停止音频IO错误: {e}")
+                # 停止音频IO
+                if self.audio_adapter:
+                    try:
+                        await self.audio_adapter.stop()
+                        self.audio_adapter.cleanup()
+                    except Exception as e:
+                        logger.warning(f"停止音频IO错误: {e}")
 
-            # 优雅关闭WebSocket连接
-            if self.client:
-                try:
-                    await self.client.graceful_shutdown()
-                except Exception as e:
-                    logger.warning(f"优雅关闭WebSocket错误: {e}")
+                # 优雅关闭WebSocket连接
+                if self.client:
+                    try:
+                        await self.client.graceful_shutdown()
+                    except Exception as e:
+                        logger.warning(f"优雅关闭WebSocket错误: {e}")
 
-            logger.info("✅ 优雅关闭完成")
-        except Exception as e:
-            logger.error(f"优雅关闭过程中出现错误: {e}")
-        finally:
-            import os
-            os._exit(0)
+                logger.info("✅ 优雅关闭完成")
+            except Exception as e:
+                logger.error(f"优雅关闭过程中出现错误: {e}")
 
     async def receive_loop(self):
         try:
@@ -359,7 +356,7 @@ class Orchestrator:
             await asyncio.sleep(0.1)
 
             # 启动音频IO
-            await asyncio.create_task(self.audio_adapter.start())
+            await self.audio_adapter.start()
 
         except Exception as e:
             logger.error(f"会话错误: {e}")
