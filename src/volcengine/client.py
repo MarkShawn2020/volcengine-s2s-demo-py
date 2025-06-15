@@ -74,7 +74,7 @@ class VoicengineClient:
                 logger.warning("WebSocket连接不可用，跳过音频请求")
                 return
 
-            # logger.debug(f"📤 VoicengineClient发送音频数据: {len(audio)} bytes")
+            # logger.info(f"📤 VoicengineClient发送音频数据: {len(audio)} bytes")
             
             task_request = bytearray(
                 protocol.generate_header(
@@ -88,7 +88,7 @@ class VoicengineClient:
             task_request.extend((len(payload_bytes)).to_bytes(4, 'big'))  # payload size(4 bytes)
             task_request.extend(payload_bytes)
             await self.ws.send(task_request)
-            # logger.debug(f"✅ 音频数据已发送到VoiceEngine")
+            # logger.info(f"✅ 音频数据已发送到VoiceEngine (压缩后: {len(payload_bytes)} bytes)")
         except Exception as e:
             logger.error(f"❌ 发送音频请求失败: {e}")  # 改为error级别，便于调试
 

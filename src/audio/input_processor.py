@@ -11,12 +11,19 @@ class AudioFrameProcessor:
     处理输入的音频帧（例如从WebRTC），将其转换为目标格式。
     """
 
-    def __init__(self, target_sample_rate: int = 16000, target_dtype: str = 'int16'):
+    def __init__(self, target_sample_rate: int = 16000, target_dtype: str = 'int16', buffer_duration_ms: int = 100):
         self.target_sample_rate = target_sample_rate
         self.target_dtype = target_dtype
+        self.buffer_duration_ms = buffer_duration_ms
+        
+        # 音频缓冲区 - 累积小的音频块
+        self.buffer = np.array([], dtype=np.int16)
+        self.min_buffer_samples = int(target_sample_rate * buffer_duration_ms / 1000)  # 例如100ms的音频
+        
         logger.info(
             f"音频输入处理器已初始化: "
-            f"目标采样率={target_sample_rate}Hz, 目标格式={target_dtype}"
+            f"目标采样率={target_sample_rate}Hz, 目标格式={target_dtype}, "
+            f"缓冲时长={buffer_duration_ms}ms ({self.min_buffer_samples} samples)"
             )
 
     def process_frame(self, frame) -> bytes | None:
@@ -64,8 +71,44 @@ class AudioFrameProcessor:
         # 3. 转换数据类型
         if audio_array.dtype.kind == 'f':  # 如果是浮点数
             if self.target_dtype == 'int16':
-                audio_array = (audio_array * 32767).astype(np.int16)
+                audio_array = (np.clip(audio_array, -1.0, 1.0) * 32767).astype(np.int16)
         elif audio_array.dtype != self.target_dtype:  # 如果是其他整数类型
             audio_array = audio_array.astype(self.target_dtype)
 
-        return audio_array.tobytes()
+        # 4. 添加到缓冲区
+        self.buffer = np.concatenate([self.buffer, audio_array])
+        
+        # 5. 检查是否有足够的数据输出
+        if len(self.buffer) >= self.min_buffer_samples:
+            # 输出缓冲区中的数据
+            output_samples = self.buffer[:self.min_buffer_samples]
+            self.buffer = self.buffer[self.min_buffer_samples:]  # 保留剩余部分
+            
+            result = output_samples.tobytes()
+            duration_ms = len(output_samples) / self.target_sample_rate * 1000
+            
+            # 添加音频质量检查
+            max_amplitude = np.max(np.abs(output_samples)) if len(output_samples) > 0 else 0
+            rms = np.sqrt(np.mean(output_samples.astype(np.float32)**2)) if len(output_samples) > 0 else 0
+            
+            logger.info(f"🎤 AudioFrameProcessor输出(缓冲): RMS={rms:.1f}")
+            
+            # 检查是否是静音
+            if max_amplitude < 100:  # 对于int16，这是很小的声音
+                logger.warning(f"⚠️ 检测到低音量音频，可能影响ASR识别")
+            
+            return result
+        else:
+            # 缓冲区数据不足，不输出
+            # logger.debug(f"🎤 缓冲区累积中: {len(self.buffer)}/{self.min_buffer_samples} samples")
+            return None
+    
+    def flush(self) -> bytes | None:
+        """刷新缓冲区，输出所有剩余的音频数据"""
+        if len(self.buffer) > 0:
+            result = self.buffer.tobytes()
+            duration_ms = len(self.buffer) / self.target_sample_rate * 1000
+            logger.info(f"🎤 AudioFrameProcessor刷新: {len(result)} bytes, {len(self.buffer)} samples, {duration_ms:.1f}ms")
+            self.buffer = np.array([], dtype=np.int16)  # 清空缓冲区
+            return result
+        return None

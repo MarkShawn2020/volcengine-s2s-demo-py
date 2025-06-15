@@ -308,10 +308,17 @@ class WebRTCManager:
 
                 # --- 核心委托步骤 ---
                 processed_data = self.frame_processor.process_frame(frame)
+                # logger.debug(f"🎤 处理音频帧: 输入={len(frame.to_ndarray().tobytes()) if frame else 0} bytes, 输出={len(processed_data) if processed_data else 0} bytes")
 
                 if processed_data and self.audio_input_callback:
+                    # logger.debug(f"🎯 调用音频输入回调: {len(processed_data)} bytes")
                     # 将处理好的、符合ASR要求的字节流传递给上层
                     self.audio_input_callback(processed_data)
+                elif not self.audio_input_callback:
+                    logger.warning("⚠️ 音频输入回调未设置")
+                elif not processed_data:
+                    pass
+                    # logger.debug("处理后的音频数据为空，跳过回调")
 
         except Exception as e:
             logger.error(f"❌ 处理音频轨道时发生意外错误 ({client_id}): {e}", exc_info=True)

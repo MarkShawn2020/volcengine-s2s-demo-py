@@ -70,26 +70,15 @@ class Orchestrator:
         if not self.is_running:
             return
 
-        # logger.debug(f"🎤 Orchestrator接收到音频数据: {len(audio_data)} bytes")
+        # logger.info(f"🎤 Orchestrator接收到音频数据: {len(audio_data)} bytes")
         
-        # 安全地在事件循环中创建任务
-        try:
-            loop = asyncio.get_running_loop()
-            asyncio.run_coroutine_threadsafe(
-                self.client.task_request(audio_data),
-                loop
-            )
-        except RuntimeError as e:
-            logger.error(f"❌ 无法获取事件循环来处理音频数据: {e}")
-            # 尝试直接创建任务（如果在主线程中）
-            try:
-                asyncio.create_task(self.client.task_request(audio_data))
-            except RuntimeError:
-                logger.error("❌ 无法创建音频处理任务，音频数据将被丢弃")
+        # 创建异步任务发送音频数据
+        asyncio.create_task(self.client.task_request(audio_data))
 
     def _on_audio_io_prepared(self) -> None:
         """音频IO准备就绪回调"""
         logger.info("🎯 音频IO已准备就绪，发送SayHello")
+        logger.info(f"🎯 WebSocket连接状态: {self._is_websocket_connected()}")
         # 创建异步任务发送SayHello
         asyncio.create_task(self.client.say_hello(VOLCENGINE_WELCOME))
 
@@ -114,6 +103,8 @@ class Orchestrator:
         """处理服务器响应"""
         if response == {}:
             return
+
+        logger.debug(f"📡 收到服务器响应: {response.get('message_type', 'unknown')}, event={response.get('event', 'none')}")
 
         if response['message_type'] == 'SERVER_ACK':
             event = response.get('event', 0)
@@ -165,25 +156,28 @@ class Orchestrator:
                 logger.debug("🎵 TTS音频合成结束")
                 self._finalize_conversation_turn()
             elif event == ServerEvent.ASR_INFO:
-                logger.debug("已清空音频缓冲区 (用户打断)")
+                logger.info("🎤 ASR_INFO: 已清空音频缓冲区 (用户打断)")
                 self.is_user_speaking = True
                 self.is_ai_responding = False
                 self.current_user_text = ""
                 self._update_console_display()
             elif event == ServerEvent.ASR_RESPONSE:
+                logger.info(f"🎤 ASR_RESPONSE: 收到语音识别响应")
                 results = payload_msg.get('results', [])
                 if results and len(results) > 0:
                     text = results[0].get('text', '')
                     is_interim = results[0].get('is_interim', False)
+                    logger.info(f"👤 用户语音识别: '{text}' (临时: {is_interim})")
                     if text and text.strip():
                         self.current_user_text = text
                         self._update_console_display()
-                        logger.debug(f"👤 用户语音识别: '{text}' (临时: {is_interim})")
+                else:
+                    logger.warning("⚠️ ASR_RESPONSE中无results或results为空")
             elif event == ServerEvent.ASR_ENDED:
+                logger.info("🎤 ASR_ENDED: 语音识别结束")
                 self.is_user_speaking = False
                 if self.current_user_text and self.current_user_text.strip():
                     self._update_console_display(final_user=True)
-                logger.debug("语音识别结束")
             elif event == ServerEvent.CHAT_RESPONSE:
                 content = payload_msg.get('content', '')
                 if content and content.strip():
@@ -329,6 +323,7 @@ class Orchestrator:
         try:
             while True:
                 response = await self.client.receive_server_response()
+                logger.debug(f"📡 接收到原始响应，开始处理...")
                 self.handle_server_response(response)
                 if 'event' in response and (response['event'] == ServerEvent.SESSION_FINISHED or response[
                     'event'] == ServerEvent.SESSION_FAILED):
