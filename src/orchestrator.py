@@ -79,8 +79,11 @@ class Orchestrator:
             logger.error(f"failed to stop, reason: {e}")
 
     async def handle_receiver(self):
+        seq = 0
         try:
             while self.is_running and self.volcengine_client.is_active:
+                seq += 1
+                logger.debug(f"handing receiver ({seq})")
                 response = await self.volcengine_client.on_response()
                 if response == {}:
                     return
@@ -171,17 +174,20 @@ class Orchestrator:
                     logger.error(f"服务器错误: {response['payload_msg']}")
                     raise Exception("服务器错误")
 
-                await asyncio.sleep(0.01)
+                await asyncio.sleep(1)
 
         except Exception as e:
             logger.warning(f"failed to receive, reason: {e}")
 
     async def handle_sender(self):
+        seq = 0
         try:
             while self.is_running and self.audio_adapter.is_running:
+                seq += 1
+                logger.debug(f"handing sender ({seq})")
                 chunk = await self.audio_adapter.on_push()
                 await self.volcengine_client.upload_audio(chunk)
-                await asyncio.sleep(0.01)
+                await asyncio.sleep(1)
         except Exception as e:
             logger.warning(f"failed to send, reason: {e}")
 
