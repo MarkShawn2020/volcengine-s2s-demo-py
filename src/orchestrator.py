@@ -280,33 +280,48 @@ class Orchestrator:
 
     def _keyboard_signal(self, sig, frame):
         logger.info("👋 收到退出信号，正在优雅关闭...")
-        self._graceful_shutdown()
+        self.is_running = False
+
+        # 立即停止音频IO，避免继续产生错误
+        if self.audio_adapter and hasattr(self.audio_adapter, 'is_running'):
+            self.audio_adapter.is_running = False
+
+        # 如果是WebRTC模式，立即停止WebRTC管理器
+        if ADAPTER_MODE == AdapterMode.webrtc and self.audio_adapter and hasattr(self.audio_adapter, 'webrtc_manager'):
+            if self.audio_adapter.webrtc_manager:
+                self.audio_adapter.webrtc_manager.is_running = False
 
     async def _graceful_shutdown(self):
         """优雅关闭所有资源"""
-        if self.is_running:
-            self.is_running = False
-            try:
-                logger.info("开始优雅关闭...")
+        # 防止重复执行
+        if hasattr(self, '_shutdown_started') and self._shutdown_started:
+            return
+        self._shutdown_started = True
+        
+        try:
+            logger.info("开始优雅关闭...")
 
-                # 停止音频IO
-                if self.audio_adapter:
-                    try:
-                        await self.audio_adapter.stop()
-                        self.audio_adapter.cleanup()
-                    except Exception as e:
-                        logger.warning(f"停止音频IO错误: {e}")
+            # 停止音频IO
+            if self.audio_adapter:
+                try:
+                    await self.audio_adapter.stop()
+                    self.audio_adapter.cleanup()
+                except Exception as e:
+                    logger.warning(f"停止音频IO错误: {e}")
 
-                # 优雅关闭WebSocket连接
-                if self.client:
-                    try:
-                        await self.client.graceful_shutdown()
-                    except Exception as e:
-                        logger.warning(f"优雅关闭WebSocket错误: {e}")
+            # 优雅关闭WebSocket连接
+            if self.client:
+                try:
+                    await self.client.graceful_shutdown()
+                except Exception as e:
+                    logger.warning(f"优雅关闭WebSocket错误: {e}")
 
-                logger.info("✅ 优雅关闭完成")
-            except Exception as e:
-                logger.error(f"优雅关闭过程中出现错误: {e}")
+            logger.info("✅ 优雅关闭完成")
+        except Exception as e:
+            logger.error(f"优雅关闭过程中出现错误: {e}")
+        finally:
+            import os
+            os._exit(0)
 
     async def receive_loop(self):
         try:
@@ -356,11 +371,16 @@ class Orchestrator:
             await asyncio.sleep(0.1)
 
             # 启动音频IO
-            await self.audio_adapter.start()
+            asyncio.create_task(self.audio_adapter.start())
+
+            # 保持主循环运行，监控连接状态
+            while self.is_running:
+                await asyncio.sleep(0.5)
 
         except Exception as e:
             logger.error(f"会话错误: {e}")
         finally:
             # 正常结束时也使用优雅关闭
             await self._graceful_shutdown()
-            logger.info(f"对话请求日志ID: {self.client.logid}")
+            if self.client:
+                logger.info(f"对话请求日志ID: {self.client.logid}")
