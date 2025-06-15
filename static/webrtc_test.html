@@ -263,9 +263,7 @@
         <!-- 步骤2: 麦克风控制 -->
         <div class="step-section compact">
             <h3>🎤 步骤2: 麦克风控制</h3>
-
-    <button id="get-devices-btn">Get Devices</button>
-
+            
             <div class="mic-controls">
                 <div class="mic-selector">
                     <select id="microphone-select">
@@ -325,44 +323,6 @@
     function log(message) {
         console.log(message);
         logElement.textContent += `${message}\n`;
-    }
-
-    async function getFullDeviceList() {
-        // 先检查一下，如果已经有权限，可能不需要再次请求
-        const initialDevices = await navigator.mediaDevices.enumerateDevices();
-        log("Initial call (before getUserMedia):");
-        log(JSON.stringify(initialDevices, null, 2));
-
-        // 检查是否已经有 label，如果有，说明权限已经存在且有效
-        if (initialDevices.some(device => device.label)) {
-            log("\nPermission already granted. Full list available.");
-            return initialDevices;
-        }
-
-        // --- 这是关键步骤 ---
-        // 为了获取权限和完整的设备列表，我们必须先请求一个媒体流
-        log("\nRequesting media stream to get permissions...");
-        try {
-            // 请求音频和视频权限。可以只请求一个，例如 { audio: true }
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
-
-            // 既然已经拿到了设备列表，我们就不需要这个初始的流了，把它关掉
-            // 这样浏览器的摄像头/麦克风图标就会消失
-            stream.getTracks().forEach(track => {
-                track.stop();
-            });
-
-            // 现在再次调用 enumerateDevices，这一次它将返回完整信息
-            log("\nPermission granted! Calling enumerateDevices again...");
-            const fullDevices = await navigator.mediaDevices.enumerateDevices();
-            return fullDevices;
-
-        } catch (err) {
-            log(`\nError getting media stream: ${err.name} - ${err.message}`);
-            // 用户可能拒绝了权限 (NotAllowedError)
-            // 或者没有找到设备 (NotFoundError)
-            return null;
-        }
     }
 
     getDevicesBtn.onclick = async () => {

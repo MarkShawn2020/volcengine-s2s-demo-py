@@ -90,8 +90,8 @@ class VoicengineClient:
             await self.ws.send(task_request)
             logger.debug(f">> volcengine: {len(payload_bytes)} bytes")
         except Exception as e:
-            logger.error(f"❌ 发送音频请求失败: {e}")  # 改为error级别，便于调试
-            exit(-1)
+            logger.error(f"❌ 发送音频请求失败: {e}")
+            raise
 
     async def receive_server_response(self) -> Dict[str, Any]:
         try:
