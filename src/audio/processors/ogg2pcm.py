@@ -21,6 +21,10 @@ class Ogg2PcmProcessor(AudioProcessor):
         # 内部队列，用于存放解码后的PCM数据
         self.pcm_queue = queue.Queue()
         self._is_running = threading.Event()
+        
+        # 输入缓冲区，用于积累足够的OGG数据再送给FFmpeg
+        self._input_buffer = b''
+        self._min_buffer_size = 1024  # 最小缓冲区大小
 
         format_map = {
             pyaudio.paFloat32: ('f32le', 4),
@@ -79,6 +83,16 @@ class Ogg2PcmProcessor(AudioProcessor):
 
     def flush(self) -> bytes | None:
         """获取内部缓冲的所有剩余数据"""
+        # 首先发送剩余的输入缓冲数据
+        if self._input_buffer and self._is_running.is_set():
+            try:
+                self.ffmpeg_process.stdin.write(self._input_buffer)
+                self.ffmpeg_process.stdin.flush()
+                self._input_buffer = b''
+            except (BrokenPipeError, OSError):
+                pass
+        
+        # 收集所有剩余的解码数据
         remaining_data = b''
         while True:
             chunk = self._get_decoded_pcm(block=False, timeout=0.1)
@@ -119,24 +133,34 @@ class Ogg2PcmProcessor(AudioProcessor):
         if not self._is_running.is_set() or not ogg_data:
             return
 
-        try:
-            self.ffmpeg_process.stdin.write(ogg_data)
-            self.ffmpeg_process.stdin.flush()
-        except (BrokenPipeError, OSError):
-            logger.warning("尝试写入已关闭的 FFmpeg stdin 管道。")
-            self.close()
+        # 将数据添加到缓冲区
+        self._input_buffer += ogg_data
+        
+        # 如果缓冲区足够大，或者这是流的开始，就发送数据
+        if len(self._input_buffer) >= self._min_buffer_size:
+            try:
+                self.ffmpeg_process.stdin.write(self._input_buffer)
+                self.ffmpeg_process.stdin.flush()
+                self._input_buffer = b''  # 清空缓冲区
+            except (BrokenPipeError, OSError):
+                logger.warning("尝试写入已关闭的 FFmpeg stdin 管道。")
+                self.close()
 
     def _get_decoded_pcm(self, block=True, timeout=None) -> bytes or None:
         """从内部队列获取解码后的 PCM 数据"""
         try:
             pcm_data = self.pcm_queue.get(block=block, timeout=timeout)
+            # 如果收到哨兵值None，说明解码器已停止
+            if pcm_data is None:
+                return b''
             return pcm_data
         except queue.Empty:
             return b''
 
     def _read_stdout(self):
         """后台线程，持续从 FFmpeg 的 stdout 读取解码后的 PCM 数据"""
-        chunk_size = int(self.sample_rate * self.frame_size * 0.1)
+        # 减小chunk_size以降低延迟，约20ms的数据
+        chunk_size = int(self.sample_rate * self.frame_size * 0.02)
         while self._is_running.is_set():
             try:
                 pcm_data = self.ffmpeg_process.stdout.read(chunk_size)
