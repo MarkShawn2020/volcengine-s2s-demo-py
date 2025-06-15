@@ -174,8 +174,6 @@ class Orchestrator:
                     logger.error(f"服务器错误: {response['payload_msg']}")
                     raise Exception("服务器错误")
 
-                await asyncio.sleep(0.01)
-
         except Exception as e:
             logger.warning(f"failed to receive, reason: {e}")
 
