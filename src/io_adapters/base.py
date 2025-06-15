@@ -3,7 +3,6 @@ from typing import Callable, Optional, Any, Dict
 
 from src.audio.processors.base import AudioProcessor
 from src.audio.type import AudioConfig, AudioType
-from src.config import VOLCENGINE_AUDIO_TYPE
 from src.utils.logger import logger
 from src.volcengine.config import input_audio_config, ogg_output_audio_config, start_session_req
 

@@ -20,14 +20,10 @@ logger = logging.getLogger(__name__)
 
 
 class Orchestrator:
-    """对话会话管理类 - 重构版本"""
 
     def __init__(self):
-        self.session_id = str(uuid.uuid4())
-        logger.info(f"🚀 启动对话会话 (ID: {self.session_id[:8]}...)")
-
         # WebSocket --> voicengine 客户端
-        self.client = VoicengineClient(config=ws_connect_config, session_id=self.session_id)
+        self.volcengine_client = VoicengineClient(config=ws_connect_config)
 
         # 初始化音频IO
         self.audio_adapter = self._create_audio_adapter(ADAPTER_MODE)
@@ -35,7 +31,7 @@ class Orchestrator:
         self.audio_adapter.set_prepared_callback(self._on_audio_io_prepared)
 
         # 会话控制
-        self.is_running = True
+        self.is_running = False
         self.is_session_finished = False
 
         # 信号处理
@@ -70,53 +66,16 @@ class Orchestrator:
 
     def _handle_audio_input(self, audio_data: bytes) -> None:
         """处理音频输入数据"""
-        if not self.is_running:
+        if not self.is_running or not self.volcengine_client.is_active:
             return
 
-        # 检查WebSocket连接状态
-        if not self._is_websocket_connected():
-            logger.debug("WebSocket连接不可用，跳过音频发送")
-            return
-
-        # logger.info(f"🎤 Orchestrator接收到音频数据: {len(audio_data)} bytes")
-
-        # 创建异步任务发送音频数据
-        task = asyncio.create_task(self.client.task_request(audio_data))
-        task.add_done_callback(self._handle_task_request_exception)
+        asyncio.create_task(self.volcengine_client.upload_audio(audio_data))
 
     def _on_audio_io_prepared(self) -> None:
         """音频IO准备就绪回调"""
         logger.info("🎯 音频IO已准备就绪，发送SayHello")
-        task = asyncio.create_task(self.client.say_hello(VOLCENGINE_WELCOME))
+        task = asyncio.create_task(self.volcengine_client.say_hello(VOLCENGINE_WELCOME))
         task.add_done_callback(self._handle_general_task_exception)
-
-    def _is_websocket_connected(self) -> bool:
-        """检查WebSocket连接状态"""
-        if not self.client or not self.client.ws:
-            return False
-
-        try:
-            import websockets
-            if hasattr(self.client.ws, 'state'):
-                return self.client.ws.state == websockets.protocol.State.OPEN
-            elif hasattr(self.client.ws, 'closed'):
-                return not self.client.ws.closed
-            else:
-                return True
-        except Exception as e:
-            logger.debug(f"检查WebSocket状态时出错: {e}")
-            return False
-
-    def _handle_task_request_exception(self, task) -> None:
-        """处理task_request异步任务的异常"""
-        try:
-            task.result()
-        except Exception as e:
-            logger.warning(f"音频发送任务失败: {e}")
-            # WebSocket连接已关闭，停止运行
-            if "received 1000" in str(e) or "ConnectionClosed" in str(e):
-                logger.info("检测到WebSocket连接已关闭，停止音频处理")
-                self.is_running = False
 
     def _handle_general_task_exception(self, task) -> None:
         """处理一般异步任务的异常"""
@@ -310,9 +269,9 @@ class Orchestrator:
                     logger.warning(f"停止音频IO错误: {e}")
 
             # 优雅关闭WebSocket连接
-            if self.client:
+            if self.volcengine_client:
                 try:
-                    await self.client.graceful_shutdown()
+                    await self.volcengine_client.graceful_shutdown()
                 except Exception as e:
                     logger.warning(f"优雅关闭WebSocket错误: {e}")
 
@@ -325,48 +284,29 @@ class Orchestrator:
 
     async def receive_loop(self):
         try:
-            while True:
-                # 检查连接状态
-                if not self._is_websocket_connected():
-                    logger.info("WebSocket连接已关闭，退出接收循环")
-                    self.is_running = False
-                    break
-
-                response = await self.client.receive_server_response()
-                # logger.debug(f"📡 接收到原始响应，开始处理...")
+            while self.is_running and self.volcengine_client.is_active:
+                response = await self.volcengine_client.receive_server_response()
                 self.handle_server_response(response)
-                if 'event' in response and (response['event'] == ServerEvent.SESSION_FINISHED or response[
-                    'event'] == ServerEvent.SESSION_FAILED):
-                    logger.info(f"接收到会话结束事件: {ServerEvent(response['event']).name}({response['event']})")
-                    self.is_session_finished = True
-                    break
-        except asyncio.CancelledError:
-            logger.info("接收任务已取消")
         except Exception as e:
-            logger.warning(f"接收消息主循环异常： {e}")
-            # 检查是否为WebSocket正常关闭
-            if "received 1000" in str(e) or "ConnectionClosed" in str(e) or "connection is closed" in str(e).lower():
-                logger.warning("WebSocket连接已正常关闭，退出接收循环")
-                self.is_running = False
-            else:
-                logger.error(f"接收消息错误: {e}")
-                self.is_running = False
+            logger.error(f"接收消息错误: {e}")
+            self.is_running = False
 
     async def start(self) -> None:
         """启动对话会话"""
         try:
             # 初始化重连锁
+            self.is_running = True
             self._reconnect_lock = asyncio.Lock()
 
             # 建立WebSocket连接
-            await self.client.connect()
+            await self.volcengine_client.connect_websocket_server()
 
             # 启动接收循环
             asyncio.create_task(self.receive_loop())
 
             # 发送连接和会话初始化请求
-            await self.client.start_connection()
-            await self.client.start_session()
+            await self.volcengine_client.start_connection()
+            await self.volcengine_client.start_session()
 
             await asyncio.sleep(0.1)
 
@@ -374,13 +314,9 @@ class Orchestrator:
             asyncio.create_task(self.audio_adapter.start())
 
             # 保持主循环运行，监控连接状态
-            while self.is_running:
-                await asyncio.sleep(0.5)
+            while self.is_running: await asyncio.sleep(0.5)
 
         except Exception as e:
             logger.error(f"会话错误: {e}")
         finally:
-            # 正常结束时也使用优雅关闭
             await self._graceful_shutdown()
-            if self.client:
-                logger.info(f"对话请求日志ID: {self.client.logid}")

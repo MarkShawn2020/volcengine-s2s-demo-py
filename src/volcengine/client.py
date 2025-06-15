@@ -2,10 +2,11 @@ import asyncio
 import gzip
 import json
 import logging
+import uuid
 from typing import Dict, Any
 
 import websockets
-from websockets import ClientConnection, ConnectionClosedOK
+from websockets import ClientConnection, State
 
 from src.volcengine import protocol
 from src.volcengine.config import start_session_req
@@ -14,45 +15,78 @@ logger = logging.getLogger(__name__)
 
 
 class VoicengineClient:
-    def __init__(self, config: Dict[str, Any], session_id: str):
+    def __init__(self, config: Dict[str, Any]):
         self.config = config
-        self.logid = ""
-        self.session_id = session_id
-        self.ws: ClientConnection | None = None
 
-    async def connect(self) -> None:
+        self.ws: ClientConnection | None = None
+        self.logid = ""
+
+        self.is_connected = False  # connection
+
+        self.is_alive = False  # session
+        self.session_id = str(uuid.uuid4())
+        logger.info(f"🚀 启动对话会话 (ID: {self.session_id[:8]}...)")
+
+    async def _deinit(self):
+        self.is_alive = False
+        self.is_connected = False
+        if self.ws:
+            await self.ws.close()
+        self.ws = None
+
+    @property
+    def is_active(self) -> bool:
+        return (self.ws is not None and self.ws.state == State.OPEN and self.is_alive)
+
+    async def connect_websocket_server(self) -> None:
         """建立WebSocket连接"""
-        logger.info(f"url: {self.config['base_url']}, headers: {self.config['headers']}")
-        self.ws = await websockets.connect(
-            self.config['base_url'], additional_headers=self.config['headers'], ping_interval=5
-            )
-        self.logid = self.ws.response_headers.get("X-Tt-Logid") if hasattr(self.ws, 'response_headers') else None
-        logger.info(f"dialog server response logid: {self.logid}")
+        try:
+            logger.info(f"url: {self.config['base_url']}, headers: {self.config['headers']}")
+            self.ws = await websockets.connect(
+                self.config['base_url'], additional_headers=self.config['headers'], ping_interval=5
+                )
+            self.logid = self.ws.response_headers.get("X-Tt-Logid") if hasattr(self.ws, 'response_headers') else None
+            logger.info(f"dialog server response logid: {self.logid}")
+        except Exception as e:
+            logger.warning(f"failed to connect, reason: {e}")
 
     async def start_connection(self) -> None:
-        """发送StartConnection请求"""
-        start_connection_request = bytearray(protocol.generate_header())
-        start_connection_request.extend(int(1).to_bytes(4, 'big'))
-        payload_bytes = str.encode("{}")
-        payload_bytes = gzip.compress(payload_bytes)
-        start_connection_request.extend((len(payload_bytes)).to_bytes(4, 'big'))
-        start_connection_request.extend(payload_bytes)
-        await self.ws.send(start_connection_request)
-        logger.info("StartConnection request sent")
+        """
+        区别于 @connect_websocket_server，这个是用于主动向火山发起一次连接请求，即：
+        1. connect to server
+        2. build a connection
+        3. build a session
+        """
+        try:
+            start_connection_request = bytearray(protocol.generate_header())
+            start_connection_request.extend(int(1).to_bytes(4, 'big'))
+            payload_bytes = str.encode("{}")
+            payload_bytes = gzip.compress(payload_bytes)
+            start_connection_request.extend((len(payload_bytes)).to_bytes(4, 'big'))
+            start_connection_request.extend(payload_bytes)
+            await self.ws.send(start_connection_request)
+            logger.info("StartConnection request sent")
+            self.is_connected = True
+        except Exception as e:
+            logger.warning(f"failed to start connection, reason: {e}")
 
     async def start_session(self) -> None:
         """发送StartSession请求"""
-        request_params = start_session_req
-        payload_bytes = str.encode(json.dumps(request_params))
-        payload_bytes = gzip.compress(payload_bytes)
-        start_session_request = bytearray(protocol.generate_header())
-        start_session_request.extend(int(100).to_bytes(4, 'big'))
-        start_session_request.extend((len(self.session_id)).to_bytes(4, 'big'))
-        start_session_request.extend(str.encode(self.session_id))
-        start_session_request.extend((len(payload_bytes)).to_bytes(4, 'big'))
-        start_session_request.extend(payload_bytes)
-        await self.ws.send(start_session_request)
-        logger.info("StartSession request sent")
+        try:
+            request_params = start_session_req
+            payload_bytes = str.encode(json.dumps(request_params))
+            payload_bytes = gzip.compress(payload_bytes)
+            start_session_request = bytearray(protocol.generate_header())
+            start_session_request.extend(int(100).to_bytes(4, 'big'))
+            start_session_request.extend((len(self.session_id)).to_bytes(4, 'big'))
+            start_session_request.extend(str.encode(self.session_id))
+            start_session_request.extend((len(payload_bytes)).to_bytes(4, 'big'))
+            start_session_request.extend(payload_bytes)
+            await self.ws.send(start_session_request)
+            logger.info("StartSession request sent")
+            self.is_alive = True
+        except Exception as e:
+            logger.warning(f"failed to start session, reason: {e}")
 
     async def say_hello(self, content: str = "你好") -> None:
         """发送SayHello事件"""
@@ -71,14 +105,10 @@ class VoicengineClient:
         await self.ws.send(say_hello_request)
         logger.info(f"SayHello sent: {content}")
 
-    async def task_request(self, audio: bytes) -> None:
+    async def upload_audio(self, audio: bytes) -> None:
+        if not self.is_active: return
+
         try:
-            if not self.ws or (hasattr(self.ws, 'closed') and self.ws.closed):
-                logger.warning("WebSocket连接不可用，跳过音频请求")
-                return
-
-            # logger.info(f"📤 VoicengineClient发送音频数据: {len(audio)} bytes")
-
             task_request = bytearray(
                 protocol.generate_header(
                     message_type=protocol.CLIENT_AUDIO_ONLY_REQUEST, serial_method=protocol.NO_SERIALIZATION
@@ -93,29 +123,24 @@ class VoicengineClient:
             await self.ws.send(task_request)
             logger.debug(f"🏠 --> 📡 {len(payload_bytes)} bytes")
         except Exception as e:
-            logger.error(f"❌ 发送音频请求失败: {e}")
-            raise
+            logger.warning(f"failed to upload audio, reason: {e}")
 
-    async def receive_server_response(self) -> Dict[str, Any]:
+    async def receive_server_response(self) -> Dict[str, Any] | None:
+        if not self.is_active: return None
+
         try:
-            if self.ws is None:
-                raise Exception("WebSocket connection not established")
             response = await self.ws.recv()
             data = protocol.parse_response(response)
             return data
-        except ConnectionClosedOK as e:
-            logger.warning("WebSocket connection closed")
-            raise e
         except Exception as e:
-            raise Exception(f"Failed to receive message: {e}")
+            logger.warning(f"failed to receive server response, reason: {e}")
 
     async def finish_session(self):
         """发送结束会话请求"""
-        try:
-            if not self.ws or (hasattr(self.ws, 'closed') and self.ws.closed):
-                logger.info("WebSocket已关闭，跳过finish_session")
-                return
+        if not self.is_active: return
 
+        self.is_alive = False
+        try:
             finish_session_request = bytearray(protocol.generate_header())
             finish_session_request.extend(int(102).to_bytes(4, 'big'))
             payload_bytes = str.encode("{}")
@@ -127,15 +152,14 @@ class VoicengineClient:
             await self.ws.send(finish_session_request)
             logger.info("FinishSession request sent")
         except Exception as e:
-            logger.warning(f"发送finish_session请求失败: {e}")
+            logger.warning(f"failed to finish session, reason: {e}")
 
     async def finish_connection(self):
         """发送结束连接请求"""
-        try:
-            if not self.ws or (hasattr(self.ws, 'closed') and self.ws.closed):
-                logger.info("WebSocket已关闭，跳过finish_connection")
-                return
+        if not self.is_active: return
 
+        self.is_connected = False
+        try:
             finish_connection_request = bytearray(protocol.generate_header())
             finish_connection_request.extend(int(2).to_bytes(4, 'big'))
             payload_bytes = str.encode("{}")
@@ -155,41 +179,12 @@ class VoicengineClient:
                 logger.warning(f"接收FinishConnection响应失败: {e}")
 
         except Exception as e:
-            logger.warning(f"发送finish_connection请求失败: {e}")
-
-    async def close(self) -> None:
-        """关闭WebSocket连接"""
-        if self.ws:
-            try:
-                logger.info("正在优雅关闭WebSocket连接...")
-
-                # 检查连接状态，如果仍然开放则尝试发送关闭帧
-                import websockets
-                if hasattr(self.ws, 'state') and self.ws.state == websockets.protocol.State.OPEN:
-                    # 发送优雅关闭帧
-                    await self.ws.close(code=1000, reason="Client shutdown")
-                    logger.info("WebSocket关闭帧已发送")
-                elif hasattr(self.ws, 'closed') and not self.ws.closed:
-                    # 对于其他WebSocket实现
-                    await self.ws.close()
-                    logger.info("WebSocket连接已关闭")
-                else:
-                    logger.info("WebSocket连接已经关闭")
-
-            except Exception as e:
-                logger.warning(f"关闭WebSocket连接时出现错误: {e}")
-                try:
-                    # 强制关闭连接
-                    if hasattr(self.ws, 'close'):
-                        await self.ws.close()
-                except:
-                    pass
-            finally:
-                self.ws = None
-                logger.info("WebSocket连接清理完成")
+            logger.warning(f"failed to finish connection: {e}")
 
     async def graceful_shutdown(self) -> None:
         """优雅关闭WebSocket连接，包括发送结束请求"""
+        if not self.ws: return
+
         try:
             logger.info("开始优雅关闭WebSocket连接...")
 
@@ -205,8 +200,7 @@ class VoicengineClient:
             # 短暂等待，让服务器处理请求
             await asyncio.sleep(0.1)
 
+            await self._deinit()
+
         except Exception as e:
             logger.warning(f"优雅关闭过程中出现错误: {e}")
-        finally:
-            # 最终关闭WebSocket连接
-            await self.close()

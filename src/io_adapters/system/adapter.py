@@ -68,6 +68,7 @@ class SystemAdapter(AdapterBase):
         # 2. 显示欢迎界面和启动麦克风输入
         self.display_welcome_screen()
         self._on_prepared()
+
         await self._process_microphone_input()
 
     async def stop(self) -> None:
@@ -114,7 +115,7 @@ class SystemAdapter(AdapterBase):
         stream = self.audio_device.open_input_stream()
         logger.info("🎙️ 麦克风已就绪，开始监听...")
 
-        while self.is_recording:
+        while self.is_recording and stream.is_active():
             try:
                 audio_data = stream.read(input_audio_config["chunk"], exception_on_overflow=False)
                 self._handle_audio_input(audio_data)
