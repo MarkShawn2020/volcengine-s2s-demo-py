@@ -11,7 +11,9 @@ from src.utils.logger import logger
 
 VOLCENGINE_APP_ID = os.environ["VOLCENGINE_APP_ID"]
 VOLCENGINE_ACCESS_TOKEN = os.environ["VOLCENGINE_ACCESS_TOKEN"]
-VOLCENGINE_AUDIO_TYPE: AudioType = os.getenv("AUDIO_TYPE", AudioType.ogg)
+VOLCENGINE_AUDIO_TYPE: AudioType = os.getenv("VOLCENGINE_AUDIO_TYPE", AudioType.ogg)
+VOLCENGINE_BOT_NAME = "小塔"
+VOLCENGINE_WELCOME = f"你好，我是{VOLCENGINE_BOT_NAME}，今天很高兴遇见你~"
 
 ADAPTER_MODE: AdapterMode = os.getenv("ADAPTER_MODE", AdapterMode.system)
 logger.info(f"Adapter Mode: {ADAPTER_MODE}")

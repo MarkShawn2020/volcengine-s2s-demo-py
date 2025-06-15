@@ -103,38 +103,18 @@ class SystemAdapter(AdapterBase):
 
     def _audio_player_thread(self):
         """音频播放线程"""
-        consecutive_errors = 0
-        max_consecutive_errors = 5
-
         while self.is_playing:
             try:
                 audio_data = self.audio_queue.get(timeout=1.0)
                 if audio_data is not None and len(audio_data) > 0:
                     self.output_stream.write(audio_data)
-                    consecutive_errors = 0
 
             except queue.Empty:
                 time.sleep(0.1)
-                consecutive_errors = 0
 
             except Exception as e:
-                consecutive_errors += 1
-                logger.debug(f"音频播放错误 ({consecutive_errors}/{max_consecutive_errors}): {e}")
-
-                if consecutive_errors >= max_consecutive_errors:
-                    logger.error("连续播放错误过多，尝试重新初始化音频流")
-                    try:
-                        if self.output_stream:
-                            self.output_stream.stop_stream()
-                            self.output_stream.close()
-                        self.output_stream = self.audio_device.open_output_stream()
-                        consecutive_errors = 0
-                        logger.info("音频流重新初始化成功")
-                    except Exception as reinit_error:
-                        logger.error(f"音频流重新初始化失败: {reinit_error}")
-                        time.sleep(1.0)
-                else:
-                    time.sleep(0.2)
+                logger.error(f"音频播放错误: {e}")
+                exit(-1)
 
     async def _process_microphone_input(self) -> None:
         """处理麦克风输入"""

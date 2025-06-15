@@ -6,7 +6,13 @@ import uuid
 from typing import Dict, Any
 
 from src.audio.audio_converter import OggToPcmConverter
-from src.config import webrtc_config, websocket_config, ADAPTER_MODE, VOLCENGINE_AUDIO_TYPE
+from src.config import (
+    webrtc_config,
+    websocket_config,
+    ADAPTER_MODE,
+    VOLCENGINE_AUDIO_TYPE,
+    VOLCENGINE_WELCOME,
+    )
 from src.io_adapters.base import AdapterBase
 from src.io_adapters.type import AdapterMode
 from src.utils.logger import logger
@@ -88,7 +94,7 @@ class Orchestrator:
         """音频IO准备就绪回调"""
         logger.info("🎯 音频IO已准备就绪，发送SayHello")
         # 创建异步任务发送SayHello
-        asyncio.create_task(self.client.say_hello("你好，我是你的语音助手，有什么可以帮助你的吗？"))
+        asyncio.create_task(self.client.say_hello(VOLCENGINE_WELCOME))
 
     def _is_websocket_connected(self) -> bool:
         """检查WebSocket连接状态"""
@@ -252,7 +258,9 @@ class Orchestrator:
 
                 self.conversation_history.append(
                     {
-                        'user': self.current_user_text, 'ai': self.current_ai_text, 'timestamp': time.time()
+                        'user': self.current_user_text,
+                        'ai': self.current_ai_text,
+                        'timestamp': time.time()
                         }
                     )
 

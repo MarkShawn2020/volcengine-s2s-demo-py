@@ -3,7 +3,7 @@ import uuid
 import pyaudio
 
 from src.audio.type import AudioType, AudioConfig
-from src.config import VOLCENGINE_AUDIO_TYPE, VOLCENGINE_APP_ID, VOLCENGINE_ACCESS_TOKEN
+from src.config import VOLCENGINE_AUDIO_TYPE, VOLCENGINE_APP_ID, VOLCENGINE_ACCESS_TOKEN, VOLCENGINE_BOT_NAME
 from src.utils.logger import logger
 
 ws_connect_config = {
@@ -39,14 +39,14 @@ ogg_output_audio_config: AudioConfig = {
     }
 pcm_output_audio_config: AudioConfig = {
     "bit_size": pyaudio.paFloat32,
-    "chunk": 1600,
+    "chunk": 3200,
     "format": "pcm",
     "channels": 1,
     "sample_rate": 24000,
     }
 start_session_req = {
     "dialog": {
-        "bot_name": "小塔"
+        "bot_name": VOLCENGINE_BOT_NAME
         },
     }
 
