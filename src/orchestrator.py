@@ -70,8 +70,22 @@ class Orchestrator:
         if not self.is_running:
             return
 
-        # 创建异步任务发送音频数据
-        asyncio.create_task(self.client.task_request(audio_data))
+        # logger.debug(f"🎤 Orchestrator接收到音频数据: {len(audio_data)} bytes")
+        
+        # 安全地在事件循环中创建任务
+        try:
+            loop = asyncio.get_running_loop()
+            asyncio.run_coroutine_threadsafe(
+                self.client.task_request(audio_data),
+                loop
+            )
+        except RuntimeError as e:
+            logger.error(f"❌ 无法获取事件循环来处理音频数据: {e}")
+            # 尝试直接创建任务（如果在主线程中）
+            try:
+                asyncio.create_task(self.client.task_request(audio_data))
+            except RuntimeError:
+                logger.error("❌ 无法创建音频处理任务，音频数据将被丢弃")
 
     def _on_audio_io_prepared(self) -> None:
         """音频IO准备就绪回调"""

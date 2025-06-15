@@ -33,17 +33,22 @@ class WebRTCAdapter(AdapterBase):
 
     def _build_audio_pipeline(self):
         """构建WebRTCAdapter的音频处理流水线"""
-        loop = asyncio.get_event_loop()
 
         class WebRTCSink(AudioProcessor):
             def __init__(self, adapter):
                 self.adapter = adapter
 
             def process(self, audio_data: bytes) -> bytes:
-                asyncio.run_coroutine_threadsafe(
-                    self.adapter.webrtc_manager.send_audio_to_all_clients(audio_data, AudioType.pcm),
-                    loop
+                # 动态获取当前事件循环，而不是在初始化时获取
+                try:
+                    loop = asyncio.get_running_loop()
+                    asyncio.run_coroutine_threadsafe(
+                        self.adapter.webrtc_manager.send_audio_to_all_clients(audio_data, AudioType.pcm),
+                        loop
                     )
+                except RuntimeError:
+                    # 如果没有运行中的事件循环，记录警告
+                    logger.warning("没有运行中的事件循环，无法发送WebRTC音频数据")
                 return b''
 
         pipeline = []
@@ -129,6 +134,7 @@ class WebRTCAdapter(AdapterBase):
         if not self.is_running:
             return
 
+        # logger.debug(f"🎤 WebRTC接收到音频数据: {len(audio_data)} bytes")
         self._handle_audio_input(audio_data)
 
     def _handle_client_connected(self, client_id: str) -> None:

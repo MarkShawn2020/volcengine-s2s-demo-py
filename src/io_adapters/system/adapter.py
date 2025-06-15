@@ -117,7 +117,6 @@ class SystemAdapter(AdapterBase):
         while self.is_recording:
             try:
                 audio_data = stream.read(input_audio_config["chunk"], exception_on_overflow=False)
-                # save_pcm_to_wav(audio_data, "../../../output.wav")
                 self._handle_audio_input(audio_data)
                 await asyncio.sleep(0.01)
             except Exception as e:

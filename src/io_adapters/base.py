@@ -3,6 +3,7 @@ from typing import Callable, Optional, Any, Dict
 
 from src.audio.processors.base import AudioProcessor
 from src.audio.type import AudioConfig, AudioType
+from src.config import VOLCENGINE_AUDIO_TYPE
 from src.utils.logger import logger
 from src.volcengine.config import input_audio_config, ogg_output_audio_config, start_session_req
 
@@ -87,9 +88,14 @@ class AdapterBase(ABC):
         """处理音频输入数据"""
         if self.audio_input_callback and audio_data:
             try:
+                # logger.debug(f"🎯 调用音频输入回调: {len(audio_data)} bytes")
                 self.audio_input_callback(audio_data)
             except Exception as e:
                 logger.error(f"音频输入回调处理错误: {e}")
+        elif not self.audio_input_callback:
+            logger.warning("⚠️ 音频输入回调未设置，无法处理音频数据")
+        elif not audio_data:
+            logger.debug("收到空音频数据，跳过处理")
 
     def _on_prepared(self) -> None:
         """触发准备就绪回调"""
