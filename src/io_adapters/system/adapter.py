@@ -18,10 +18,10 @@ class SystemAdapter(AdapterBase):
         self._output_stream = self._audio_device.open_output_stream()
         self.is_running = True
 
-    async def on_push(self) -> bytes:
+    async def on_push(self) -> bytes | None:
         if self.is_running and self._input_stream.is_active():
             data = self._input_stream.read(input_audio_config.chunk, exception_on_overflow=False)
-        return b''
+            return data
 
     async def on_pull(self, chunk: bytes) -> None:
         if self.is_running and self._output_stream.is_active():

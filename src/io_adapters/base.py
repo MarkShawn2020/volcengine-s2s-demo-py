@@ -19,7 +19,7 @@ class AdapterBase(ABC):
         pass
 
     @abstractmethod
-    async def on_push(self) -> bytes:
+    async def on_push(self) -> bytes | None:
         """
         本函数返回每一次读取的用户音频，以供上层程序发送给AI
         """

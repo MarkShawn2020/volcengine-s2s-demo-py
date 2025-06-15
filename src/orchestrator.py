@@ -174,7 +174,7 @@ class Orchestrator:
                     logger.error(f"服务器错误: {response['payload_msg']}")
                     raise Exception("服务器错误")
 
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(0.01)
 
         except Exception as e:
             logger.warning(f"failed to receive, reason: {e}")
@@ -186,8 +186,9 @@ class Orchestrator:
                 seq += 1
                 logger.debug(f"handing sender ({seq})")
                 chunk = await self.audio_adapter.on_push()
-                await self.volcengine_client.upload_audio(chunk)
-                await asyncio.sleep(0.1)
+                if chunk:
+                    await self.volcengine_client.upload_audio(chunk)
+                await asyncio.sleep(0.01)
         except Exception as e:
             logger.warning(f"failed to send, reason: {e}")
 
