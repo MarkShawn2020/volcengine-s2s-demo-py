@@ -28,25 +28,22 @@
         }
 
         .main-content {
-            display: flex;
-            width: 100%;
+            display: grid;
+            grid-template-columns: 320px 1fr;
             gap: 12px;
-            align-items: stretch;
+            grid-template-rows: minmax(0, 1fr);
         }
 
         .left-panel {
-            width: 320px;
             display: flex;
             flex-direction: column;
             gap: 10px;
         }
 
         .right-panel {
-            flex: 1;
             display: flex;
             flex-direction: column;
             min-width: 0;
-            overflow: hidden;
         }
 
         @media (max-width: 768px) {
@@ -113,15 +110,14 @@
             border: 1px solid #ddd;
             border-radius: 4px;
             padding: 12px;
-            height: 100%;
             overflow-y: auto;
             overflow-x: auto;
             font-family: monospace;
             font-size: 11px;
-            margin-top: 0;
             text-align: left;
             white-space: nowrap;
             min-width: 0;
+            min-height: 0;
         }
 
         .log-entry {
@@ -252,6 +248,34 @@
             font-size: 12px !important;
             margin: 0 !important;
         }
+        
+        .log-section {
+            display: grid;
+            grid-template-rows: auto minmax(0, 1fr);
+            height: 100%;
+            max-height: 100%;
+            overflow: hidden;
+        }
+        
+        .log-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #dee2e6;
+            padding-bottom: 6px;
+            margin-bottom: 12px;
+        }
+        
+        .log-header h3 {
+            margin: 0;
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+        
+        .log-buttons {
+            display: flex;
+            gap: 4px;
+        }
     </style>
 </head>
 <body>
@@ -312,15 +336,15 @@
         </div>
 
         <div class="right-panel">
-            <div class="step-section" style="height: 100%; display: flex; flex-direction: column;">
-                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #dee2e6; padding-bottom: 6px; margin-bottom: 12px;">
-                    <h3 style="margin: 0; border-bottom: none; padding-bottom: 0;">✍🏻 日志</h3>
-                    <div style="display: flex; gap: 4px;">
+            <div class="step-section log-section">
+                <div class="log-header">
+                    <h3>✍🏻 日志</h3>
+                    <div class="log-buttons">
                         <button onclick="toggleWrap()" class="small-btn" id="wrap-btn">📄 换行</button>
                         <button onclick="clearLog()" class="small-btn">🗑️ 清空</button>
                     </div>
                 </div>
-                <div class="log" id="log" style="flex: 1;"></div>
+                <div class="log" id="log"></div>
             </div>
         </div>
     </div>
