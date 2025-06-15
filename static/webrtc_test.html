@@ -7,92 +7,91 @@
     <style>
         body {
             font-family: 'Arial', sans-serif;
-            max-width: 800px;
+            max-width: 1000px;
             margin: 0 auto;
-            padding: 20px;
+            padding: 15px;
             background-color: #f5f5f5;
         }
-        
+
         .container {
             background: white;
-            border-radius: 10px;
-            padding: 30px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         }
-        
+
         h1 {
             text-align: center;
             color: #333;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
+            font-size: 24px;
         }
-        
-        .status {
-            padding: 15px;
-            border-radius: 5px;
-            margin: 10px 0;
-            font-weight: bold;
+
+        .main-content {
+            display: flex;
+            width: 100%;
+            gap: 12px;
         }
-        
-        .status.disconnected {
-            background-color: #ffebee;
-            color: #c62828;
-            border: 1px solid #ef5350;
+
+        .left-panel {
+            width: 320px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
         }
-        
-        .status.connecting {
-            background-color: #fff3e0;
-            color: #ef6c00;
-            border: 1px solid #ff9800;
+
+        .right-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            height: 100%;
         }
-        
-        .status.connected {
-            background-color: #e8f5e8;
-            color: #2e7d32;
-            border: 1px solid #4caf50;
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
         }
-        
+
         .controls {
             text-align: center;
-            margin: 20px 0;
+            margin: 12px 0;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
         }
-        
+
+
         button {
             background-color: #2196f3;
             color: white;
             border: none;
-            padding: 12px 24px;
-            margin: 5px;
-            border-radius: 5px;
+            padding: 8px 16px;
+            margin: 3px;
+            border-radius: 4px;
             cursor: pointer;
-            font-size: 16px;
+            font-size: 14px;
             transition: background-color 0.3s;
         }
-        
+
         button:hover:not(:disabled) {
             background-color: #1976d2;
         }
-        
+
         button:disabled {
             background-color: #ccc;
             cursor: not-allowed;
         }
-        
+
         button.danger {
             background-color: #f44336;
         }
-        
+
         button.danger:hover:not(:disabled) {
             background-color: #d32f2f;
         }
-        
-        .audio-controls {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 20px;
-            margin: 20px 0;
-        }
-        
+
         .volume-meter {
             width: 200px;
             height: 10px;
@@ -100,782 +99,993 @@
             border-radius: 5px;
             overflow: hidden;
         }
-        
+
         .volume-bar {
             height: 100%;
             background: linear-gradient(to right, #4caf50, #ffeb3b, #f44336);
             width: 0%;
             transition: width 0.1s;
         }
-        
+
         .log {
             background-color: #f9f9f9;
             border: 1px solid #ddd;
-            border-radius: 5px;
-            padding: 15px;
-            height: 200px;
+            border-radius: 4px;
+            padding: 12px;
+            height: 100%;
             overflow-y: auto;
             font-family: monospace;
-            font-size: 12px;
-            margin-top: 20px;
+            font-size: 11px;
+            margin-top: 0;
+            text-align: left;
+            text-wrap: nowrap;
         }
-        
+
         .log-entry {
             margin: 2px 0;
             padding: 2px 0;
         }
-        
+
         .log-entry.info {
             color: #2196f3;
         }
-        
+
         .log-entry.success {
             color: #4caf50;
         }
-        
+
         .log-entry.warning {
             color: #ff9800;
         }
-        
+
         .log-entry.error {
             color: #f44336;
         }
-        
+
         .step-section {
             background-color: #f8f9fa;
             border: 1px solid #e9ecef;
-            border-radius: 8px;
-            margin: 20px 0;
-            padding: 20px;
+            border-radius: 6px;
+            /*margin: 12px 0;*/
+            padding: 16px;
         }
-        
+
         .step-section h3 {
-            margin: 0 0 15px 0;
+            margin: 0 0 12px 0;
             color: #495057;
-            border-bottom: 2px solid #dee2e6;
-            padding-bottom: 8px;
+            border-bottom: 1px solid #dee2e6;
+            padding-bottom: 6px;
+            font-size: 16px;
         }
-        
+
         .config {
             background-color: #f0f0f0;
-            padding: 15px;
-            border-radius: 5px;
-            margin: 15px 0;
+            padding: 12px;
+            border-radius: 4px;
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+            gap: 4px;
         }
-        
+
         .config label {
             display: block;
-            margin: 10px 0 5px 0;
+            margin: 8px 0;
             font-weight: bold;
+            font-size: 14px;
         }
-        
+
         .config input, .config select {
-            width: calc(100% - 120px);
-            padding: 8px;
+            flex: 1;
+            padding: 6px 8px;
             border: 1px solid #ddd;
             border-radius: 3px;
             box-sizing: border-box;
             display: inline-block;
-            margin-right: 10px;
+            margin-right: 8px;
+            font-size: 14px;
         }
-        
+
         .config button {
-            padding: 8px 12px;
+            padding: 6px 12px;
             margin: 0;
+            font-size: 14px;
         }
-        
+
         .step-section.compact {
-            padding: 15px 20px;
+            padding: 12px 16px;
         }
-        
+
         .mic-controls {
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 10px;
         }
-        
+
         .mic-selector {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
         }
-        
+
         .mic-selector select {
             flex: 1;
             margin: 0;
             width: auto;
+            padding: 4px 6px;
+            font-size: 13px;
         }
-        
+
         .mic-buttons {
-            display: flex;
-            gap: 8px;
+            display: grid;
+            grid-column: 2;
+            gap: 6px;
         }
-        
+
         .volume-display {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
         }
-        
+
         .volume-label {
-            font-size: 14px;
-            min-width: 40px;
+            font-size: 13px;
+            min-width: 35px;
         }
-        
+
         .volume-meter {
-            width: 150px;
-            height: 8px;
+            flex: 1;
+            height: 6px;
         }
-        
+
         .volume-text {
-            font-size: 12px;
-            min-width: 30px;
+            font-size: 11px;
+            min-width: 25px;
             text-align: right;
         }
-        
+
         .small-btn {
-            padding: 6px 12px !important;
-            font-size: 14px !important;
+            padding: 4px 8px !important;
+            font-size: 12px !important;
             margin: 0 !important;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>🎙️ WebRTC 语音对话测试 🤖</h1>
-        
-        <!-- 步骤1: 服务器配置 -->
-        <div class="step-section">
-            <h3>🌐 步骤1: 服务器配置</h3>
-            <div class="config">
-                <label for="signaling-url">信令服务器地址:</label>
-                <input type="text" id="signaling-url" value="ws://localhost:8765" placeholder="ws://localhost:8765">
-            </div>
-            <div id="connection-status" class="status disconnected">
-                🔴 未连接
-            </div>
-            <div class="controls">
-                <button id="connect-btn" onclick="connect()">连接服务器</button>
-                <button id="disconnect-btn" onclick="disconnect()" disabled>断开连接</button>
-            </div>
-        </div>
+<div class="container">
+    <h1>🎙️ WebRTC 语音对话测试 🤖</h1>
 
-        <!-- 步骤2: 麦克风控制 -->
-        <div class="step-section compact">
-            <h3>🎤 步骤2: 麦克风控制</h3>
-            
-            <div class="mic-controls">
-                <div class="mic-selector">
-                    <select id="microphone-select">
-                        <option value="">请选择麦克风设备</option>
-                    </select>
-                    <button id="refresh-devices-btn" onclick="refreshDevices()" class="small-btn">🔄</button>
+    <div class="main-content">
+        <div class="left-panel">
+            <!-- 步骤1: 服务器配置 -->
+            <div class="step-section">
+                <h3>🌐 服务器配置</h3>
+                <div class="config">
+                    <label for="signaling-url">地址</label>
+                    <input type="text" id="signaling-url" value="ws://localhost:8765" placeholder="ws://localhost:8765">
                 </div>
-                <div class="mic-buttons">
-                    <button id="enable-mic-btn" onclick="enableMicrophone()" disabled class="small-btn">启用</button>
-                    <button id="disable-mic-btn" onclick="disableMicrophone()" disabled class="small-btn">关闭</button>
+                <div class="controls">
+                    <button id="connect-btn" onclick="connect()">连接服务器</button>
+                    <button id="disconnect-btn" onclick="disconnect()" disabled>断开连接</button>
                 </div>
-                <div class="volume-display">
-                    <span class="volume-label">音量:</span>
-                    <div class="volume-meter">
-                        <div id="volume-bar" class="volume-bar"></div>
+            </div>
+
+            <!-- 步骤2: 麦克风控制 -->
+            <div class="step-section compact">
+                <h3>🎤 麦克风控制</h3>
+
+                <div class="mic-controls">
+                    <div class="mic-selector">
+                        <select id="microphone-select">
+                            <option value="">请选择麦克风设备</option>
+                        </select>
+                        <button id="refresh-devices-btn" onclick="refreshDevices()" class="small-btn">🔄</button>
                     </div>
-                    <span id="volume-text" class="volume-text">0%</span>
+                    <div class="mic-buttons">
+                        <button id="enable-mic-btn" onclick="enableMicrophone()" disabled class="small-btn">启用
+                        </button>
+                        <button id="disable-mic-btn" onclick="disableMicrophone()" disabled class="small-btn">关闭
+                        </button>
+                    </div>
+                    <div class="volume-display">
+                        <span class="volume-label">音量:</span>
+                        <div class="volume-meter">
+                            <div id="volume-bar" class="volume-bar"></div>
+                        </div>
+                        <span id="volume-text" class="volume-text">0%</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 步骤3: 推流控制 -->
+            <div class="step-section">
+                <h3>📡 推流控制</h3>
+                <div class="controls">
+                    <button id="start-stream-btn" onclick="startStreaming()" disabled>开始推流</button>
+                    <button id="pause-stream-btn" onclick="togglePauseStreaming()" disabled>暂停推流</button>
+                    <button id="stop-stream-btn" onclick="stopStreaming()" disabled>停止推流</button>
                 </div>
             </div>
         </div>
 
-        <!-- 步骤3: 推流控制 -->
-        <div class="step-section">
-            <h3>📡 步骤3: 推流控制</h3>
-            <div class="controls">
-                <button id="start-stream-btn" onclick="startStreaming()" disabled>开始推流</button>
-                <button id="pause-stream-btn" onclick="togglePauseStreaming()" disabled>暂停推流</button>
-                <button id="stop-stream-btn" onclick="stopStreaming()" disabled>停止推流</button>
-            </div>
-            <div class="controls">
-                <button id="play-audio-btn" onclick="manualPlayAudio()" disabled>手动播放音频</button>
-                <button id="test-audio-btn" onclick="requestTestAudio()" disabled>请求测试音频</button>
+        <div class="right-panel">
+            <div class="step-section">
+                <h3>✍🏻 日志</h3>
+                <div class="controls">
+                    <div class="log" id="log"></div>
+                </div>
             </div>
         </div>
-        
-        <div class="log" id="log"></div>
-
-
     </div>
+</div>
 
-    <script>
-        let signalingSocket = null;
-        let peerConnection = null;
-        let localStream = null;
-        let isRecording = false;
-        let audioContext = null;
-        let analyser = null;
-        let selectedDeviceId = null;
-        let microphoneEnabled = false;
-        let isStreaming = false;
-        let streamPaused = false;
-        let availableDevices = [];
+<script>
+    let signalingSocket = null;
+    let peerConnection = null;
+    let localStream = null;
+    let isRecording = false;
+    let audioContext = null;
+    let analyser = null;
+    let selectedDeviceId = null;
+    let microphoneEnabled = false;
+    let isStreaming = false;
+    let streamPaused = false;
+    let availableDevices = [];
 
-        
-        // 日志函数
-        function log(message, type = 'info') {
-            const logElement = document.getElementById('log');
-            const timestamp = new Date().toLocaleTimeString();
-            const entry = document.createElement('div');
-            entry.className = `log-entry ${type}`;
-            entry.textContent = `[${timestamp}] ${message}`;
-            logElement.appendChild(entry);
-            logElement.scrollTop = logElement.scrollHeight;
+
+    // 日志函数
+    function log(message, type = 'info') {
+        const logElement = document.getElementById('log');
+        const timestamp = new Date().toLocaleTimeString();
+        const entry = document.createElement('div');
+        entry.className = `log-entry ${type}`;
+        entry.textContent = `[${timestamp}] ${message}`;
+        logElement.appendChild(entry);
+        logElement.scrollTop = logElement.scrollHeight;
+    }
+
+    // 更新连接状态
+    function updateConnectionStatus(status, message) {
+        const statusElement = document.getElementById('connection-status');
+        statusElement.className = `status ${status}`;
+        statusElement.textContent = message;
+    }
+
+    // 修改SDP以支持16kHz采样率
+    // function modifySdpFor16kHz(sdp) {
+    //     const lines = sdp.split('\n');
+    //     const modifiedLines = [];
+    //
+    //     for (let i = 0; i < lines.length; i++) {
+    //         const line = lines[i];
+    //         modifiedLines.push(line);
+    //
+    //         // 在opus的a=fmtp行中添加maxplaybackrate=16000
+    //         if (line.startsWith('a=fmtp:') && line.includes('opus')) {
+    //             // 如果已经有参数，添加maxplaybackrate
+    //             const parts = line.split(' ');
+    //             if (parts.length > 1) {
+    //                 const params = parts.slice(1).join(' ');
+    //                 if (params.includes('=') || params.includes(';')) {
+    //                     modifiedLines[modifiedLines.length - 1] = line + ';maxplaybackrate=16000';
+    //                 } else {
+    //                     modifiedLines[modifiedLines.length - 1] = line + ' maxplaybackrate=16000';
+    //                 }
+    //                 log(`修改SDP支持16kHz: ${modifiedLines[modifiedLines.length - 1]}`, 'info');
+    //             }
+    //         }
+    //     }
+    //
+    //     return modifiedLines.join('\n');
+    // }
+
+    // 更新按钮状态
+    function updateButtons() {
+        const connected = signalingSocket && signalingSocket.readyState === WebSocket.OPEN;
+        const deviceSelected = selectedDeviceId !== null && selectedDeviceId !== '' && selectedDeviceId !== undefined;
+
+        // 调试信息
+        console.log('updateButtons debug:', {
+            selectedDeviceId,
+            selectedDeviceIdType: typeof selectedDeviceId,
+            deviceSelected,
+            microphoneEnabled
+        });
+        log(`调试: selectedDeviceId="${selectedDeviceId}", type=${typeof selectedDeviceId}, deviceSelected=${deviceSelected}`, 'info');
+
+        // 步骤1: 服务器配置（完全独立）
+        document.getElementById('connect-btn').disabled = connected;
+        document.getElementById('disconnect-btn').disabled = !connected;
+
+        // 步骤2: 麦克风控制（完全独立）
+        document.getElementById('refresh-devices-btn').disabled = false;
+        const enableBtnDisabled = !deviceSelected || microphoneEnabled;
+        const disableBtnDisabled = !microphoneEnabled;
+
+        document.getElementById('enable-mic-btn').disabled = enableBtnDisabled;
+        document.getElementById('disable-mic-btn').disabled = disableBtnDisabled;
+
+        // 添加状态日志
+        if (enableBtnDisabled && !microphoneEnabled) {
+            log(`启用麦克风按钮被禁用，原因: deviceSelected=${deviceSelected}, microphoneEnabled=${microphoneEnabled}`, 'warning');
         }
-        
-        // 更新连接状态
-        function updateConnectionStatus(status, message) {
-            const statusElement = document.getElementById('connection-status');
-            statusElement.className = `status ${status}`;
-            statusElement.textContent = message;
-        }
-        
-        // 修改SDP以支持16kHz采样率
-        // function modifySdpFor16kHz(sdp) {
-        //     const lines = sdp.split('\n');
-        //     const modifiedLines = [];
-        //
-        //     for (let i = 0; i < lines.length; i++) {
-        //         const line = lines[i];
-        //         modifiedLines.push(line);
-        //
-        //         // 在opus的a=fmtp行中添加maxplaybackrate=16000
-        //         if (line.startsWith('a=fmtp:') && line.includes('opus')) {
-        //             // 如果已经有参数，添加maxplaybackrate
-        //             const parts = line.split(' ');
-        //             if (parts.length > 1) {
-        //                 const params = parts.slice(1).join(' ');
-        //                 if (params.includes('=') || params.includes(';')) {
-        //                     modifiedLines[modifiedLines.length - 1] = line + ';maxplaybackrate=16000';
-        //                 } else {
-        //                     modifiedLines[modifiedLines.length - 1] = line + ' maxplaybackrate=16000';
-        //                 }
-        //                 log(`修改SDP支持16kHz: ${modifiedLines[modifiedLines.length - 1]}`, 'info');
-        //             }
-        //         }
-        //     }
-        //
-        //     return modifiedLines.join('\n');
-        // }
-        
-        // 更新按钮状态
-        function updateButtons() {
-            const connected = signalingSocket && signalingSocket.readyState === WebSocket.OPEN;
-            const hasRemoteAudio = window.remoteAudio !== null && window.remoteAudio !== undefined;
-            const deviceSelected = selectedDeviceId !== null && selectedDeviceId !== '' && selectedDeviceId !== undefined;
-            
-            // 调试信息
-            console.log('updateButtons debug:', {
-                selectedDeviceId,
-                selectedDeviceIdType: typeof selectedDeviceId,
-                deviceSelected,
-                microphoneEnabled
+
+        // 步骤3: 推流控制（需要麦克风和服务器都就绪）
+        document.getElementById('start-stream-btn').disabled = !connected || !microphoneEnabled || isStreaming;
+        document.getElementById('pause-stream-btn').disabled = !isStreaming;
+        document.getElementById('stop-stream-btn').disabled = !isStreaming;
+    }
+
+    // 手动播放音频
+    function manualPlayAudio() {
+        if (window.remoteAudio) {
+            window.remoteAudio.play().then(() => {
+                log('手动播放音频成功', 'success');
+            }).catch(error => {
+                log(`手动播放失败: ${error.message}`, 'error');
             });
-            log(`调试: selectedDeviceId="${selectedDeviceId}", type=${typeof selectedDeviceId}, deviceSelected=${deviceSelected}`, 'info');
-            
-            // 步骤1: 服务器配置（完全独立）
-            document.getElementById('connect-btn').disabled = connected;
-            document.getElementById('disconnect-btn').disabled = !connected;
-            
-            // 步骤2: 麦克风控制（完全独立）
-            document.getElementById('refresh-devices-btn').disabled = false;
-            const enableBtnDisabled = !deviceSelected || microphoneEnabled;
-            const disableBtnDisabled = !microphoneEnabled;
-            
-            document.getElementById('enable-mic-btn').disabled = enableBtnDisabled;
-            document.getElementById('disable-mic-btn').disabled = disableBtnDisabled;
-            
-            // 添加状态日志
-            if (enableBtnDisabled && !microphoneEnabled) {
-                log(`启用麦克风按钮被禁用，原因: deviceSelected=${deviceSelected}, microphoneEnabled=${microphoneEnabled}`, 'warning');
-            }
-            
-            // 步骤3: 推流控制（需要麦克风和服务器都就绪）
-            document.getElementById('start-stream-btn').disabled = !connected || !microphoneEnabled || isStreaming;
-            document.getElementById('pause-stream-btn').disabled = !isStreaming;
-            document.getElementById('stop-stream-btn').disabled = !isStreaming;
-            document.getElementById('play-audio-btn').disabled = !hasRemoteAudio;
-            document.getElementById('test-audio-btn').disabled = !connected;
+        } else {
+            log('没有可播放的音频', 'warning');
         }
-        
-        // 手动播放音频
-        function manualPlayAudio() {
-            if (window.remoteAudio) {
-                window.remoteAudio.play().then(() => {
-                    log('手动播放音频成功', 'success');
-                }).catch(error => {
-                    log(`手动播放失败: ${error.message}`, 'error');
-                });
-            } else {
-                log('没有可播放的音频', 'warning');
-            }
+    }
+
+    // 请求测试音频
+    function requestTestAudio() {
+        if (signalingSocket && signalingSocket.readyState === WebSocket.OPEN) {
+            log('请求服务器发送测试音频', 'info');
+            signalingSocket.send(JSON.stringify({
+                type: 'test-audio'
+            }));
+        } else {
+            log('连接未建立，无法请求测试音频', 'error');
         }
-        
-        // 请求测试音频
-        function requestTestAudio() {
-            if (signalingSocket && signalingSocket.readyState === WebSocket.OPEN) {
-                log('请求服务器发送测试音频', 'info');
-                signalingSocket.send(JSON.stringify({
-                    type: 'test-audio'
-                }));
-            } else {
-                log('连接未建立，无法请求测试音频', 'error');
-            }
-        }
-        
-        // WebRTC统计信息监控
-        function startRTCStatsMonitoring() {
-            if (!peerConnection) return;
-            
-            const monitorStats = async () => {
-                try {
-                    const stats = await peerConnection.getStats();
-                    let audioReceived = false;
-                    let packetsReceived = 0;
-                    let bytesReceived = 0;
-                    
-                    stats.forEach(report => {
-                        if (report.type === 'inbound-rtp' && report.mediaType === 'audio') {
-                            audioReceived = true;
-                            packetsReceived = report.packetsReceived || 0;
-                            bytesReceived = report.bytesReceived || 0;
-                            
-                            log(`📊 音频接收统计: 包=${packetsReceived}, 字节=${bytesReceived}`, 'info');
-                            
-                            if (report.packetsLost) {
-                                log(`⚠️ 丢包数量: ${report.packetsLost}`, 'warning');
-                            }
-                        }
-                        
-                        if (report.type === 'media-source' && report.mediaType === 'audio') {
-                            log(`🎵 音频源统计: ${JSON.stringify({
-                                audioLevel: report.audioLevel,
-                                totalAudioEnergy: report.totalAudioEnergy
-                            })}`, 'info');
-                        }
-                    });
-                    
-                    if (!audioReceived) {
-                        log('⚠️ 未检测到音频接收统计', 'warning');
-                    }
-                    
-                } catch (error) {
-                    log(`统计信息获取失败: ${error.message}`, 'error');
-                }
-            };
-            
-            // 每2秒检查一次统计信息
-            setInterval(monitorStats, 2000);
-            log('开始监控WebRTC统计信息', 'info');
-        }
-        
-        // 连接信令服务器
-        async function connect() {
-            const signalingUrl = document.getElementById('signaling-url').value;
-            
+    }
+
+    // WebRTC统计信息监控
+    function startRTCStatsMonitoring() {
+        if (!peerConnection) return;
+
+        const monitorStats = async () => {
             try {
-                updateConnectionStatus('connecting', '🟡 连接中...');
-                log(`连接信令服务器: ${signalingUrl}`);
-                
-                signalingSocket = new WebSocket(signalingUrl);
-                
-                signalingSocket.onopen = () => {
-                    updateConnectionStatus('connected', '🟢 已连接');
-                    log('信令服务器连接成功', 'success');
-                    updateButtons();
-                };
-                
-                signalingSocket.onmessage = handleSignalingMessage;
-                
-                signalingSocket.onclose = () => {
-                    updateConnectionStatus('disconnected', '🔴 连接断开');
-                    log('信令服务器连接断开', 'warning');
-                    updateButtons();
-                };
-                
-                signalingSocket.onerror = (error) => {
-                    updateConnectionStatus('disconnected', '🔴 连接错误');
-                    log(`信令服务器连接错误: ${error}`, 'error');
-                    updateButtons();
-                };
-                
-            } catch (error) {
-                updateConnectionStatus('disconnected', '🔴 连接失败');
-                log(`连接失败: ${error.message}`, 'error');
-                updateButtons();
-            }
-        }
-        
-        // 断开连接
-        function disconnect() {
-            if (signalingSocket) {
-                signalingSocket.close();
-                signalingSocket = null;
-            }
-            
-            if (peerConnection) {
-                peerConnection.close();
-                peerConnection = null;
-            }
-            
-            // 清理远程音频元素
-            if (window.remoteAudio) {
-                window.remoteAudio.pause();
-                window.remoteAudio.srcObject = null;
-                if (window.remoteAudio.parentNode) {
-                    window.remoteAudio.parentNode.removeChild(window.remoteAudio);
+                const stats = await peerConnection.getStats();
+                let audioReceived = false;
+                let packetsReceived = 0;
+                let bytesReceived = 0;
+
+                stats.forEach(report => {
+                    if (report.type === 'inbound-rtp' && report.mediaType === 'audio') {
+                        audioReceived = true;
+                        packetsReceived = report.packetsReceived || 0;
+                        bytesReceived = report.bytesReceived || 0;
+
+                        log(`📊 音频接收统计: 包=${packetsReceived}, 字节=${bytesReceived}`, 'info');
+
+                        if (report.packetsLost) {
+                            log(`⚠️ 丢包数量: ${report.packetsLost}`, 'warning');
+                        }
+                    }
+
+                    if (report.type === 'media-source' && report.mediaType === 'audio') {
+                        log(`🎵 音频源统计: ${JSON.stringify({
+                            audioLevel: report.audioLevel,
+                            totalAudioEnergy: report.totalAudioEnergy
+                        })}`, 'info');
+                    }
+                });
+
+                if (!audioReceived) {
+                    log('⚠️ 未检测到音频接收统计', 'warning');
                 }
-                window.remoteAudio = null;
+
+            } catch (error) {
+                log(`统计信息获取失败: ${error.message}`, 'error');
             }
-            
-            stopAudio();
-            updateConnectionStatus('disconnected', '🔴 未连接');
-            log('已断开连接');
+        };
+
+        // 每2秒检查一次统计信息
+        setInterval(monitorStats, 2000);
+        log('开始监控WebRTC统计信息', 'info');
+    }
+
+    // 连接信令服务器
+    async function connect() {
+        const signalingUrl = document.getElementById('signaling-url').value;
+
+        try {
+            updateConnectionStatus('connecting', '🟡 连接中...');
+            log(`连接信令服务器: ${signalingUrl}`);
+
+            signalingSocket = new WebSocket(signalingUrl);
+
+            signalingSocket.onopen = () => {
+                updateConnectionStatus('connected', '🟢 已连接');
+                log('信令服务器连接成功', 'success');
+                updateButtons();
+            };
+
+            signalingSocket.onmessage = handleSignalingMessage;
+
+            signalingSocket.onclose = () => {
+                updateConnectionStatus('disconnected', '🔴 连接断开');
+                log('信令服务器连接断开', 'warning');
+                updateButtons();
+            };
+
+            signalingSocket.onerror = (error) => {
+                updateConnectionStatus('disconnected', '🔴 连接错误');
+                log(`信令服务器连接错误: ${error}`, 'error');
+                updateButtons();
+            };
+
+        } catch (error) {
+            updateConnectionStatus('disconnected', '🔴 连接失败');
+            log(`连接失败: ${error.message}`, 'error');
             updateButtons();
         }
-        
-        // 处理信令消息
-        async function handleSignalingMessage(event) {
-            const message = JSON.parse(event.data);
-            log(`收到信令消息: ${message.type}`);
-            
-            switch (message.type) {
-                case 'offer':
-                    await handleOffer(message.sdp);
-                    break;
-                case 'answer':
-                    await handleAnswer(message.sdp);
-                    break;
-                case 'ice-candidate':
-                    await handleIceCandidate(message.candidate);
-                    break;
-                case 'pong':
-                    log('收到心跳回复');
-                    break;
-                default:
-                    log(`未知消息类型: ${message.type}`, 'warning');
+    }
+
+    // 断开连接
+    function disconnect() {
+        if (signalingSocket) {
+            signalingSocket.close();
+            signalingSocket = null;
+        }
+
+        if (peerConnection) {
+            peerConnection.close();
+            peerConnection = null;
+        }
+
+        // 清理远程音频元素
+        if (window.remoteAudio) {
+            window.remoteAudio.pause();
+            window.remoteAudio.srcObject = null;
+            if (window.remoteAudio.parentNode) {
+                window.remoteAudio.parentNode.removeChild(window.remoteAudio);
             }
+            window.remoteAudio = null;
         }
-        
-        // 创建WebRTC连接
-        async function createPeerConnection() {
-            const config = {
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' }
-                ]
+
+        stopAudio();
+        updateConnectionStatus('disconnected', '🔴 未连接');
+        log('已断开连接');
+        updateButtons();
+    }
+
+    // 处理信令消息
+    async function handleSignalingMessage(event) {
+        const message = JSON.parse(event.data);
+        log(`收到信令消息: ${message.type}`);
+
+        switch (message.type) {
+            case 'offer':
+                await handleOffer(message.sdp);
+                break;
+            case 'answer':
+                await handleAnswer(message.sdp);
+                break;
+            case 'ice-candidate':
+                await handleIceCandidate(message.candidate);
+                break;
+            case 'pong':
+                log('收到心跳回复');
+                break;
+            default:
+                log(`未知消息类型: ${message.type}`, 'warning');
+        }
+    }
+
+    // 创建WebRTC连接
+    async function createPeerConnection() {
+        const config = {
+            iceServers: [
+                {urls: 'stun:stun.l.google.com:19302'}
+            ]
+        };
+
+        peerConnection = new RTCPeerConnection(config);
+
+        // 添加双向音频transceiver，配置16kHz采样率
+        const transceiver = peerConnection.addTransceiver('audio', {direction: 'sendrecv'});
+        log('添加双向音频transceiver', 'info');
+
+        // ICE候选事件
+        peerConnection.onicecandidate = (event) => {
+            if (event.candidate) {
+                log('发送ICE候选');
+                signalingSocket.send(JSON.stringify({
+                    type: 'ice-candidate',
+                    candidate: event.candidate
+                }));
+            }
+        };
+
+        // 连接状态变化
+        peerConnection.onconnectionstatechange = () => {
+            log(`WebRTC连接状态: ${peerConnection.connectionState}`);
+
+            // 如果连接成功，开始监控统计信息
+            if (peerConnection.connectionState === 'connected') {
+                startRTCStatsMonitoring();
+            }
+
+            // 检测连接断开状态并自动停止推流
+            if (peerConnection.connectionState === 'disconnected' ||
+                peerConnection.connectionState === 'failed' ||
+                peerConnection.connectionState === 'closed') {
+                if (isStreaming) {
+                    log(`WebRTC连接${peerConnection.connectionState}，自动停止推流`, 'warning');
+                    stopStreaming();
+                }
+            }
+        };
+
+        // 接收远程音频流
+        peerConnection.ontrack = (event) => {
+            log('接收到远程音频流', 'success');
+            console.log('接收到音频轨道:', event.track);
+            console.log('音频流:', event.streams[0]);
+
+            // 创建音频元素并播放
+            const remoteAudio = document.createElement('audio');
+            remoteAudio.controls = true; // 显示控件便于调试
+            remoteAudio.autoplay = true;
+            remoteAudio.volume = 1.0; // 设置为最大音量进行测试
+            remoteAudio.muted = false;
+
+            // 设置音频流
+            remoteAudio.srcObject = event.streams[0];
+
+            // 添加详细的事件监听
+            remoteAudio.onloadstart = () => {
+                log('开始加载音频', 'info');
             };
-            
-            peerConnection = new RTCPeerConnection(config);
-            
-            // 添加双向音频transceiver，配置16kHz采样率
-            const transceiver = peerConnection.addTransceiver('audio', { direction: 'sendrecv' });
-            log('添加双向音频transceiver', 'info');
-            
-            // ICE候选事件
-            peerConnection.onicecandidate = (event) => {
-                if (event.candidate) {
-                    log('发送ICE候选');
-                    signalingSocket.send(JSON.stringify({
-                        type: 'ice-candidate',
-                        candidate: event.candidate
-                    }));
+
+            remoteAudio.onloadeddata = () => {
+                log('音频数据加载完成', 'success');
+            };
+
+            remoteAudio.onloadedmetadata = () => {
+                log(`音频元数据加载完成: 时长=${remoteAudio.duration}s`, 'success');
+            };
+
+            remoteAudio.oncanplay = () => {
+                log('音频可以播放', 'success');
+
+                // 立即显示音频控件
+                remoteAudio.style.display = 'block';
+                remoteAudio.style.margin = '10px auto';
+                remoteAudio.style.width = '300px';
+                document.body.appendChild(remoteAudio);
+
+                // 尝试自动播放
+                const playPromise = remoteAudio.play();
+                if (playPromise !== undefined) {
+                    playPromise.then(() => {
+                        log('✅ 音频自动播放成功', 'success');
+                    }).catch(error => {
+                        log(`⚠️ 自动播放失败，需要用户交互: ${error.message}`, 'warning');
+
+                        // 创建播放按钮
+                        const playButton = document.createElement('button');
+                        playButton.textContent = '🔊 点击播放音频';
+                        playButton.style.display = 'block';
+                        playButton.style.margin = '10px auto';
+                        playButton.style.padding = '10px 20px';
+                        playButton.style.fontSize = '16px';
+                        playButton.style.backgroundColor = '#4CAF50';
+                        playButton.style.color = 'white';
+                        playButton.style.border = 'none';
+                        playButton.style.borderRadius = '5px';
+                        playButton.style.cursor = 'pointer';
+
+                        playButton.onclick = () => {
+                            remoteAudio.play().then(() => {
+                                log('✅ 手动播放成功', 'success');
+                                playButton.remove();
+                            }).catch(err => {
+                                log(`❌ 手动播放也失败: ${err.message}`, 'error');
+                            });
+                        };
+
+                        document.body.appendChild(playButton);
+                        log('已添加播放按钮，请点击开始播放', 'info');
+                    });
                 }
             };
-            
-            // 连接状态变化
-            peerConnection.onconnectionstatechange = () => {
-                log(`WebRTC连接状态: ${peerConnection.connectionState}`);
-                
-                // 如果连接成功，开始监控统计信息
-                if (peerConnection.connectionState === 'connected') {
-                    startRTCStatsMonitoring();
-                }
-                
-                // 检测连接断开状态并自动停止推流
-                if (peerConnection.connectionState === 'disconnected' || 
-                    peerConnection.connectionState === 'failed' || 
-                    peerConnection.connectionState === 'closed') {
-                    if (isStreaming) {
-                        log(`WebRTC连接${peerConnection.connectionState}，自动停止推流`, 'warning');
-                        stopStreaming();
-                    }
-                }
+
+            remoteAudio.onplay = () => {
+                log('音频开始播放事件', 'success');
             };
-            
-            // 接收远程音频流
-            peerConnection.ontrack = (event) => {
-                log('接收到远程音频流', 'success');
-                console.log('接收到音频轨道:', event.track);
-                console.log('音频流:', event.streams[0]);
-                
-                // 创建音频元素并播放
-                const remoteAudio = document.createElement('audio');
-                remoteAudio.controls = true; // 显示控件便于调试
-                remoteAudio.autoplay = true;
-                remoteAudio.volume = 1.0; // 设置为最大音量进行测试
-                remoteAudio.muted = false;
-                
-                // 设置音频流
-                remoteAudio.srcObject = event.streams[0];
-                
-                // 添加详细的事件监听
-                remoteAudio.onloadstart = () => {
-                    log('开始加载音频', 'info');
-                };
-                
-                remoteAudio.onloadeddata = () => {
-                    log('音频数据加载完成', 'success');
-                };
-                
-                remoteAudio.onloadedmetadata = () => {
-                    log(`音频元数据加载完成: 时长=${remoteAudio.duration}s`, 'success');
-                };
-                
-                remoteAudio.oncanplay = () => {
-                    log('音频可以播放', 'success');
-                    
-                    // 立即显示音频控件
-                    remoteAudio.style.display = 'block';
-                    remoteAudio.style.margin = '10px auto';
-                    remoteAudio.style.width = '300px';
-                    document.body.appendChild(remoteAudio);
-                    
-                    // 尝试自动播放
-                    const playPromise = remoteAudio.play();
-                    if (playPromise !== undefined) {
-                        playPromise.then(() => {
-                            log('✅ 音频自动播放成功', 'success');
-                        }).catch(error => {
-                            log(`⚠️ 自动播放失败，需要用户交互: ${error.message}`, 'warning');
-                            
-                            // 创建播放按钮
-                            const playButton = document.createElement('button');
-                            playButton.textContent = '🔊 点击播放音频';
-                            playButton.style.display = 'block';
-                            playButton.style.margin = '10px auto';
-                            playButton.style.padding = '10px 20px';
-                            playButton.style.fontSize = '16px';
-                            playButton.style.backgroundColor = '#4CAF50';
-                            playButton.style.color = 'white';
-                            playButton.style.border = 'none';
-                            playButton.style.borderRadius = '5px';
-                            playButton.style.cursor = 'pointer';
-                            
-                            playButton.onclick = () => {
-                                remoteAudio.play().then(() => {
-                                    log('✅ 手动播放成功', 'success');
-                                    playButton.remove();
-                                }).catch(err => {
-                                    log(`❌ 手动播放也失败: ${err.message}`, 'error');
-                                });
-                            };
-                            
-                            document.body.appendChild(playButton);
-                            log('已添加播放按钮，请点击开始播放', 'info');
-                        });
-                    }
-                };
-                
-                remoteAudio.onplay = () => {
-                    log('音频开始播放事件', 'success');
-                };
-                
-                remoteAudio.onplaying = () => {
-                    log('音频正在播放', 'success');
-                };
-                
-                remoteAudio.onpause = () => {
-                    log('音频暂停', 'warning');
-                };
-                
-                remoteAudio.onended = () => {
-                    log('音频播放结束', 'info');
-                };
-                
-                remoteAudio.onerror = (error) => {
-                    log(`音频播放错误: ${error}`, 'error');
-                    console.error('音频错误详情:', remoteAudio.error);
-                };
-                
-                remoteAudio.onvolumechange = () => {
-                    log(`音量变化: ${remoteAudio.volume}`, 'info');
-                };
-                
-                // 监听音频轨道状态
-                event.track.onmute = () => {
-                    log('音频轨道被静音', 'warning');
-                };
-                
-                event.track.onunmute = () => {
-                    log('音频轨道取消静音', 'success');
-                };
-                
-                // 音频元素将在oncanplay事件中添加到页面
-                
-                // 保存引用用于后续清理
-                window.remoteAudio = remoteAudio;
-                updateButtons(); // 更新按钮状态
-                
-                // 额外的调试信息
-                setTimeout(() => {
-                    log(`音频状态检查: paused=${remoteAudio.paused}, muted=${remoteAudio.muted}, volume=${remoteAudio.volume}`, 'info');
-                    const stream = remoteAudio.srcObject;
-                    if (stream) {
-                        const tracks = stream.getAudioTracks();
-                        log(`音频轨道数量: ${tracks.length}`, 'info');
-                        tracks.forEach((track, index) => {
-                            log(`轨道${index}: enabled=${track.enabled}, muted=${track.muted}, readyState=${track.readyState}`, 'info');
-                        });
-                    }
-                }, 1000);
+
+            remoteAudio.onplaying = () => {
+                log('音频正在播放', 'success');
             };
-            
-            return peerConnection;
+
+            remoteAudio.onpause = () => {
+                log('音频暂停', 'warning');
+            };
+
+            remoteAudio.onended = () => {
+                log('音频播放结束', 'info');
+            };
+
+            remoteAudio.onerror = (error) => {
+                log(`音频播放错误: ${error}`, 'error');
+                console.error('音频错误详情:', remoteAudio.error);
+            };
+
+            remoteAudio.onvolumechange = () => {
+                log(`音量变化: ${remoteAudio.volume}`, 'info');
+            };
+
+            // 监听音频轨道状态
+            event.track.onmute = () => {
+                log('音频轨道被静音', 'warning');
+            };
+
+            event.track.onunmute = () => {
+                log('音频轨道取消静音', 'success');
+            };
+
+            // 音频元素将在oncanplay事件中添加到页面
+
+            // 保存引用用于后续清理
+            window.remoteAudio = remoteAudio;
+            updateButtons(); // 更新按钮状态
+
+            // 额外的调试信息
+            setTimeout(() => {
+                log(`音频状态检查: paused=${remoteAudio.paused}, muted=${remoteAudio.muted}, volume=${remoteAudio.volume}`, 'info');
+                const stream = remoteAudio.srcObject;
+                if (stream) {
+                    const tracks = stream.getAudioTracks();
+                    log(`音频轨道数量: ${tracks.length}`, 'info');
+                    tracks.forEach((track, index) => {
+                        log(`轨道${index}: enabled=${track.enabled}, muted=${track.muted}, readyState=${track.readyState}`, 'info');
+                    });
+                }
+            }, 1000);
+        };
+
+        return peerConnection;
+    }
+
+    // 开始录音 (保留兼容性)
+    async function startAudio() {
+        log('请使用新的步骤式接口：1.选择设备 -> 2.启用麦克风 -> 3.连接服务器 -> 4.开始推流', 'warning');
+    }
+
+    // 停止录音 (保留兼容性)
+    function stopAudio() {
+        log('请使用 "关闭麦克风" 按钮', 'warning');
+    }
+
+    // 设置音量监测
+    function setupVolumeMonitoring() {
+        if (!localStream) return;
+
+        try {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const source = audioContext.createMediaStreamSource(localStream);
+            analyser = audioContext.createAnalyser();
+            analyser.fftSize = 256;
+            source.connect(analyser);
+
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+            function updateVolume() {
+                if (!microphoneEnabled || !localStream) {
+                    document.getElementById('volume-bar').style.width = '0%';
+                    document.getElementById('volume-text').textContent = '0%';
+                    return;
+                }
+
+                analyser.getByteFrequencyData(dataArray);
+                const average = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
+                const percentage = Math.round((average / 255) * 100);
+
+                document.getElementById('volume-bar').style.width = `${percentage}%`;
+                document.getElementById('volume-text').textContent = `${percentage}%`;
+
+                requestAnimationFrame(updateVolume);
+            }
+
+            updateVolume();
+        } catch (error) {
+            log(`音量监测设置失败: ${error.message}`, 'error');
         }
-        
-        // 开始录音 (保留兼容性)
-        async function startAudio() {
-            log('请使用新的步骤式接口：1.选择设备 -> 2.启用麦克风 -> 3.连接服务器 -> 4.开始推流', 'warning');
+    }
+
+    // 处理Offer
+    async function handleOffer(offer) {
+        if (!peerConnection) {
+            await createPeerConnection();
         }
-        
-        // 停止录音 (保留兼容性)
-        function stopAudio() {
-            log('请使用 "关闭麦克风" 按钮', 'warning');
+
+        await peerConnection.setRemoteDescription(offer);
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+
+        log('发送WebRTC Answer');
+        signalingSocket.send(JSON.stringify({
+            type: 'answer',
+            sdp: answer
+        }));
+    }
+
+    // 处理Answer
+    async function handleAnswer(answer) {
+        if (peerConnection) {
+            await peerConnection.setRemoteDescription(answer);
+            log('设置远程描述成功', 'success');
         }
-        
-        // 设置音量监测
-        function setupVolumeMonitoring() {
-            if (!localStream) return;
-            
+    }
+
+    // 处理ICE候选
+    async function handleIceCandidate(candidate) {
+        if (peerConnection && candidate) {
+            await peerConnection.addIceCandidate(candidate);
+            log('添加ICE候选成功');
+        }
+    }
+
+    // 获取麦克风设备列表
+    async function refreshDevices() {
+        try {
+            log('获取音频设备列表...');
+
+            // 先请求麦克风权限以获取设备名称
+            let permissionGranted = false;
             try {
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                const source = audioContext.createMediaStreamSource(localStream);
-                analyser = audioContext.createAnalyser();
-                analyser.fftSize = 256;
-                source.connect(analyser);
-                
-                const dataArray = new Uint8Array(analyser.frequencyBinCount);
-                
-                function updateVolume() {
-                    if (!microphoneEnabled || !localStream) {
-                        document.getElementById('volume-bar').style.width = '0%';
-                        document.getElementById('volume-text').textContent = '0%';
-                        return;
-                    }
-                    
-                    analyser.getByteFrequencyData(dataArray);
-                    const average = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
-                    const percentage = Math.round((average / 255) * 100);
-                    
-                    document.getElementById('volume-bar').style.width = `${percentage}%`;
-                    document.getElementById('volume-text').textContent = `${percentage}%`;
-                    
-                    requestAnimationFrame(updateVolume);
+                log('请求麦克风权限以获取设备名称...');
+                const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+                stream.getTracks().forEach(track => track.stop()); // 立即停止
+                permissionGranted = true;
+                log('麦克风权限已获取，可以显示真实设备名称', 'success');
+            } catch (e) {
+                log(`无法获取麦克风权限: ${e.message}，设备名称将显示为通用名称`, 'warning');
+            }
+
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            log(`devices: ${JSON.stringify(devices, null, 2)}`)
+            const audioInputs = devices.filter(device => device.kind === 'audioinput');
+
+            log(`权限状态: ${permissionGranted ? '已授予' : '未授予'}，找到 ${audioInputs.length} 个设备`, 'info');
+
+            const select = document.getElementById('microphone-select');
+            select.innerHTML = '<option value="">请选择麦克风设备</option>';
+
+            audioInputs.forEach((device, index) => {
+                const option = document.createElement('option');
+                option.value = device.deviceId || 'default'; // 如果deviceId为空，使用'default'
+
+                // 显示真实设备名称或通用名称
+                if (device.label && device.label.trim() !== '') {
+                    option.textContent = device.label;
+                    log(`设备 ${index + 1}: ${device.label} (ID: ${device.deviceId || 'default'})`, 'info');
+                } else {
+                    option.textContent = `麦克风设备 ${index + 1}`;
+                    log(`设备 ${index + 1}: 通用名称 (需要权限获取真实名称)`, 'warning');
                 }
-                
-                updateVolume();
-            } catch (error) {
-                log(`音量监测设置失败: ${error.message}`, 'error');
+
+                select.appendChild(option);
+            });
+
+            // 默认选择第一个可用设备
+            if (audioInputs.length > 0) {
+                select.selectedIndex = 1; // 选择第一个设备（索引1，因为0是“请选择”）
+                selectedDeviceId = audioInputs[0].deviceId || 'default'; // 如果deviceId为空，使用'default'
+                log(`默认选择: ${audioInputs[0].label || '麦克风设备 1'}`, 'info');
+                log(`设备ID: "${selectedDeviceId}", 类型: ${typeof selectedDeviceId}`, 'info');
+
+                // 如果设备ID为空，说明需要权限，提示用户
+                if (audioInputs[0].deviceId === '') {
+                    log('设备ID为空，使用默认设备。如需获取具体设备信息，请允许麦克风权限。', 'warning');
+                }
             }
+
+            availableDevices = audioInputs;
+            log(`找到 ${audioInputs.length} 个音频输入设备`, 'success');
+
+            // 设置选择事件
+            select.onchange = (e) => {
+                selectedDeviceId = e.target.value || null;
+                if (selectedDeviceId) {
+                    const selectedDevice = availableDevices.find(d => d.deviceId === selectedDeviceId);
+                    log(`选择设备: ${selectedDevice?.label || '未知设备'}`, 'info');
+                }
+                updateButtons();
+            };
+
+            updateButtons();
+
+        } catch (error) {
+            log(`获取设备列表失败: ${error.message}`, 'error');
         }
-        
-        // 处理Offer
-        async function handleOffer(offer) {
-            if (!peerConnection) {
-                await createPeerConnection();
-            }
-            
-            await peerConnection.setRemoteDescription(offer);
-            const answer = await peerConnection.createAnswer();
-            await peerConnection.setLocalDescription(answer);
-            
-            log('发送WebRTC Answer');
+    }
+
+    // 启用麦克风
+    async function enableMicrophone() {
+        if (!selectedDeviceId || selectedDeviceId === '') {
+            log('请先选择麦克风设备', 'warning');
+            return;
+        }
+
+        try {
+            log('启用麦克风...');
+
+            localStream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    deviceId: selectedDeviceId,
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true,
+                    sampleRate: 16000
+                }
+            });
+
+            microphoneEnabled = true;
+            setupVolumeMonitoring();
+
+            log('麦克风已启用', 'success');
+            updateButtons();
+
+        } catch (error) {
+            log(`启用麦克风失败: ${error.message}`, 'error');
+        }
+    }
+
+    // 关闭麦克风
+    function disableMicrophone() {
+        if (localStream) {
+            localStream.getTracks().forEach(track => track.stop());
+            localStream = null;
+        }
+
+        if (audioContext) {
+            audioContext.close();
+            audioContext = null;
+        }
+
+        microphoneEnabled = false;
+
+        // 重置音量显示
+        document.getElementById('volume-bar').style.width = '0%';
+        document.getElementById('volume-text').textContent = '0%';
+
+        log('麦克风已关闭');
+        updateButtons();
+    }
+
+    // 开始推流
+    async function startStreaming() {
+        if (!localStream) {
+            log('请先启用麦克风', 'warning');
+            return;
+        }
+
+        if (!signalingSocket || signalingSocket.readyState !== WebSocket.OPEN) {
+            log('请先连接服务器', 'warning');
+            return;
+        }
+
+        if (!peerConnection) {
+            await createPeerConnection();
+        }
+
+        try {
+            // 添加本地音频流
+            localStream.getTracks().forEach(track => {
+                peerConnection.addTrack(track, localStream);
+            });
+
+            // 创建并发送Offer
+            const offer = await peerConnection.createOffer();
+            const modifiedOffer = new RTCSessionDescription({
+                type: offer.type,
+                sdp: offer.sdp
+            });
+
+            await peerConnection.setLocalDescription(modifiedOffer);
+
+            log('发送WebRTC Offer (16kHz)');
             signalingSocket.send(JSON.stringify({
-                type: 'answer',
-                sdp: answer
+                type: 'offer',
+                sdp: modifiedOffer
             }));
+
+            isStreaming = true;
+            streamPaused = false;
+            log('开始推流', 'success');
+            updateButtons();
+
+        } catch (error) {
+            log(`开始推流失败: ${error.message}`, 'error');
         }
-        
-        // 处理Answer
-        async function handleAnswer(answer) {
-            if (peerConnection) {
-                await peerConnection.setRemoteDescription(answer);
-                log('设置远程描述成功', 'success');
-            }
+    }
+
+    // 切换暂停/恢复推流
+    function togglePauseStreaming() {
+        if (!localStream) return;
+
+        if (streamPaused) {
+            // 恢复推流
+            localStream.getAudioTracks().forEach(track => {
+                track.enabled = true;
+            });
+            streamPaused = false;
+            document.getElementById('pause-stream-btn').textContent = '暂停推流';
+            log('推流已恢复', 'success');
+        } else {
+            // 暂停推流
+            localStream.getAudioTracks().forEach(track => {
+                track.enabled = false;
+            });
+            streamPaused = true;
+            document.getElementById('pause-stream-btn').textContent = '恢复推流';
+            log('推流已暂停', 'warning');
         }
-        
-        // 处理ICE候选
-        async function handleIceCandidate(candidate) {
-            if (peerConnection && candidate) {
-                await peerConnection.addIceCandidate(candidate);
-                log('添加ICE候选成功');
-            }
+        updateButtons();
+    }
+
+    // 停止推流
+    function stopStreaming() {
+        if (peerConnection) {
+            peerConnection.close();
+            peerConnection = null;
         }
-        
-        // 获取麦克风设备列表
-        async function refreshDevices() {
-            try {
-                log('获取音频设备列表...');
-                
-                // 先请求麦克风权限以获取设备名称
-                let permissionGranted = false;
-                try {
-                    log('请求麦克风权限以获取设备名称...');
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    stream.getTracks().forEach(track => track.stop()); // 立即停止
-                    permissionGranted = true;
-                    log('麦克风权限已获取，可以显示真实设备名称', 'success');
-                } catch (e) {
-                    log(`无法获取麦克风权限: ${e.message}，设备名称将显示为通用名称`, 'warning');
-                }
-                
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                log(`devices: ${JSON.stringify(devices, null, 2)}`)
-                const audioInputs = devices.filter(device => device.kind === 'audioinput');
-                
-                log(`权限状态: ${permissionGranted ? '已授予' : '未授予'}，找到 ${audioInputs.length} 个设备`, 'info');
-                
+
+        isStreaming = false;
+        streamPaused = false;
+
+        // 重置按钮文本
+        document.getElementById('pause-stream-btn').textContent = '暂停推流';
+
+        log('推流已停止');
+        updateButtons();
+    }
+
+    // 自动获取麦克风权限并选择默认设备
+    async function autoSetupMicrophone() {
+        try {
+            log('🚀 开始自动设置麦克风...');
+
+            // 先请求权限
+            log('1. 请求麦克风权限...');
+            const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+            stream.getTracks().forEach(track => track.stop()); // 立即停止
+            log('✅ 麦克风权限获取成功', 'success');
+
+            // 获取设备列表
+            log('2. 获取设备列表...');
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const audioInputs = devices.filter(device => device.kind === 'audioinput');
+            log(`📱 找到 ${audioInputs.length} 个音频输入设备`, 'info');
+
+            if (audioInputs.length > 0) {
+                // 更新下拉列表
+                log('3. 更新设备下拉列表...');
                 const select = document.getElementById('microphone-select');
                 select.innerHTML = '<option value="">请选择麦克风设备</option>';
-                
+
                 audioInputs.forEach((device, index) => {
                     const option = document.createElement('option');
-                    option.value = device.deviceId || 'default'; // 如果deviceId为空，使用'default'
-                    
-                    // 显示真实设备名称或通用名称
-                    if (device.label && device.label.trim() !== '') {
-                        option.textContent = device.label;
-                        log(`设备 ${index + 1}: ${device.label} (ID: ${device.deviceId || 'default'})`, 'info');
-                    } else {
-                        option.textContent = `麦克风设备 ${index + 1}`;
-                        log(`设备 ${index + 1}: 通用名称 (需要权限获取真实名称)`, 'warning');
-                    }
-                    
+                    option.value = device.deviceId || 'default';
+                    option.textContent = device.label || `麦克风设备 ${index + 1}`;
                     select.appendChild(option);
+                    log(`  - 设备 ${index + 1}: ${device.label || '未知设备'} (ID: ${device.deviceId || 'default'})`, 'info');
                 });
-                
-                // 默认选择第一个可用设备
-                if (audioInputs.length > 0) {
-                    select.selectedIndex = 1; // 选择第一个设备（索引1，因为0是“请选择”）
-                    selectedDeviceId = audioInputs[0].deviceId || 'default'; // 如果deviceId为空，使用'default'
-                    log(`默认选择: ${audioInputs[0].label || '麦克风设备 1'}`, 'info');
-                    log(`设备ID: "${selectedDeviceId}", 类型: ${typeof selectedDeviceId}`, 'info');
-                    
-                    // 如果设备ID为空，说明需要权限，提示用户
-                    if (audioInputs[0].deviceId === '') {
-                        log('设备ID为空，使用默认设备。如需获取具体设备信息，请允许麦克风权限。', 'warning');
-                    }
-                }
-                
+
+                // 自动选择第一个设备
+                log('4. 自动选择第一个设备...');
+                select.selectedIndex = 1;
+                selectedDeviceId = audioInputs[0].deviceId || 'default';
                 availableDevices = audioInputs;
-                log(`找到 ${audioInputs.length} 个音频输入设备`, 'success');
-                
+
+                log(`✅ 自动选择设备: ${audioInputs[0].label || '麦克风设备 1'}`, 'success');
+                log(`📍 设备ID: "${selectedDeviceId}"`, 'info');
+
                 // 设置选择事件
                 select.onchange = (e) => {
                     selectedDeviceId = e.target.value || null;
@@ -885,245 +1095,47 @@
                     }
                     updateButtons();
                 };
-                
-                updateButtons();
-                
-            } catch (error) {
-                log(`获取设备列表失败: ${error.message}`, 'error');
-            }
-        }
-        
-        // 启用麦克风
-        async function enableMicrophone() {
-            if (!selectedDeviceId || selectedDeviceId === '') {
-                log('请先选择麦克风设备', 'warning');
-                return;
-            }
-            
-            try {
-                log('启用麦克风...');
-                
-                localStream = await navigator.mediaDevices.getUserMedia({
-                    audio: {
-                        deviceId: selectedDeviceId,
-                        echoCancellation: true,
-                        noiseSuppression: true,
-                        autoGainControl: true,
-                        sampleRate: 16000
-                    }
-                });
-                
-                microphoneEnabled = true;
-                setupVolumeMonitoring();
-                
-                log('麦克风已启用', 'success');
-                updateButtons();
-                
-            } catch (error) {
-                log(`启用麦克风失败: ${error.message}`, 'error');
-            }
-        }
-        
-        // 关闭麦克风
-        function disableMicrophone() {
-            if (localStream) {
-                localStream.getTracks().forEach(track => track.stop());
-                localStream = null;
-            }
-            
-            if (audioContext) {
-                audioContext.close();
-                audioContext = null;
-            }
-            
-            microphoneEnabled = false;
-            
-            // 重置音量显示
-            document.getElementById('volume-bar').style.width = '0%';
-            document.getElementById('volume-text').textContent = '0%';
-            
-            log('麦克风已关闭');
-            updateButtons();
-        }
-        
-        // 开始推流
-        async function startStreaming() {
-            if (!localStream) {
-                log('请先启用麦克风', 'warning');
-                return;
-            }
-            
-            if (!signalingSocket || signalingSocket.readyState !== WebSocket.OPEN) {
-                log('请先连接服务器', 'warning');
-                return;
-            }
-            
-            if (!peerConnection) {
-                await createPeerConnection();
-            }
-            
-            try {
-                // 添加本地音频流
-                localStream.getTracks().forEach(track => {
-                    peerConnection.addTrack(track, localStream);
-                });
-                
-                // 创建并发送Offer
-                const offer = await peerConnection.createOffer();
-                const modifiedOffer = new RTCSessionDescription({
-                    type: offer.type,
-                    sdp: offer.sdp
-                });
-                
-                await peerConnection.setLocalDescription(modifiedOffer);
-                
-                log('发送WebRTC Offer (16kHz)');
-                signalingSocket.send(JSON.stringify({
-                    type: 'offer',
-                    sdp: modifiedOffer
-                }));
-                
-                isStreaming = true;
-                streamPaused = false;
-                log('开始推流', 'success');
-                updateButtons();
-                
-            } catch (error) {
-                log(`开始推流失败: ${error.message}`, 'error');
-            }
-        }
-        
-        // 切换暂停/恢复推流
-        function togglePauseStreaming() {
-            if (!localStream) return;
-            
-            if (streamPaused) {
-                // 恢复推流
-                localStream.getAudioTracks().forEach(track => {
-                    track.enabled = true;
-                });
-                streamPaused = false;
-                document.getElementById('pause-stream-btn').textContent = '暂停推流';
-                log('推流已恢复', 'success');
-            } else {
-                // 暂停推流
-                localStream.getAudioTracks().forEach(track => {
-                    track.enabled = false;
-                });
-                streamPaused = true;
-                document.getElementById('pause-stream-btn').textContent = '恢复推流';
-                log('推流已暂停', 'warning');
-            }
-            updateButtons();
-        }
-        
-        // 停止推流
-        function stopStreaming() {
-            if (peerConnection) {
-                peerConnection.close();
-                peerConnection = null;
-            }
-            
-            isStreaming = false;
-            streamPaused = false;
-            
-            // 重置按钮文本
-            document.getElementById('pause-stream-btn').textContent = '暂停推流';
-            
-            log('推流已停止');
-            updateButtons();
-        }
-        
-        // 自动获取麦克风权限并选择默认设备
-        async function autoSetupMicrophone() {
-            try {
-                log('🚀 开始自动设置麦克风...');
-                
-                // 先请求权限
-                log('1. 请求麦克风权限...');
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                stream.getTracks().forEach(track => track.stop()); // 立即停止
-                log('✅ 麦克风权限获取成功', 'success');
-                
-                // 获取设备列表
-                log('2. 获取设备列表...');
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                const audioInputs = devices.filter(device => device.kind === 'audioinput');
-                log(`📱 找到 ${audioInputs.length} 个音频输入设备`, 'info');
-                
-                if (audioInputs.length > 0) {
-                    // 更新下拉列表
-                    log('3. 更新设备下拉列表...');
-                    const select = document.getElementById('microphone-select');
-                    select.innerHTML = '<option value="">请选择麦克风设备</option>';
-                    
-                    audioInputs.forEach((device, index) => {
-                        const option = document.createElement('option');
-                        option.value = device.deviceId || 'default';
-                        option.textContent = device.label || `麦克风设备 ${index + 1}`;
-                        select.appendChild(option);
-                        log(`  - 设备 ${index + 1}: ${device.label || '未知设备'} (ID: ${device.deviceId || 'default'})`, 'info');
-                    });
-                    
-                    // 自动选择第一个设备
-                    log('4. 自动选择第一个设备...');
-                    select.selectedIndex = 1;
-                    selectedDeviceId = audioInputs[0].deviceId || 'default';
-                    availableDevices = audioInputs;
-                    
-                    log(`✅ 自动选择设备: ${audioInputs[0].label || '麦克风设备 1'}`, 'success');
-                    log(`📍 设备ID: "${selectedDeviceId}"`, 'info');
-                    
-                    // 设置选择事件
-                    select.onchange = (e) => {
-                        selectedDeviceId = e.target.value || null;
-                        if (selectedDeviceId) {
-                            const selectedDevice = availableDevices.find(d => d.deviceId === selectedDeviceId);
-                            log(`选择设备: ${selectedDevice?.label || '未知设备'}`, 'info');
-                        }
-                        updateButtons();
-                    };
-                    
-                    // 自动启用麦克风
-                    log('5. 自动启用麦克风...');
-                    await enableMicrophone();
-                    
-                    log('🎉 自动设置完成！', 'success');
-                    
-                } else {
-                    log('❌ 未找到音频输入设备', 'error');
-                }
-                
-            } catch (error) {
-                log(`❌ 自动设置麦克风失败: ${error.message}`, 'error');
-                console.error('详细错误:', error);
-                // fallback 到手动模式
-                log('🔄 fallback 到手动模式...', 'warning');
-                refreshDevices();
-            }
-        }
 
-        // 页面加载完成
-        document.addEventListener('DOMContentLoaded', async () => {
-            log('页面加载完成');
-            
-            // 自动设置麦克风
-            await autoSetupMicrophone();
-            
-            updateButtons();
-            
-            // 定期发送心跳
-            setInterval(() => {
-                if (signalingSocket && signalingSocket.readyState === WebSocket.OPEN) {
-                    signalingSocket.send(JSON.stringify({ type: 'ping' }));
-                }
-            }, 30000);
-        });
-        
-        // 页面卸载时清理资源
-        window.addEventListener('beforeunload', () => {
-            disconnect();
-        });
-    </script>
+                // 自动启用麦克风
+                log('5. 自动启用麦克风...');
+                await enableMicrophone();
+
+                log('🎉 自动设置完成！', 'success');
+
+            } else {
+                log('❌ 未找到音频输入设备', 'error');
+            }
+
+        } catch (error) {
+            log(`❌ 自动设置麦克风失败: ${error.message}`, 'error');
+            console.error('详细错误:', error);
+            // fallback 到手动模式
+            log('🔄 fallback 到手动模式...', 'warning');
+            refreshDevices();
+        }
+    }
+
+    // 页面加载完成
+    document.addEventListener('DOMContentLoaded', async () => {
+        log('页面加载完成');
+
+        // 自动设置麦克风
+        await autoSetupMicrophone();
+
+        updateButtons();
+
+        // 定期发送心跳
+        setInterval(() => {
+            if (signalingSocket && signalingSocket.readyState === WebSocket.OPEN) {
+                signalingSocket.send(JSON.stringify({type: 'ping'}));
+            }
+        }, 30000);
+    });
+
+    // 页面卸载时清理资源
+    window.addEventListener('beforeunload', () => {
+        disconnect();
+    });
+</script>
 </body>
 </html>

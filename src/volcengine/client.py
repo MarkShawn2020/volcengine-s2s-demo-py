@@ -4,6 +4,7 @@ import json
 from typing import Dict, Any
 
 import websockets
+from websockets import ClientConnection, ConnectionClosedOK
 
 from src.utils.logger import logger
 from src.volcengine import protocol
@@ -15,7 +16,7 @@ class VoicengineClient:
         self.config = config
         self.logid = ""
         self.session_id = session_id
-        self.ws = None
+        self.ws: ClientConnection | None = None
 
     async def connect(self) -> None:
         """建立WebSocket连接"""
@@ -100,6 +101,9 @@ class VoicengineClient:
             response = await self.ws.recv()
             data = protocol.parse_response(response)
             return data
+        except ConnectionClosedOK as e:
+            logger.warning("WebSocket connection closed")
+            raise e
         except Exception as e:
             raise Exception(f"Failed to receive message: {e}")
 
