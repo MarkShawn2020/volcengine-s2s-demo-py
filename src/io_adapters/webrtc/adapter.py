@@ -26,12 +26,25 @@ class WebRTCAdapter(AdapterBase):
         self._prepared_triggered = False
 
     async def start(self) -> None:
-        """启动WebRTC音频输入输出"""
         logger.info("🌐 启动WebRTC音频输入输出...")
-
         self.is_running = True
 
-        # 启动WebRTC管理器
+        # 获取当前事件循环，用于跨线程调度
+        loop = asyncio.get_event_loop()
+
+        # 1. 定义处理PCM数据的回调
+        def pcm_to_webrtc(pcm_data: bytes):
+            # 使用 loop.call_soon_threadsafe 从其他线程安全地调度协程
+            # 这是从同步线程调用异步代码的标准方式
+            asyncio.run_coroutine_threadsafe(
+                self.webrtc_manager.send_audio_to_all_clients(pcm_data, AudioType.pcm),
+                loop
+                )
+
+        # 2. 初始化音频处理器
+        self._initialize_audio_processor(pcm_to_webrtc)
+
+        # 3. 启动WebRTC管理器 (它内部不应该有阻塞循环)
         await self.webrtc_manager.start()
 
         # 显示欢迎界面
@@ -47,17 +60,13 @@ class WebRTCAdapter(AdapterBase):
 
         self.is_running = False
 
+        if self.processing_strategy:
+            self.processing_strategy.stop()
+
         if self.webrtc_manager:
             # 确保WebRTC管理器也停止
             self.webrtc_manager.is_running = False
             await self.webrtc_manager.stop()
-
-    async def send_audio_output(self, audio_data: bytes, audio_type: AudioType) -> None:
-        """发送音频输出数据"""
-        if not audio_data or len(audio_data) == 0:
-            return
-
-        self.webrtc_manager.send_audio_to_all_clients(audio_data, audio_type)
 
     def display_welcome_screen(self) -> None:
         """显示WebRTC欢迎界面"""

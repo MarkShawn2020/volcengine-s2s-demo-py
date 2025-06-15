@@ -1,11 +1,11 @@
 import asyncio
 from typing import Dict, Optional, Callable, Any
 
-import numpy as np
 from aiortc import RTCPeerConnection, RTCSessionDescription, RTCIceCandidate
 
+from src.audio.input_processor import AudioFrameProcessor
 from src.audio.type import AudioType
-from src.io_adapters.webrtc.audio_stream_track import AudioStreamTrack
+from src.audio.audio_stream_track import AudioStreamTrack
 from src.io_adapters.webrtc.webrtc_signaling_server import WebRTCSignalingServer
 from src.utils.logger import logger
 
@@ -18,6 +18,9 @@ class WebRTCManager:
         self.signaling_server = WebRTCSignalingServer(host, port)
         self.peer_connections: Dict[str, RTCPeerConnection] = {}
         self.audio_tracks: Dict[str, AudioStreamTrack] = {}
+
+        self.frame_processor = AudioFrameProcessor() # 创建处理器实例
+
 
         # 音频处理回调
         self.audio_input_callback: Optional[Callable[[bytes], None]] = None
@@ -280,116 +283,62 @@ class WebRTCManager:
             logger.error(f"❌ 添加ICE候选错误: {e}")
 
     async def process_audio_track(self, client_id: str, track):
-        """处理接收到的音频轨道"""
+        """
+        从音频轨道接收帧，并委托给 AudioFrameProcessor 处理。
+        (此版本更健壮、更简洁)
+        """
         logger.info(f"🎵 开始处理音频轨道: {client_id}")
+        pc = self.peer_connections.get(client_id)
+        if not pc:
+            logger.warning(f"处理音频轨道时，找不到 PeerConnection: {client_id}")
+            return
 
         try:
-            while self.is_running and client_id in self.peer_connections:
-                # 检查客户端连接状态
-                if client_id in self.peer_connections:
-                    pc = self.peer_connections[client_id]
-                    if pc.connectionState in ["failed", "disconnected", "closed"]:
-                        logger.info(f"🔚 客户端连接已断开，停止音频轨道处理: {client_id} (状态: {pc.connectionState})")
+            while self.is_running and pc.connectionState in ["new", "connecting", "connected"]:
+                try:
+                    frame = await asyncio.wait_for(track.recv(), timeout=5.0)
+                except asyncio.TimeoutError:
+                    logger.debug(f"从客户端 {client_id} 接收音频超时，继续等待...")
+                    if pc.connectionState not in ["new", "connecting", "connected"]:
+                        logger.warning(f"客户端 {client_id} 连接状态恶化 ({pc.connectionState})，停止接收。")
                         break
-
-                # 设置接收超时，避免无限等待
-                frame = await asyncio.wait_for(track.recv(), timeout=3.0)
-
-                if frame is None:
-                    logger.debug(f"⚠️ 接收到空音频帧，跳过处理")
                     continue
+                except asyncio.CancelledError:
+                    logger.info(f"音频轨道接收任务被取消: {client_id}")
+                    break
 
-                # logger.debug(f"🎤 收到音频帧: {frame.format}, 采样率: {frame.sample_rate}, 样本数: {frame.samples}")
+                # --- 核心委托步骤 ---
+                processed_data = self.frame_processor.process_frame(frame)
 
-                # 转换音频帧为numpy数组
-                audio_array = frame.to_ndarray()
-
-                if audio_array is None or audio_array.size == 0:
-                    logger.debug(f"⚠️ 音频数组为空，跳过处理")
-                    continue
-
-                # logger.debug(f"🎤 音频数组形状: {audio_array.shape}, 数据类型: {audio_array.dtype}")
-
-                # 如果是多维数组，展平为一维（通道在第一维）
-                if len(audio_array.shape) > 1:
-                    # 如果是多通道，取第一个通道或平均
-                    if audio_array.shape[0] > 1:
-                        audio_array = audio_array[0]  # 取第一个通道
-                    else:
-                        audio_array = audio_array.flatten()
-
-                # logger.debug(f"🎤 展平后音频数组形状: {audio_array.shape}")
-
-                # 转换为16位PCM格式（火山引擎需要的格式）
-                if audio_array.dtype != 'int16':
-                    # 如果是浮点格式，转换为int16
-                    if audio_array.dtype.kind == 'f':
-                        audio_array = (audio_array * 32767).astype('int16')
-                    else:
-                        audio_array = audio_array.astype('int16')
-
-                # 重采样到16kHz（如果需要）
-                if frame.sample_rate != 16000:
-                    # 简单的重采样（生产环境建议使用更好的重采样算法）
-                    target_length = int(len(audio_array) * 16000 / frame.sample_rate)
-                    if target_length > 0:
-                        indices = np.linspace(0, len(audio_array) - 1, target_length)
-                        audio_array = np.interp(
-                            indices, range(len(audio_array)), audio_array
-                            ).astype(
-                            'int16'
-                            )  # logger.debug(f"🎤 重采样: {frame.sample_rate}Hz -> 16000Hz, 长度: {len(audio_array)}")
-                    else:
-                        # logger.debug(f"⚠️ 重采样长度为0: 原长度={len(audio_array)}, 目标长度={target_length}")
-                        continue
-
-                audio_data = audio_array.tobytes()
-                # logger.debug(f"🎤 received audio data: {len(audio_data)} 字节")
-
-                # 调用音频输入回调
-                if self.audio_input_callback and len(audio_data) > 0:
-                    self.audio_input_callback(audio_data)
-
+                if processed_data and self.audio_input_callback:
+                    # 将处理好的、符合ASR要求的字节流传递给上层
+                    self.audio_input_callback(processed_data)
 
         except Exception as e:
-            logger.error(f"❌ 处理音频轨道错误: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
+            logger.error(f"❌ 处理音频轨道时发生意外错误 ({client_id}): {e}", exc_info=True)
         finally:
-            logger.info(f"🔚 音频轨道处理结束: {client_id}")
+            logger.info(f"🔚 音频轨道处理循环结束: {client_id}")
 
-    def send_audio_to_client(self, client_id: str, audio_data: bytes, audio_type: AudioType):
-        """发送音频数据给指定客户端"""
+    # 这个方法现在是 async def
+    async def send_audio_to_client(self, client_id: str, pcm_data: bytes):
         if client_id in self.audio_tracks:
-            try:
-                # 检查客户端连接状态
-                if client_id in self.peer_connections:
-                    pc_state = self.peer_connections[
-                        client_id].connectionState  # logger.debug(f"📡 向客户端 {client_id} 发送音频: {len(audio_data)}字节,
-                    # 连接状态: {pc_state}")
-
-                self.audio_tracks[client_id].add_audio_data(
-                    audio_data, audio_type
-                    )  # logger.debug(f"✅ 音频数据已发送给客户端: {client_id}")
-            except Exception as e:
-                logger.error(f"❌ 发送音频数据给客户端失败 {client_id}: {e}")
+            track = self.audio_tracks[client_id]
+            await track.add_p_c_m_data(pcm_data)
         else:
             logger.warning(f"⚠️ 客户端音频轨道不存在: {client_id}")
 
-    def send_audio_to_all_clients(self, audio_data: bytes, audio_type: AudioType):
-        """发送音频数据给所有客户端"""
-        if not audio_data or len(audio_data) == 0:
-            logger.debug("⚠️ 跳过空音频数据")
+    # 这个也变成 async def
+    async def send_audio_to_all_clients(self, pcm_data: bytes, audio_type: AudioType):
+        if not pcm_data or audio_type != AudioType.pcm:
             return
 
-        active_clients = list(self.audio_tracks.keys())
-        if not active_clients:
-            logger.debug("⚠️ 没有活跃的WebRTC客户端")
-            return
-
-        logger.debug(f"📡 向 {len(active_clients)} 个客户端发送音频数据: {len(audio_data)}字节")
-        for client_id in active_clients:
-            self.send_audio_to_client(client_id, audio_data, audio_type)
+        # 使用 asyncio.gather 并行地向所有客户端发送
+        tasks = [
+            self.send_audio_to_client(client_id, pcm_data)
+            for client_id in self.audio_tracks.keys()
+            ]
+        if tasks:
+            await asyncio.gather(*tasks)
 
     def set_audio_input_callback(self, callback: Callable[[bytes], None]):
         """设置音频输入回调函数"""
