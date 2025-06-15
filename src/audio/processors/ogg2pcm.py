@@ -6,6 +6,7 @@ import ffmpeg
 import pyaudio
 
 from src.audio.processors.base import AudioProcessor
+from src.audio.type import AudioConfig
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 class Ogg2PcmProcessor(AudioProcessor):
     """一个有状态的处理器，负责将 OGG 流解码为 PCM 流。"""
 
-    def __init__(self, output_config):
+    def __init__(self, output_config: AudioConfig):
         self.sample_rate = output_config.sample_rate
         self.channels = output_config.channels
         self.pyaudio_format = output_config.bit_size

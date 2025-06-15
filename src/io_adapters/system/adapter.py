@@ -1,7 +1,9 @@
-from src.audio.processors import PcmResamplerProcessor
+from src.audio.processors import Ogg2PcmProcessor
+from src.audio.type import AudioType
+from src.config import VOLCENGINE_AUDIO_TYPE
 from src.io_adapters.base import AdapterBase
 from src.io_adapters.system.system_audio_manager import SystemAudioManager
-from src.volcengine.config import input_audio_config
+from src.volcengine.config import input_audio_config, ogg_output_audio_config
 
 
 class SystemAdapter(AdapterBase):
@@ -18,6 +20,8 @@ class SystemAdapter(AdapterBase):
         self._output_stream = self._audio_device.open_output_stream()
         self.is_running = True
 
+        self.ogg2pcm = Ogg2PcmProcessor(ogg_output_audio_config)
+
     async def on_push(self) -> bytes | None:
         if self.is_running and self._input_stream.is_active():
             data = self._input_stream.read(input_audio_config.chunk, exception_on_overflow=False)
@@ -25,6 +29,8 @@ class SystemAdapter(AdapterBase):
 
     async def on_pull(self, chunk: bytes) -> None:
         if self.is_running and self._output_stream.is_active():
+            if VOLCENGINE_AUDIO_TYPE == AudioType.ogg:
+                chunk = self.ogg2pcm.process(chunk)
             self._output_stream.write(chunk)
 
     async def stop(self):
