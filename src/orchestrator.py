@@ -7,6 +7,8 @@ import time
 import uuid
 from typing import Dict, Any
 
+from cffi.model import void_type
+
 from src.config import (
     webrtc_config, websocket_config, ADAPTER_MODE, VOLCENGINE_AUDIO_TYPE, VOLCENGINE_WELCOME,
     )
@@ -132,8 +134,10 @@ class Orchestrator:
 
         event = response.get('event', 'unknown')
         payload_msg = response.get('payload_msg')
-        logger.debug(f"🏠 <-- 📡 [{ServerEvent(event).name}] Payload(type={type(payload_msg)}, size="
-                     f"{len(payload_msg)})")
+        logger.debug(
+            f"🏠 <-- 📡 [{ServerEvent(event).name}] Payload(type={type(payload_msg)}, size="
+            f"{len(payload_msg)})"
+            )
         if isinstance(payload_msg, dict):
             logger.debug(json.dumps(payload_msg, indent=2, ensure_ascii=False))
 
@@ -278,30 +282,7 @@ class Orchestrator:
 
     def _keyboard_signal(self, sig, frame):
         logger.info("👋 收到退出信号，正在优雅关闭...")
-        self.is_running = False
-
-        # 立即停止音频IO，避免继续产生错误
-        if self.audio_adapter and hasattr(self.audio_adapter, 'is_running'):
-            self.audio_adapter.is_running = False
-
-        # 如果是WebRTC模式，立即停止WebRTC管理器
-        if ADAPTER_MODE == AdapterMode.webrtc and self.audio_adapter and hasattr(self.audio_adapter, 'webrtc_manager'):
-            if self.audio_adapter.webrtc_manager:
-                self.audio_adapter.webrtc_manager.is_running = False
-
-        # 创建一个新的事件循环来处理清理操作
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # 如果事件循环正在运行，创建任务
-                asyncio.create_task(self._graceful_shutdown())
-            else:
-                # 如果事件循环未运行，直接运行
-                loop.run_until_complete(self._graceful_shutdown())
-        except Exception as e:
-            logger.error(f"优雅关闭过程中出现错误: {e}")
-            import os
-            os._exit(1)
+        asyncio.run(self._graceful_shutdown())
 
     async def _graceful_shutdown(self):
         """优雅关闭所有资源"""
@@ -369,7 +350,7 @@ class Orchestrator:
             await self.client.connect()
 
             # 启动接收循环
-            receive_task = asyncio.create_task(self.receive_loop())
+            asyncio.create_task(self.receive_loop())
 
             # 发送连接和会话初始化请求
             await self.client.start_connection()
@@ -378,28 +359,11 @@ class Orchestrator:
             await asyncio.sleep(0.1)
 
             # 启动音频IO
-            asyncio.create_task(self.audio_adapter.start())
+            await asyncio.create_task(self.audio_adapter.start())
 
-            # 保持主循环运行，监控连接状态
-            while self.is_running:
-                await asyncio.sleep(0.5)
-
-            # 正常结束时也使用优雅关闭
-            await self.client.graceful_shutdown()
-            logger.info(f"对话请求日志ID: {self.client.logid}")
         except Exception as e:
             logger.error(f"会话错误: {e}")
         finally:
-            # 确保资源被清理
-            if self.audio_adapter:
-                try:
-                    await self.audio_adapter.stop()
-                    self.audio_adapter.cleanup()
-                except Exception as e:
-                    logger.warning(f"清理音频IO资源错误: {e}")
-
-            if self.client:
-                try:
-                    await self.client.close()
-                except Exception as e:
-                    logger.warning(f"最终关闭WebSocket错误: {e}")
+            # 正常结束时也使用优雅关闭
+            await self._graceful_shutdown()
+            logger.info(f"对话请求日志ID: {self.client.logid}")

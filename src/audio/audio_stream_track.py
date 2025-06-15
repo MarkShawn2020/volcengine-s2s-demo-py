@@ -20,7 +20,7 @@ class AudioStreamTrack(MediaStreamTrack):
         self._buffer = bytearray()
         self._buffer_lock = asyncio.Lock()
 
-        self.SAMPLE_RATE = 48000
+        self.SAMPLE_RATE = 24000  # 匹配火山引擎TTS输出采样率
         self.SAMPLES_PER_FRAME = int(self.SAMPLE_RATE * 0.020)
         self.BYTES_PER_FRAME = self.SAMPLES_PER_FRAME * 2
 

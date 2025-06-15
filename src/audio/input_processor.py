@@ -11,7 +11,7 @@ class AudioFrameProcessor:
     处理输入的音频帧（例如从WebRTC），将其转换为目标格式。
     """
 
-    def __init__(self, target_sample_rate: int = 16000, target_dtype: str = 'int16', buffer_duration_ms: int = 250):
+    def __init__(self, target_sample_rate: int = 16000, target_dtype: str = 'int16', buffer_duration_ms: int = 50):
         self.target_sample_rate = target_sample_rate
         self.target_dtype = target_dtype
         self.buffer_duration_ms = buffer_duration_ms
