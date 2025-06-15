@@ -63,10 +63,8 @@ class WebRTCAdapter(AdapterBase):
         source_dtype = np.float32 if self.output_config.bit_size == pyaudio.paFloat32 else np.int16
         pipeline.append(
             PcmResamplerProcessor(
-                source_sr=source_sr, source_dtype=source_dtype,
-                # 默认48k，修改成16k
-                target_sr=48000,
-                target_dtype='int16'  # 硬性要求
+                source_sr=source_sr, source_dtype=source_dtype,  # 默认48k，修改成16k
+                target_sr=48000, target_dtype='int16'  # 硬性要求
                 )
             )
 
@@ -143,14 +141,18 @@ class WebRTCAdapter(AdapterBase):
         # source_sr = 16000
         # source_dtype = 'int16'
         #
-        # processor = PcmResamplerProcessor(
-        #     source_sr=source_sr, source_dtype=source_dtype, target_sr=16000,  # 硬性要求
-        #     target_dtype='int16'  # 硬性要求
-        #     )
-        # processed_audio = processor.process(audio_data)
-        # # logger.debug(f"🎤 WebRTC重采样后音频数据: {len(processed_audio)} bytes, RMS={processed_rms:.1f}")
-        #
-        # 只处理有足够音量的音频
+        processor = PcmResamplerProcessor(
+            source_sr=48000,
+
+            source_dtype="int16",
+
+            target_sr=16000,  # 硬性要求
+
+            target_dtype='int16'  # 硬性要求
+            )
+        audio_data = processor.process(audio_data)
+        # logger.debug(f"🎤 WebRTC重采样后音频数据: {len(processed_audio)} bytes, RMS={processed_rms:.1f}")
+
         self._handle_audio_input(audio_data)
 
     def _handle_client_connected(self, client_id: str) -> None:
