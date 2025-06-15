@@ -1,15 +1,36 @@
 # src/audio/processor.py (重构后)
 
 import abc
-import queue
-import threading
 import logging
+import threading
+
+import numpy as np
+from scipy.signal import resample
+
 from .opus_stream_decoder import OpusStreamDecoder
 
 logger = logging.getLogger(__name__)
 
+
+class AudioProcessor(abc.ABC):
+    """音频处理模块的基类"""
+
+    @abc.abstractmethod
+    def process(self, audio_data: bytes) -> bytes:
+        pass
+
+    def flush(self) -> bytes | None:
+        """处理内部可能剩余的缓冲数据"""
+        return None
+
+    def close(self):
+        """清理资源"""
+        pass
+
+
 class AudioProcessingStrategy(abc.ABC):
     """音频处理策略的抽象基类 (接口)"""
+
     def __init__(self, output_config, pcm_output_callback):
         """
         :param output_config: 音频输出配置 (AudioConfig)
@@ -35,6 +56,7 @@ class AudioProcessingStrategy(abc.ABC):
         """停止策略并清理资源"""
         pass
 
+
 # --- 策略一：OGG 解码 ---
 class OggDecodingStrategy(AudioProcessingStrategy):
     def __init__(self, output_config, pcm_output_callback):
@@ -43,7 +65,7 @@ class OggDecodingStrategy(AudioProcessingStrategy):
             output_sample_rate=self.output_config.sample_rate,
             output_channels=self.output_config.channels,
             pyaudio_format=self.output_config.bit_size
-        )
+            )
         self.consumer_thread = None
 
     def start(self):
@@ -93,3 +115,47 @@ class PcmPassThroughStrategy(AudioProcessingStrategy):
         logger.info("正在停止 PCM 直通策略...")
         self.is_running.clear()
         logger.info("PCM 直通策略已停止。")
+
+
+class PcmResamplerProcessor(AudioProcessor):
+    def __init__(self, source_sr, source_dtype, target_sr, target_dtype='int16'):
+        self.source_sr = source_sr
+        self.source_dtype = source_dtype
+        self.target_sr = target_sr
+        self.target_dtype = target_dtype
+        # 维持一个小的缓冲区来处理跨块的音频，避免边界效应
+        self._buffer = np.array([], dtype=np.float32)
+
+    def process(self, audio_data: bytes) -> bytes:
+        if not audio_data:
+            return b''
+
+        # 字节转 Numpy
+        new_samples = np.frombuffer(audio_data, dtype=self.source_dtype)
+
+        # 将新样本添加到缓冲区
+        # 确保是 float32 以便处理
+        self._buffer = np.concatenate([self._buffer, new_samples.astype(np.float32)])
+
+        num_source_samples = len(self._buffer)
+
+        # 计算可以输出多少目标样本
+        # 注意：scipy.signal.resample 的第二个参数是输出样本数
+        num_target_samples = int(num_source_samples * self.target_sr / self.source_sr)
+
+        if num_target_samples == 0:
+            return b''  # 缓冲区数据太少，还不够一个输出样本
+
+        # 使用 scipy 进行高质量重采样
+        resampled_samples = resample(self._buffer, num_target_samples)
+
+        # 清空缓冲区，因为它已经被完全处理
+        # 在流式应用中，更好的做法是保留一小部分重叠，但这里先简化
+        self._buffer = np.array([], dtype=np.float32)
+
+        # 转换到目标数据类型
+        if self.target_dtype == 'int16':
+            if resampled_samples.dtype.kind == 'f':
+                resampled_samples = (np.clip(resampled_samples, -1.0, 1.0) * 32767).astype(np.int16)
+
+        return resampled_samples.tobytes()

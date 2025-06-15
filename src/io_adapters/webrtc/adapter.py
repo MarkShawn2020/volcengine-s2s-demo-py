@@ -1,5 +1,9 @@
 import asyncio
 
+import numpy as np
+import pyaudio
+
+from src.audio.processor import PcmResamplerProcessor
 from src.audio.type import AudioType
 from src.io_adapters.base import AdapterBase
 from src.io_adapters.webrtc.config import WebrtcConfig
@@ -25,6 +29,10 @@ class WebRTCAdapter(AdapterBase):
         # 标记是否已经触发过prepared回调
         self._prepared_triggered = False
 
+        source_dtype = np.float32 if self.output_config.bit_size == pyaudio.paFloat32 else np.int16
+
+        self.resample_processor = PcmResamplerProcessor(self.output_config.sample_rate, source_dtype, 48000, 'int16')
+
     async def start(self) -> None:
         logger.info("🌐 启动WebRTC音频输入输出...")
         self.is_running = True
@@ -34,6 +42,9 @@ class WebRTCAdapter(AdapterBase):
 
         # 1. 定义处理PCM数据的回调
         def pcm_to_webrtc(pcm_data: bytes):
+            # resample for webrtc
+            pcm_data = self.resample_processor.process(pcm_data)
+
             # 使用 loop.call_soon_threadsafe 从其他线程安全地调度协程
             # 这是从同步线程调用异步代码的标准方式
             asyncio.run_coroutine_threadsafe(
