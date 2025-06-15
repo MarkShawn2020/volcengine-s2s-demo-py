@@ -43,16 +43,25 @@ class WebRTCAdapter(AdapterBase):
     def _start_webrtc_thread(self) -> None:
         """在单独线程中启动 WebRTC 管理器"""
         def run_webrtc():
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+            self._webrtc_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self._webrtc_loop)
             try:
-                loop.run_until_complete(self._webrtc_manager.start())
-                loop.run_forever()
+                self._webrtc_loop.run_until_complete(self._webrtc_manager.start())
+                # 运行直到收到停止信号
+                while self.is_running and self._webrtc_manager.is_running:
+                    self._webrtc_loop.run_until_complete(asyncio.sleep(0.1))
+                logger.info("WebRTC事件循环正在停止...")
+                # 停止WebRTC管理器
+                if self._webrtc_manager.is_running:
+                    self._webrtc_loop.run_until_complete(self._webrtc_manager.stop())
+            except Exception as e:
+                logger.error(f"WebRTC线程异常: {e}")
             finally:
-                loop.close()
+                self._webrtc_loop.close()
+                logger.info("WebRTC线程已退出")
         
-        webrtc_thread = Thread(target=run_webrtc, daemon=True)
-        webrtc_thread.start()
+        self._webrtc_thread = Thread(target=run_webrtc, daemon=True)
+        self._webrtc_thread.start()
 
     def _handle_client_connected(self, client_id: str) -> None:
         """处理WebRTC客户端连接"""
@@ -71,18 +80,15 @@ class WebRTCAdapter(AdapterBase):
             return
             
         try:
-            # 获取 WebRTC 线程的事件循环
-            import threading
-            for thread in threading.enumerate():
-                if hasattr(thread, '_target') and 'webrtc' in str(thread._target).lower():
-                    # 找到 WebRTC 线程，使用其事件循环
-                    break
-            
             # 使用线程安全的方式发送音频
-            asyncio.run_coroutine_threadsafe(
-                self._webrtc_manager.send_audio_to_all_clients(audio_data, AudioType.pcm),
-                asyncio.get_event_loop()
-            )
+            if hasattr(self, '_webrtc_loop') and self._webrtc_loop and not self._webrtc_loop.is_closed():
+                future = asyncio.run_coroutine_threadsafe(
+                    self._webrtc_manager.send_audio_to_all_clients(audio_data, AudioType.pcm),
+                    self._webrtc_loop
+                )
+                # 不等待完成，避免阻塞
+            else:
+                logger.debug("WebRTC事件循环不可用，跳过音频发送")
         except Exception as e:
             logger.warning(f"发送WebRTC音频数据失败: {e}")
 
@@ -120,13 +126,19 @@ class WebRTCAdapter(AdapterBase):
     
     async def stop(self):
         """停止适配器"""
+        logger.info("正在停止WebRTC适配器...")
         self.is_running = False
         if self._webrtc_manager:
             self._webrtc_manager.is_running = False
-            try:
-                await self._webrtc_manager.stop()
-            except Exception as e:
-                logger.error(f"停止WebRTC管理器失败: {e}")
+        
+        # 等待WebRTC线程退出
+        if hasattr(self, '_webrtc_thread') and self._webrtc_thread.is_alive():
+            logger.info("等待WebRTC线程退出...")
+            self._webrtc_thread.join(timeout=5.0)
+            if self._webrtc_thread.is_alive():
+                logger.warning("WebRTC线程未在超时时间内退出")
+        
+        logger.info("WebRTC适配器已停止")
 
     def display_welcome_screen(self) -> None:
         """显示WebRTC欢迎界面"""
