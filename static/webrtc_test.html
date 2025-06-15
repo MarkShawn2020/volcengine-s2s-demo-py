@@ -183,43 +183,70 @@
             padding: 8px 12px;
             margin: 0;
         }
+        
+        .step-section.compact {
+            padding: 15px 20px;
+        }
+        
+        .mic-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .mic-selector {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .mic-selector select {
+            flex: 1;
+            margin: 0;
+            width: auto;
+        }
+        
+        .mic-buttons {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .volume-display {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .volume-label {
+            font-size: 14px;
+            min-width: 40px;
+        }
+        
+        .volume-meter {
+            width: 150px;
+            height: 8px;
+        }
+        
+        .volume-text {
+            font-size: 12px;
+            min-width: 30px;
+            text-align: right;
+        }
+        
+        .small-btn {
+            padding: 6px 12px !important;
+            font-size: 14px !important;
+            margin: 0 !important;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>🎙️ WebRTC 语音对话测试 🤖</h1>
         
-        <!-- 步骤1: 麦克风设备选择 -->
+        <!-- 步骤1: 服务器配置 -->
         <div class="step-section">
-            <h3>🎤 步骤1: 麦克风设备选择</h3>
-            <div class="config">
-                <label for="microphone-select">选择麦克风设备:</label>
-                <select id="microphone-select">
-                    <option value="">请选择麦克风设备</option>
-                </select>
-                <button id="refresh-devices-btn" onclick="refreshDevices()">🔄 刷新设备</button>
-            </div>
-        </div>
-
-        <!-- 步骤2: 麦克风启用/关闭 -->
-        <div class="step-section">
-            <h3>🎙️ 步骤2: 麦克风控制</h3>
-            <div class="controls">
-                <button id="enable-mic-btn" onclick="enableMicrophone()" disabled>启用麦克风</button>
-                <button id="disable-mic-btn" onclick="disableMicrophone()" disabled>关闭麦克风</button>
-            </div>
-            <div class="audio-controls">
-                <span>音量:</span>
-                <div class="volume-meter">
-                    <div id="volume-bar" class="volume-bar"></div>
-                </div>
-                <span id="volume-text">0%</span>
-            </div>
-        </div>
-
-        <!-- 步骤3: 服务器连接 -->
-        <div class="step-section">
-            <h3>🌐 步骤3: 服务器连接</h3>
+            <h3>🌐 步骤1: 服务器配置</h3>
             <div class="config">
                 <label for="signaling-url">信令服务器地址:</label>
                 <input type="text" id="signaling-url" value="ws://localhost:8765" placeholder="ws://localhost:8765">
@@ -228,14 +255,38 @@
                 🔴 未连接
             </div>
             <div class="controls">
-                <button id="connect-btn" onclick="connect()" disabled>连接服务器</button>
+                <button id="connect-btn" onclick="connect()">连接服务器</button>
                 <button id="disconnect-btn" onclick="disconnect()" disabled>断开连接</button>
             </div>
         </div>
 
-        <!-- 步骤4: 推流控制 -->
+        <!-- 步骤2: 麦克风控制 -->
+        <div class="step-section compact">
+            <h3>🎤 步骤2: 麦克风控制</h3>
+            <div class="mic-controls">
+                <div class="mic-selector">
+                    <select id="microphone-select">
+                        <option value="">请选择麦克风设备</option>
+                    </select>
+                    <button id="refresh-devices-btn" onclick="refreshDevices()" class="small-btn">🔄</button>
+                </div>
+                <div class="mic-buttons">
+                    <button id="enable-mic-btn" onclick="enableMicrophone()" disabled class="small-btn">启用</button>
+                    <button id="disable-mic-btn" onclick="disableMicrophone()" disabled class="small-btn">关闭</button>
+                </div>
+                <div class="volume-display">
+                    <span class="volume-label">音量:</span>
+                    <div class="volume-meter">
+                        <div id="volume-bar" class="volume-bar"></div>
+                    </div>
+                    <span id="volume-text" class="volume-text">0%</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 步骤3: 推流控制 -->
         <div class="step-section">
-            <h3>📡 步骤4: 推流控制</h3>
+            <h3>📡 步骤3: 推流控制</h3>
             <div class="controls">
                 <button id="start-stream-btn" onclick="startStreaming()" disabled>开始推流</button>
                 <button id="pause-stream-btn" onclick="togglePauseStreaming()" disabled>暂停推流</button>
@@ -312,23 +363,20 @@
         // 更新按钮状态
         function updateButtons() {
             const connected = signalingSocket && signalingSocket.readyState === WebSocket.OPEN;
-            const hasAudio = localStream !== null;
             const hasRemoteAudio = window.remoteAudio !== null && window.remoteAudio !== undefined;
-            const deviceSelected = selectedDeviceId !== null;
+            const deviceSelected = selectedDeviceId !== null && selectedDeviceId !== '';
             
-            // 步骤1: 设备选择
+            // 步骤1: 服务器配置（完全独立）
+            document.getElementById('connect-btn').disabled = connected;
+            document.getElementById('disconnect-btn').disabled = !connected;
+            
+            // 步骤2: 麦克风控制（完全独立）
             document.getElementById('refresh-devices-btn').disabled = false;
-            
-            // 步骤2: 麦克风控制
             document.getElementById('enable-mic-btn').disabled = !deviceSelected || microphoneEnabled;
             document.getElementById('disable-mic-btn').disabled = !microphoneEnabled;
             
-            // 步骤3: 服务器连接
-            document.getElementById('connect-btn').disabled = connected || !microphoneEnabled;
-            document.getElementById('disconnect-btn').disabled = !connected;
-            
-            // 步骤4: 推流控制
-            document.getElementById('start-stream-btn').disabled = !connected || isStreaming;
+            // 步骤3: 推流控制（需要麦克风和服务器都就绪）
+            document.getElementById('start-stream-btn').disabled = !connected || !microphoneEnabled || isStreaming;
             document.getElementById('pause-stream-btn').disabled = !isStreaming;
             document.getElementById('stop-stream-btn').disabled = !isStreaming;
             document.getElementById('play-audio-btn').disabled = !hasRemoteAudio;
@@ -743,28 +791,49 @@
         async function refreshDevices() {
             try {
                 log('获取音频设备列表...');
+                
+                // 先请求麦克风权限以获取设备名称
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    stream.getTracks().forEach(track => track.stop()); // 立即停止
+                } catch (e) {
+                    log('无法获取麦克风权限，设备名称可能显示不全', 'warning');
+                }
+                
                 const devices = await navigator.mediaDevices.enumerateDevices();
                 const audioInputs = devices.filter(device => device.kind === 'audioinput');
                 
                 const select = document.getElementById('microphone-select');
                 select.innerHTML = '<option value="">请选择麦克风设备</option>';
                 
-                audioInputs.forEach(device => {
+                audioInputs.forEach((device, index) => {
                     const option = document.createElement('option');
                     option.value = device.deviceId;
-                    option.textContent = device.label || `麦克风 ${device.deviceId.slice(0, 8)}`;
+                    option.textContent = device.label || `麦克风设备 ${index + 1}`;
                     select.appendChild(option);
                 });
+                
+                // 默认选择第一个可用设备
+                if (audioInputs.length > 0) {
+                    select.selectedIndex = 1; // 选择第一个设备（索引1，因为0是“请选择”）
+                    selectedDeviceId = audioInputs[0].deviceId;
+                    log(`默认选择: ${audioInputs[0].label || '麦克风设备 1'}`, 'info');
+                }
                 
                 availableDevices = audioInputs;
                 log(`找到 ${audioInputs.length} 个音频输入设备`, 'success');
                 
                 // 设置选择事件
                 select.onchange = (e) => {
-                    selectedDeviceId = e.target.value;
-                    log(`选择设备: ${e.target.selectedOptions[0].text}`, 'info');
+                    selectedDeviceId = e.target.value || null;
+                    if (selectedDeviceId) {
+                        const selectedDevice = availableDevices.find(d => d.deviceId === selectedDeviceId);
+                        log(`选择设备: ${selectedDevice?.label || '未知设备'}`, 'info');
+                    }
                     updateButtons();
                 };
+                
+                updateButtons();
                 
             } catch (error) {
                 log(`获取设备列表失败: ${error.message}`, 'error');
@@ -773,7 +842,7 @@
         
         // 启用麦克风
         async function enableMicrophone() {
-            if (!selectedDeviceId) {
+            if (!selectedDeviceId || selectedDeviceId === '') {
                 log('请先选择麦克风设备', 'warning');
                 return;
             }
@@ -828,6 +897,11 @@
         async function startStreaming() {
             if (!localStream) {
                 log('请先启用麦克风', 'warning');
+                return;
+            }
+            
+            if (!signalingSocket || signalingSocket.readyState !== WebSocket.OPEN) {
+                log('请先连接服务器', 'warning');
                 return;
             }
             
