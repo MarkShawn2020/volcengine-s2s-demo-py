@@ -5,13 +5,13 @@ import time
 import uuid
 from typing import Dict, Any
 
-from src.config import webrtc_config, websocket_config, ADAPTER_MODE
+from src.audio.audio_converter import OggToPcmConverter
+from src.config import webrtc_config, websocket_config, ADAPTER_MODE, VOLCENGINE_AUDIO_TYPE
 from src.io_adapters.base import AdapterBase
 from src.io_adapters.type import AdapterMode
-from src.audio.audio_converter import OggToPcmConverter
 from src.utils.logger import logger
 from src.volcengine.client import VoicengineClient
-from src.volcengine.config import audio_type, ws_connect_config, start_session_req, ogg_output_audio_config
+from src.volcengine.config import ws_connect_config, start_session_req, ogg_output_audio_config
 from src.volcengine.protocol import ServerEvent
 
 
@@ -125,7 +125,7 @@ class Orchestrator:
                     logger.debug(f"🎵 收到TTSResponse音频数据: {len(audio_data)}字节")
 
                 # 通过音频IO发送输出
-                asyncio.create_task(self.audio_adapter.send_audio_output(audio_data, audio_type))
+                asyncio.create_task(self.audio_adapter.send_audio_output(audio_data, VOLCENGINE_AUDIO_TYPE))
 
             elif isinstance(response.get('payload_msg'), dict):
                 ai_content = response.get('payload_msg', {}).get('content', '')
@@ -276,7 +276,7 @@ class Orchestrator:
             self.audio_adapter.is_running = False
 
         # 如果是WebRTC模式，立即停止WebRTC管理器
-        if self.io_mode == "webrtc" and self.audio_adapter and hasattr(self.audio_adapter, 'webrtc_manager'):
+        if ADAPTER_MODE == AdapterMode.webrtc and self.audio_adapter and hasattr(self.audio_adapter, 'webrtc_manager'):
             if self.audio_adapter.webrtc_manager:
                 self.audio_adapter.webrtc_manager.is_running = False
 

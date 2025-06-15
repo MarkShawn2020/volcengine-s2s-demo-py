@@ -1,9 +1,8 @@
-from dataclasses import dataclass
 from enum import StrEnum
+from typing_extensions import TypedDict
 
 
-@dataclass
-class AudioConfig:
+class AudioConfig(TypedDict):
     """音频配置数据类"""
     format: str
     bit_size: int
@@ -15,5 +14,3 @@ class AudioConfig:
 class AudioType(StrEnum):
     pcm = 'pcm'
     ogg = 'ogg'
-
-
