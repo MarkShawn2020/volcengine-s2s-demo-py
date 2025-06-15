@@ -2,6 +2,7 @@ import json
 from typing import Dict, Optional, Callable, Any
 
 import websockets
+from websockets.legacy.server import WebSocketServerProtocol
 
 from src.utils.logger import logger
 
@@ -12,7 +13,7 @@ class WebRTCSignalingServer:
     def __init__(self, host: str = "localhost", port: int = 8765):
         self.host = host
         self.port = port
-        self.clients: Dict[str, websockets.WebSocketServerProtocol] = {}
+        self.clients: Dict[str, WebSocketServerProtocol] = {}
         self.server = None
 
         # 回调函数
@@ -21,19 +22,16 @@ class WebRTCSignalingServer:
         self.on_ice_candidate_callback: Optional[Callable[[str, Dict[str, Any]], None]] = None
         self.on_client_connected_callback: Optional[Callable[[str], None]] = None
         self.on_client_disconnected_callback: Optional[Callable[[str], None]] = None
-        self.on_test_audio_callback: Optional[Callable[[str], None]] = None
 
     async def start(self):
         """启动信令服务器"""
         logger.info(f"🚀 启动WebRTC信令服务器: {self.host}:{self.port}")
         self.server = await websockets.serve(
-            self.handle_client,
-            self.host,
-            self.port
+            self.handle_client, self.host, self.port
         )
         logger.info("✅ WebRTC信令服务器启动成功")
 
-    async def handle_client(self, websocket: websockets.WebSocketServerProtocol):
+    async def handle_client(self, websocket: WebSocketServerProtocol):
         """处理客户端连接"""
         client_id = f"{websocket.remote_address[0]}:{websocket.remote_address[1]}"
         logger.info(f"🔗 客户端已连接: {client_id}")
@@ -91,12 +89,6 @@ class WebRTCSignalingServer:
             elif message_type == "ping":
                 # 心跳包
                 await self.send_to_client(client_id, {"type": "pong"})
-            
-            elif message_type == "test-audio":
-                # 测试音频请求
-                logger.info(f"🎵 收到测试音频请求: {client_id}")
-                if self.on_test_audio_callback:
-                    self.on_test_audio_callback(client_id)
 
             else:
                 logger.warning(f"⚠️ 未知消息类型: {message_type}")
@@ -129,34 +121,31 @@ class WebRTCSignalingServer:
     async def send_offer(self, client_id: str, offer: Dict[str, Any]):
         """发送WebRTC Offer给客户端"""
         message = {
-            "type": "offer",
-            "sdp": offer
+            "type": "offer", "sdp": offer
         }
         await self.send_to_client(client_id, message)
 
     async def send_answer(self, client_id: str, answer: Dict[str, Any]):
         """发送WebRTC Answer给客户端"""
         message = {
-            "type": "answer",
-            "sdp": answer
+            "type": "answer", "sdp": answer
         }
         await self.send_to_client(client_id, message)
 
     async def send_ice_candidate(self, client_id: str, candidate: Dict[str, Any]):
         """发送ICE候选给客户端"""
         message = {
-            "type": "ice-candidate",
-            "candidate": candidate
+            "type": "ice-candidate", "candidate": candidate
         }
         await self.send_to_client(client_id, message)
 
-    def set_callbacks(self,
-                     on_offer: Optional[Callable[[str, Dict[str, Any]], None]] = None,
-                     on_answer: Optional[Callable[[str, Dict[str, Any]], None]] = None,
-                     on_ice_candidate: Optional[Callable[[str, Dict[str, Any]], None]] = None,
-                     on_client_connected: Optional[Callable[[str], None]] = None,
-                     on_client_disconnected: Optional[Callable[[str], None]] = None,
-                     on_test_audio: Optional[Callable[[str], None]] = None):
+    def set_callbacks(
+        self,
+        on_offer: Optional[Callable[[str, Dict[str, Any]], None]] = None,
+        on_answer: Optional[Callable[[str, Dict[str, Any]], None]] = None,
+        on_ice_candidate: Optional[Callable[[str, Dict[str, Any]], None]] = None,
+        on_client_connected: Optional[Callable[[str], None]] = None,
+        on_client_disconnected: Optional[Callable[[str], None]] = None, ):
         """设置回调函数"""
         if on_offer:
             self.on_offer_callback = on_offer
@@ -168,8 +157,6 @@ class WebRTCSignalingServer:
             self.on_client_connected_callback = on_client_connected
         if on_client_disconnected:
             self.on_client_disconnected_callback = on_client_disconnected
-        if on_test_audio:
-            self.on_test_audio_callback = on_test_audio
 
     async def stop(self):
         """停止信令服务器"""

@@ -1,18 +1,33 @@
 from abc import ABC, abstractmethod
 from typing import Callable, Optional, Any, Dict
 
+from src.types.audio import AudioConfig
 from src.utils.logger import logger
+from src.volcengine.config import input_audio_config, ogg_output_audio_config, start_session_req
 
 
-class IOBase(ABC):
+class AdapterBase(ABC):
     """实时音频输入输出基类"""
     
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: Dict[str, Any] = None):
         self.config = config
         self.is_running = False
         self.audio_input_callback: Optional[Callable[[bytes], None]] = None
         self.prepared_callback: Optional[Callable[[], None]] = None
-        
+
+        # 音频设备配置
+        self.input_audio_config = AudioConfig(**input_audio_config)
+
+        # 输出音频配置
+        output_audio_config = ogg_output_audio_config
+        tts_config = start_session_req.get("tts")
+        if tts_config:
+            tts_audio_config = tts_config.get("audio_config")
+            if tts_audio_config:
+                output_audio_config = tts_audio_config
+
+        self.output_audio_config = AudioConfig(**output_audio_config)
+
     def set_audio_input_callback(self, callback: Callable[[bytes], None]) -> None:
         """设置音频输入回调函数"""
         self.audio_input_callback = callback

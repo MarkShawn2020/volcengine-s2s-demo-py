@@ -1,19 +1,9 @@
-from dataclasses import dataclass
 from typing import Optional
 
 import pyaudio
 
+from src.types.audio import AudioConfig
 from src.utils.logger import logger
-
-
-@dataclass
-class AudioConfig:
-    """音频配置数据类"""
-    format: str
-    bit_size: int
-    channels: int
-    sample_rate: int
-    chunk: int
 
 
 class AudioDeviceManager:

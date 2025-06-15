@@ -1,19 +1,18 @@
 import asyncio
+import os
 import signal
 import threading
 import time
 import uuid
 from typing import Dict, Any
 
-import src.io.webrtc.config
-import src.io.websocket.config
 import src.volcengine.config
 from src import config
 from src.client import RealtimeDialogClient
-from src.io.io_base import IOBase
+from src.io_adapters.base import AdapterBase
 from src.utils.audio.audio_converter import OggToPcmConverter
-from src.utils.audio.detect_audio_format import detect_audio_format
 from src.utils.logger import logger
+from src.volcengine.config import audio_type
 from src.volcengine.protocol import ServerEvent
 
 
@@ -33,9 +32,9 @@ class Orchestrator:
         self.io_mode = io_mode
 
         # 初始化音频IO
-        self.audio_io = self._create_audio_io(io_mode)
-        self.audio_io.set_audio_input_callback(self._handle_audio_input)
-        self.audio_io.set_prepared_callback(self._on_audio_io_prepared)
+        self.audio_adapter = self._create_audio_adapter(io_mode)
+        self.audio_adapter.set_audio_input_callback(self._handle_audio_input)
+        self.audio_adapter.set_prepared_callback(self._on_audio_io_prepared)
 
         # 会话控制
         self.is_running = True
@@ -52,8 +51,9 @@ class Orchestrator:
             if tts_audio_config:
                 output_config = tts_audio_config
 
-        self.ogg_converter = OggToPcmConverter(sample_rate=output_config['sample_rate'],
-                                               channels=output_config['channels'])
+        self.ogg_converter = OggToPcmConverter(
+            sample_rate=output_config['sample_rate'], channels=output_config['channels']
+            )
 
         # 实时字幕显示
         self.current_user_text = ""
@@ -68,17 +68,25 @@ class Orchestrator:
         self._reconnecting = False
         self._reconnect_lock = None
 
-    def _create_audio_io(self, io_mode: str) -> IOBase:
+    def _create_audio_adapter(self, io_mode: str) -> AdapterBase:
         """创建音频IO实例"""
         if io_mode == "webrtc":
-            from src.io.webrtc.webrtc_io import WebRTCIO
-            return WebRTCIO(src.io.webrtc.config.webrtc_config)
+            from src.io_adapters.webrtc.webrtc_adapter import WebRTCAdapter, WebrtcConfig
+            webrtc_config = WebrtcConfig(
+                host=os.getenv("WEBRTC_HOST", "localhost"),
+                port=os.getenv("WEBRTC_PORT", 8765),
+                )
+            return WebRTCAdapter(webrtc_config)
         elif io_mode == "websocket":
-            from src.io.websocket.websocket_io import WebsocketIO
-            return WebsocketIO(src.io.websocket.config.socket_config)
+            from src.io_adapters.websocket.websocket_io import WebsocketIO, SocketConfig
+            socket_config = SocketConfig(
+                host=os.getenv("SOCKET_HOST", "localhost"),
+                port=int(os.getenv("SOCKET_PORT", "8888"))
+                )
+            return WebsocketIO(socket_config)
         else:  # system
-            from src.io.system.system_io import SystemIO
-            return SystemIO({})
+            from src.io_adapters.system.system_adapter import SystemAdapter
+            return SystemAdapter({})
 
     def _handle_audio_input(self, audio_data: bytes) -> None:
         """处理音频输入数据"""
@@ -87,7 +95,7 @@ class Orchestrator:
 
         # 创建异步任务发送音频数据
         asyncio.create_task(self.client.task_request(audio_data))
-    
+
     def _on_audio_io_prepared(self) -> None:
         """音频IO准备就绪回调"""
         logger.info("🎯 音频IO已准备就绪，发送SayHello")
@@ -128,17 +136,8 @@ class Orchestrator:
                 if event == ServerEvent.TTS_RESPONSE:
                     logger.debug(f"🎵 收到TTSResponse音频数据: {len(audio_data)}字节")
 
-                audio_format = detect_audio_format(audio_data)
-
-                if audio_format == "ogg":
-                    audio_data = self.ogg_converter.convert(audio_data)
-                    # OGG已转换为PCM，更新格式标记
-                    format_type = "pcm"
-                else:
-                    format_type = "pcm"
-
                 # 通过音频IO发送输出
-                asyncio.create_task(self.audio_io.send_audio_output(audio_data, format_type))
+                asyncio.create_task(self.audio_adapter.send_audio_output(audio_data, audio_type))
 
             elif isinstance(response.get('payload_msg'), dict):
                 ai_content = response.get('payload_msg', {}).get('content', '')
@@ -168,8 +167,7 @@ class Orchestrator:
                 logger.info("🔗 连接已建立")
             elif event == ServerEvent.SESSION_STARTED:
                 dialog_id = payload_msg.get('dialog_id', '')
-                logger.info(f"🚀 会话已启动 (Dialog ID: {dialog_id[:8]}...)")
-                # SayHello将在音频IO准备就绪时发送
+                logger.info(f"🚀 会话已启动 (Dialog ID: {dialog_id[:8]}...)")  # SayHello将在音频IO准备就绪时发送
             elif event == ServerEvent.SESSION_FINISHED:
                 logger.info("✅ 会话已结束")
             elif event == ServerEvent.TTS_ENDED:
@@ -204,9 +202,9 @@ class Orchestrator:
                         self.current_ai_text = ""
                         self.last_displayed_ai_text = ""
                     self.current_ai_text += content
-                    if len(self.current_ai_text) - len(self.last_displayed_ai_text) >= 5 or content.endswith(('。', '！',
-                                                                                                              '？', '，',
-                                                                                                              '、')):
+                    if len(self.current_ai_text) - len(self.last_displayed_ai_text) >= 5 or content.endswith(
+                            ('。', '！', '？', '，', '、')
+                            ):
                         self._update_console_display()
                     logger.debug(f"🤖 AI文本回复: '{content}' → 总计: '{self.current_ai_text[:50]}...'")
             elif event == ServerEvent.CHAT_ENDED:
@@ -240,14 +238,16 @@ class Orchestrator:
 
             if self.is_user_speaking and self.current_user_text:
                 self._clear_current_line()
-                display_text = self.current_user_text[
-                               :150] + "..." if len(self.current_user_text) > 150 else self.current_user_text
+                display_text = self.current_user_text[:150] + "..." if len(
+                    self.current_user_text
+                    ) > 150 else self.current_user_text
                 print(f"👤 用户: {display_text}", end="", flush=True)
             elif self.is_ai_responding and self.current_ai_text:
                 if self.current_ai_text != self.last_displayed_ai_text:
                     self._clear_current_line()
-                    display_text = self.current_ai_text[
-                                   :150] + "..." if len(self.current_ai_text) > 150 else self.current_ai_text
+                    display_text = self.current_ai_text[:150] + "..." if len(
+                        self.current_ai_text
+                        ) > 150 else self.current_ai_text
                     print(f"🤖 AI: {display_text}", end="", flush=True)
                     self.last_displayed_ai_text = self.current_ai_text
             elif not self.is_user_speaking and not self.is_ai_responding:
@@ -262,11 +262,13 @@ class Orchestrator:
                     self._clear_current_line()
                     print(f"🤖 AI: {self.current_ai_text}")
 
-                self.conversation_history.append({
-                    'user': self.current_user_text,
-                    'ai': self.current_ai_text,
-                    'timestamp': time.time()
-                })
+                self.conversation_history.append(
+                    {
+                        'user': self.current_user_text,
+                        'ai': self.current_ai_text,
+                        'timestamp': time.time()
+                        }
+                    )
 
                 self.current_user_text = ""
                 self.current_ai_text = ""
@@ -284,13 +286,13 @@ class Orchestrator:
         self.is_running = False
 
         # 立即停止音频IO，避免继续产生错误
-        if self.audio_io and hasattr(self.audio_io, 'is_running'):
-            self.audio_io.is_running = False
-            
+        if self.audio_adapter and hasattr(self.audio_adapter, 'is_running'):
+            self.audio_adapter.is_running = False
+
         # 如果是WebRTC模式，立即停止WebRTC管理器
-        if self.io_mode == "webrtc" and self.audio_io and hasattr(self.audio_io, 'webrtc_manager'):
-            if self.audio_io.webrtc_manager:
-                self.audio_io.webrtc_manager.is_running = False
+        if self.io_mode == "webrtc" and self.audio_adapter and hasattr(self.audio_adapter, 'webrtc_manager'):
+            if self.audio_adapter.webrtc_manager:
+                self.audio_adapter.webrtc_manager.is_running = False
 
         # 创建一个新的事件循环来处理清理操作
         try:
@@ -310,12 +312,12 @@ class Orchestrator:
         """优雅关闭所有资源"""
         try:
             logger.info("开始优雅关闭...")
-            
+
             # 停止音频IO
-            if self.audio_io:
+            if self.audio_adapter:
                 try:
-                    await self.audio_io.stop()
-                    self.audio_io.cleanup()
+                    await self.audio_adapter.stop()
+                    self.audio_adapter.cleanup()
                 except Exception as e:
                     logger.warning(f"停止音频IO错误: {e}")
 
@@ -367,7 +369,7 @@ class Orchestrator:
             await asyncio.sleep(0.1)
 
             # 启动音频IO
-            asyncio.create_task(self.audio_io.start())
+            asyncio.create_task(self.audio_adapter.start())
 
             # 保持主循环运行，监控连接状态
             while self.is_running:
@@ -380,13 +382,13 @@ class Orchestrator:
             logger.error(f"会话错误: {e}")
         finally:
             # 确保资源被清理
-            if self.audio_io:
+            if self.audio_adapter:
                 try:
-                    await self.audio_io.stop()
-                    self.audio_io.cleanup()
+                    await self.audio_adapter.stop()
+                    self.audio_adapter.cleanup()
                 except Exception as e:
                     logger.warning(f"清理音频IO资源错误: {e}")
-            
+
             if self.client:
                 try:
                     await self.client.close()

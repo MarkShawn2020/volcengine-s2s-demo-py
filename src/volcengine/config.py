@@ -3,6 +3,9 @@ import uuid
 
 import pyaudio
 
+from src.types.audio import AudioType
+from src.utils.logger import logger
+
 ws_connect_config = {
     "base_url": "wss://openspeech.bytedance.com/api/v3/realtime/dialogue",
     "headers": {
@@ -41,4 +44,13 @@ tts_output_audio_config = {
     "sample_rate": 24000,
     "chunk": 3200
 }
-start_session_req = {"dialog": {"bot_name": "小塔"}, "tts": {"audio_config": tts_output_audio_config}}
+start_session_req = {"dialog": {"bot_name": "小塔"}, }
+VOLCENGINE_OGG_MODE = os.getenv("ENABLE_OGG", False)
+
+# 服务器默认直接返回pcm格式音频，客户端可以直接播放，代码量小，但传输较慢
+# 开启OGG后，服务器将只返回ogg封装的opus音频，客户端自行解码后播放，性能较高
+logger.info(f"OGG Enabled: {VOLCENGINE_OGG_MODE}")
+audio_type: AudioType = AudioType.ogg
+if not VOLCENGINE_OGG_MODE:
+    start_session_req["tts"] = {"audio_config": tts_output_audio_config}
+    audio_type = AudioType.pcm

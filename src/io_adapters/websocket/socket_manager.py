@@ -3,10 +3,15 @@ import json
 import queue
 import socket
 import threading
-from dataclasses import dataclass
-from typing import Optional, Callable
+from typing import Optional, Callable, TypedDict
 
 from src.utils.logger import logger
+
+
+class SocketConfig(TypedDict):
+    """Socket配置数据类"""
+    host: str
+    port: int
 
 
 class SocketAudioManager:
@@ -35,11 +40,11 @@ class SocketAudioManager:
         self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
         try:
-            self.server_socket.bind((self.config.host, self.config.port))
+            self.server_socket.bind((self.config['host'], self.config['port']))
             self.server_socket.listen(1)
             self.is_running = True
 
-            logger.info(f"🔌 Socket服务器启动: {self.config.host}:{self.config.port}")
+            logger.info(f"🔌 Socket服务器启动: {self.config['host']}:{self.config['port']}")
             logger.info("等待客户端连接...")
 
             # 在单独线程中等待连接
@@ -117,7 +122,7 @@ class SocketAudioManager:
                 "type": "audio_output",
                 "format": format_type,
                 "data_length": len(audio_data)
-            }
+                }
 
             # 发送消息头
             message_json = json.dumps(message).encode('utf-8')
@@ -159,10 +164,3 @@ class SocketAudioManager:
             self.receive_thread.join(timeout=1.0)
 
         logger.info("Socket连接已清理")
-
-
-@dataclass
-class SocketConfig:
-    """Socket配置数据类"""
-    host: str
-    port: int
