@@ -22,8 +22,6 @@ class SystemAdapter(AdapterBase):
         config = SystemAudioConfig(input=self.input_audio_config, output=self.output_config)
         self.audio_device = SystemAudioManager(config)
 
-        self.ogg2pcm: OpusStreamDecoder | None = None
-
         # 音频队列和播放流
         self.audio_queue = queue.Queue(maxsize=50)
         self.output_stream = None
@@ -37,28 +35,24 @@ class SystemAdapter(AdapterBase):
             }
 
     async def start(self) -> None:
-        """启动音频输入输出"""
         logger.info("🎙️ 启动系统音频输入输出...")
-
         self.is_running = True
         self.is_recording = True
-        self.is_playing = True
 
-        # 启动音频输出流
+        # 1. 启动音频输出流
         self.output_stream = self.audio_device.open_output_stream()
 
-        # 启动播放线程
-        self.player_thread = threading.Thread(target=self._audio_player_thread)
-        self.player_thread.daemon = True
-        self.player_thread.start()
+        # 2. 定义处理PCM数据的回调：写入系统扬声器
+        def pcm_to_speaker(pcm_data: bytes):
+            if self.output_stream and not self.output_stream.is_stopped():
+                self.output_stream.write(pcm_data)
 
-        # 显示欢迎界面
+        # 3. 初始化并启动音频处理策略
+        self._initialize_audio_processor(pcm_to_speaker)
+
+        # ... (后续代码，如显示欢迎界面、启动麦克风输入) ...
         self.display_welcome_screen()
-
-        # 系统音频立即就绪，触发prepared回调
         self._on_prepared()
-
-        # 启动音频输入处理
         await self._process_microphone_input()
 
     async def stop(self) -> None:
@@ -80,18 +74,6 @@ class SystemAdapter(AdapterBase):
         if self.player_thread and self.player_thread.is_alive():
             self.player_thread.join(timeout=2.0)
 
-    async def send_audio_output(self, audio_data: bytes, audio_type: AudioType) -> None:
-        """发送音频输出数据"""
-        if not audio_data or len(audio_data) == 0:
-            return
-
-        try:
-            self.audio_queue.put(audio_data, timeout=0.1)
-        except queue.Full:
-            self.stats['audio_queue_overflows'] += 1
-            if self.stats['audio_queue_overflows'] % 10 == 1:
-                logger.debug(f"⚠️ 音频队列溢出 (第{self.stats['audio_queue_overflows']}次)")
-
     def display_welcome_screen(self) -> None:
         """显示欢迎界面"""
         print("\033[2J\033[H", end="")
@@ -111,37 +93,6 @@ class SystemAdapter(AdapterBase):
         """清理资源"""
         if self.audio_device:
             self.audio_device.cleanup()
-
-    def _audio_player_thread(self):
-        """
-        音频播放线程（优雅版）。
-        它的职责是选择并执行一个策略。
-        """
-        # --- 策略选择 ---
-        if VOLCENGINE_AUDIO_TYPE == AudioType.ogg:
-            self.processing_strategy = OggDecodingStrategy(self)
-        else:
-            self.processing_strategy = PcmPassThroughStrategy(self)
-
-        logger.info(f"播放器已启动，使用策略: {self.processing_strategy.__class__.__name__}")
-
-        try:
-            # --- 策略执行 ---
-            # self.is_playing 是总开关
-            while self.is_playing:
-                self.processing_strategy.start()
-                # start() 方法本身就是一个循环，当它退出时，意味着流结束
-                # 我们可以直接 break 掉外层循环
-                break
-
-        except Exception as e:
-            logger.error(f"音频播放线程发生未捕获的异常: {e}", exc_info=True)
-        finally:
-            logger.info("音频播放线程结束。清理资源...")
-            # 确保即使出错也能调用stop
-            if self.processing_strategy:
-                self.processing_strategy.stop()
-            self.is_playing = False  # 确保状态同步
 
     async def _process_microphone_input(self) -> None:
         """处理麦克风输入"""

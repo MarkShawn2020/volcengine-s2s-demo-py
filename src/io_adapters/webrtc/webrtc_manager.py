@@ -4,18 +4,18 @@ from typing import Dict, Optional, Callable, Any
 import numpy as np
 from aiortc import RTCPeerConnection, RTCSessionDescription, RTCIceCandidate
 
+from src.audio.type import AudioType
 from src.io_adapters.webrtc.audio_stream_track import AudioStreamTrack
 from src.io_adapters.webrtc.webrtc_signaling_server import WebRTCSignalingServer
-from src.audio.type import AudioType
 from src.utils.logger import logger
 
 
 class WebRTCManager:
     """WebRTC管理器，处理与浏览器的WebRTC连接"""
 
-    def __init__(self, signaling_host: str = "localhost", signaling_port: int = 8765):
+    def __init__(self, host: str = "localhost", port: int = 8765):
 
-        self.signaling_server = WebRTCSignalingServer(signaling_host, signaling_port)
+        self.signaling_server = WebRTCSignalingServer(host, port)
         self.peer_connections: Dict[str, RTCPeerConnection] = {}
         self.audio_tracks: Dict[str, AudioStreamTrack] = {}
 
@@ -35,8 +35,7 @@ class WebRTCManager:
             on_answer=self.handle_answer,
             on_ice_candidate=self.handle_ice_candidate,
             on_client_connected=self.handle_client_connected,
-            on_client_disconnected=self.handle_client_disconnected,
-            )
+            on_client_disconnected=self.handle_client_disconnected, )
 
     async def start(self):
         """启动WebRTC管理器"""
@@ -215,7 +214,8 @@ class WebRTCManager:
             # 发送答案给客户端
             await self.signaling_server.send_answer(
                 client_id, {
-                    "type": answer.type, "sdp": answer.sdp
+                    "type": answer.type,
+                    "sdp": answer.sdp
                     }
                 )
 
@@ -366,11 +366,10 @@ class WebRTCManager:
                 if client_id in self.peer_connections:
                     pc_state = self.peer_connections[
                         client_id].connectionState  # logger.debug(f"📡 向客户端 {client_id} 发送音频: {len(audio_data)}字节,
-                        # 连接状态: {pc_state}")
+                    # 连接状态: {pc_state}")
 
                 self.audio_tracks[client_id].add_audio_data(
-                    audio_data,
-                    audio_type
+                    audio_data, audio_type
                     )  # logger.debug(f"✅ 音频数据已发送给客户端: {client_id}")
             except Exception as e:
                 logger.error(f"❌ 发送音频数据给客户端失败 {client_id}: {e}")
@@ -403,5 +402,3 @@ class WebRTCManager:
     def get_client_count(self) -> int:
         """获取当前连接的客户端数量"""
         return len(self.peer_connections)
-
-

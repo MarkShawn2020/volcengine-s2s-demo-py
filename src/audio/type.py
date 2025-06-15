@@ -1,8 +1,9 @@
 from enum import StrEnum
-from typing_extensions import TypedDict
+
+from pydantic import BaseModel
 
 
-class AudioConfig(TypedDict):
+class AudioConfig(BaseModel):
     """音频配置数据类"""
     format: str
     bit_size: int
