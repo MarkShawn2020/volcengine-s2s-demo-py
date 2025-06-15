@@ -28,10 +28,14 @@ websocket_config = WebsocketConfig(
 
 
 def validate_config():
-    class VolcengineConfig(BaseModel):
+    class VolcengineConfig(
+        BaseModel
+        ):
         app_id: str = Field(min_length=1)
         access_token: str = Field(min_length=1)
         audio_type: AudioType
+        bot_name: str = Field(min_length=1)
+        welcome: Optional[str] = Field(min_length=1)
 
     class AdaptersConfig(BaseModel):
         mode: AdapterMode
@@ -43,15 +47,23 @@ def validate_config():
         adapter: AdaptersConfig
 
     try:
-        GlobalConfig(
+        global_config = GlobalConfig(
             volcengine=VolcengineConfig(
-                app_id=VOLCENGINE_APP_ID, access_token=VOLCENGINE_ACCESS_TOKEN, audio_type=VOLCENGINE_AUDIO_TYPE, ),
+                app_id=VOLCENGINE_APP_ID,
+                access_token=VOLCENGINE_ACCESS_TOKEN,
+                audio_type=VOLCENGINE_AUDIO_TYPE,
+                bot_name=VOLCENGINE_BOT_NAME,
+                welcome=VOLCENGINE_WELCOME
+                ),
+
             adapter=AdaptersConfig(
                 mode=ADAPTER_MODE, webrtc=webrtc_config, websocket=websocket_config
                 )
             )
+        logger.info(f"global_config: {global_config.model_dump_json(indent=2)}")
     except Exception as e:
         logger.error(e)
         exit(-1)
+
 
 validate_config()

@@ -1,9 +1,11 @@
 import asyncio
 import queue
 import threading
-import time
 
-from src.audio.save_pcm_to_wav import save_pcm_to_wav
+from src.audio.opus_stream_decoder import OpusStreamDecoder
+from src.audio.processor import OggDecodingStrategy, PcmPassThroughStrategy
+from src.audio.type import AudioType
+from src.config import VOLCENGINE_AUDIO_TYPE
 from src.io_adapters.base import AdapterBase
 from src.io_adapters.system.system_audio_manager import SystemAudioManager, SystemAudioConfig
 from src.utils.logger import logger
@@ -17,8 +19,10 @@ class SystemAdapter(AdapterBase):
         super().__init__(config)
 
         # 初始化音频设备管理器
-        config = SystemAudioConfig(input=self.input_audio_config, output=self.output_audio_config)
+        config = SystemAudioConfig(input=self.input_audio_config, output=self.output_config)
         self.audio_device = SystemAudioManager(config)
+
+        self.ogg2pcm: OpusStreamDecoder | None = None
 
         # 音频队列和播放流
         self.audio_queue = queue.Queue(maxsize=50)
@@ -65,11 +69,18 @@ class SystemAdapter(AdapterBase):
         self.is_recording = False
         self.is_playing = False
 
+        # 告诉策略停止
+        if self.processing_strategy:
+            self.processing_strategy.stop()
+
+        # 可以向队列发送一个None来唤醒阻塞的get()
+        self.audio_queue.put(None)
+
         # 等待播放线程结束
         if self.player_thread and self.player_thread.is_alive():
             self.player_thread.join(timeout=2.0)
 
-    async def send_audio_output(self, audio_data: bytes, audio_type: str = "pcm") -> None:
+    async def send_audio_output(self, audio_data: bytes, audio_type: AudioType) -> None:
         """发送音频输出数据"""
         if not audio_data or len(audio_data) == 0:
             return
@@ -102,19 +113,35 @@ class SystemAdapter(AdapterBase):
             self.audio_device.cleanup()
 
     def _audio_player_thread(self):
-        """音频播放线程"""
-        while self.is_playing:
-            try:
-                audio_data = self.audio_queue.get(timeout=1.0)
-                if audio_data is not None and len(audio_data) > 0:
-                    self.output_stream.write(audio_data)
+        """
+        音频播放线程（优雅版）。
+        它的职责是选择并执行一个策略。
+        """
+        # --- 策略选择 ---
+        if VOLCENGINE_AUDIO_TYPE == AudioType.ogg:
+            self.processing_strategy = OggDecodingStrategy(self)
+        else:
+            self.processing_strategy = PcmPassThroughStrategy(self)
 
-            except queue.Empty:
-                time.sleep(0.1)
+        logger.info(f"播放器已启动，使用策略: {self.processing_strategy.__class__.__name__}")
 
-            except Exception as e:
-                logger.error(f"音频播放错误: {e}")
-                exit(-1)
+        try:
+            # --- 策略执行 ---
+            # self.is_playing 是总开关
+            while self.is_playing:
+                self.processing_strategy.start()
+                # start() 方法本身就是一个循环，当它退出时，意味着流结束
+                # 我们可以直接 break 掉外层循环
+                break
+
+        except Exception as e:
+            logger.error(f"音频播放线程发生未捕获的异常: {e}", exc_info=True)
+        finally:
+            logger.info("音频播放线程结束。清理资源...")
+            # 确保即使出错也能调用stop
+            if self.processing_strategy:
+                self.processing_strategy.stop()
+            self.is_playing = False  # 确保状态同步
 
     async def _process_microphone_input(self) -> None:
         """处理麦克风输入"""
@@ -124,7 +151,7 @@ class SystemAdapter(AdapterBase):
         while self.is_recording:
             try:
                 audio_data = stream.read(input_audio_config["chunk"], exception_on_overflow=False)
-                save_pcm_to_wav(audio_data, "../../../output.wav")
+                # save_pcm_to_wav(audio_data, "../../../output.wav")
                 self._handle_audio_input(audio_data)
                 await asyncio.sleep(0.01)
             except Exception as e:

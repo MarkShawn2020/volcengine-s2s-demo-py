@@ -4,7 +4,6 @@ import pyaudio
 
 from src.audio.type import AudioType, AudioConfig
 from src.config import VOLCENGINE_AUDIO_TYPE, VOLCENGINE_APP_ID, VOLCENGINE_ACCESS_TOKEN, VOLCENGINE_BOT_NAME
-from src.utils.logger import logger
 
 ws_connect_config = {
     "base_url": "wss://openspeech.bytedance.com/api/v3/realtime/dialogue",
@@ -52,7 +51,6 @@ start_session_req = {
 
 # 服务器默认直接返回pcm格式音频，客户端可以直接播放，代码量小，但传输较慢
 # 开启OGG后，服务器将只返回ogg封装的opus音频，客户端自行解码后播放，性能较高
-logger.info(f"OGG Enabled: {VOLCENGINE_AUDIO_TYPE}")
 if VOLCENGINE_AUDIO_TYPE == AudioType.pcm:
     start_session_req["tts"] = {
         "audio_config": pcm_output_audio_config

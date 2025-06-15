@@ -26,7 +26,7 @@ class AdapterBase(ABC):
             if tts_audio_config:
                 output_audio_config = tts_audio_config
 
-        self.output_audio_config = AudioConfig(**output_audio_config)
+        self.output_config = AudioConfig(**output_audio_config)
 
     def set_audio_input_callback(self, callback: Callable[[bytes], None]) -> None:
         """设置音频输入回调函数"""

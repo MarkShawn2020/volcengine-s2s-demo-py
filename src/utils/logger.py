@@ -65,7 +65,7 @@ def setup_logging(level=logging.INFO):
     return log_filename
 
 
-logger = logging.getLogger('[open-voice-chat-s2s]')
+logger = logging.getLogger('[open-voice-chat]')
 
 # 从环境变量读取日志级别
 log_level_str = os.getenv('LOG_LEVEL', 'INFO').upper()

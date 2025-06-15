@@ -5,19 +5,14 @@ import time
 import uuid
 from typing import Dict, Any
 
-from src.audio.audio_converter import OggToPcmConverter
 from src.config import (
-    webrtc_config,
-    websocket_config,
-    ADAPTER_MODE,
-    VOLCENGINE_AUDIO_TYPE,
-    VOLCENGINE_WELCOME,
+    webrtc_config, websocket_config, ADAPTER_MODE, VOLCENGINE_AUDIO_TYPE, VOLCENGINE_WELCOME,
     )
 from src.io_adapters.base import AdapterBase
 from src.io_adapters.type import AdapterMode
 from src.utils.logger import logger
 from src.volcengine.client import VoicengineClient
-from src.volcengine.config import ws_connect_config, start_session_req, ogg_output_audio_config
+from src.volcengine.config import ws_connect_config
 from src.volcengine.protocol import ServerEvent
 
 
@@ -42,18 +37,6 @@ class Orchestrator:
 
         # 信号处理
         signal.signal(signal.SIGINT, self._keyboard_signal)
-
-        # 音频转换器
-        output_config = ogg_output_audio_config
-        tts_config = start_session_req.get("tts")
-        if tts_config:
-            tts_audio_config = tts_config.get("audio_config")
-            if tts_audio_config:
-                output_config = tts_audio_config
-
-        self.ogg_converter = OggToPcmConverter(
-            sample_rate=output_config['sample_rate'], channels=output_config['channels']
-            )
 
         # 实时字幕显示
         self.current_user_text = ""
@@ -168,7 +151,6 @@ class Orchestrator:
                 logger.debug("🎵 TTS音频合成结束")
                 self._finalize_conversation_turn()
             elif event == ServerEvent.ASR_INFO:
-                self.ogg_converter.reset()
                 logger.debug("已清空音频缓冲区 (用户打断)")
                 self.is_user_speaking = True
                 self.is_ai_responding = False

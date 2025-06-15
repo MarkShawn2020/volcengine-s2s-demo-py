@@ -1,10 +1,9 @@
 import asyncio
 
+from src.audio.type import AudioType
 from src.io_adapters.base import AdapterBase
 from src.io_adapters.webrtc.config import WebrtcConfig
 from src.io_adapters.webrtc.webrtc_manager import WebRTCManager
-from src.audio.type import AudioType
-from src.audio.audio_converter import OggToPcmConverter
 from src.utils.logger import logger
 
 
@@ -22,9 +21,6 @@ class WebRTCAdapter(AdapterBase):
 
         # 设置客户端连接回调
         self.webrtc_manager.set_client_connected_callback(self._handle_client_connected)
-
-        # 初始化OGG转PCM转换器
-        self.ogg_converter = OggToPcmConverter(sample_rate=24000, channels=1)
 
         # 标记是否已经触发过prepared回调
         self._prepared_triggered = False
