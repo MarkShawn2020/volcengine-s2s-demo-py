@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import queue
 
 from src.audio.processors import Ogg2PcmProcessor
@@ -7,8 +8,9 @@ from src.audio.type import AudioType
 from src.config import VOLCENGINE_AUDIO_TYPE
 from src.io_adapters.base import AdapterBase
 from src.io_adapters.system.system_audio_manager import SystemAudioManager, SystemAudioConfig
-from src.utils.logger import logger
 from src.volcengine.config import input_audio_config
+
+logger = logging.getLogger(__name__)
 
 
 class SystemAdapter(AdapterBase):
@@ -58,18 +60,20 @@ class SystemAdapter(AdapterBase):
         self.audio_pipeline = pipeline
 
     async def start(self) -> None:
-        logger.info("🎙️ 启动系统音频输入输出...")
+        logger.info("starting")
         self.is_running = True
         self.is_recording = True
 
         # 1. 启动音频输出流
         self.output_stream = self.audio_device.open_output_stream()
 
-        # 2. 显示欢迎界面和启动麦克风输入
+        # 2. 显示欢迎界面
         self.display_welcome_screen()
         self._on_prepared()
 
+        # 3. 启动麦克风输入
         await self._process_microphone_input()
+        logger.info("started")
 
     async def stop(self) -> None:
         """停止音频输入输出"""
@@ -106,9 +110,11 @@ class SystemAdapter(AdapterBase):
 
     def cleanup(self) -> None:
         """清理资源"""
+        logger.info("cleaning up")
         self._cleanup_pipeline()
         if self.audio_device:
             self.audio_device.cleanup()
+        logger.info("cleaned up")
 
     async def _process_microphone_input(self) -> None:
         """处理麦克风输入"""
