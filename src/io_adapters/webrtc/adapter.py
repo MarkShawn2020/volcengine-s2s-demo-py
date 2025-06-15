@@ -63,7 +63,9 @@ class WebRTCAdapter(AdapterBase):
         source_dtype = np.float32 if self.output_config.bit_size == pyaudio.paFloat32 else np.int16
         pipeline.append(
             PcmResamplerProcessor(
-                source_sr=source_sr, source_dtype=source_dtype, target_sr=48000,  # 硬性要求
+                source_sr=source_sr, source_dtype=source_dtype,
+                # 默认48k，修改成16k
+                target_sr=48000,
                 target_dtype='int16'  # 硬性要求
                 )
             )
@@ -128,23 +130,28 @@ class WebRTCAdapter(AdapterBase):
                 logger.error(f"清理WebRTC资源错误: {e}")
 
     def _handle_webrtc_audio_input(self, audio_data: bytes) -> None:
-        """处理WebRTC音频输入"""
+        """
+        处理WebRTC音频输入
+
+        火山规定：客户端上传音频格式要求PCM（脉冲编码调制，未经压缩的的音频格式）、单声道、采样率16000、每个采样点用int16表示、字节序为小端序。
+        基于 webrtc_test，已经是 16k int16了
+        """
         if not self.is_running:
             return
 
-        # WebRTC客户端音频格式: PCM, 单声道, 48000Hz, int16, 小端序
-        source_sr = 48000
-        source_dtype = 'int16'
-
-        processor = PcmResamplerProcessor(
-            source_sr=source_sr, source_dtype=source_dtype, target_sr=16000,  # 硬性要求
-            target_dtype='int16'  # 硬性要求
-            )
-        processed_audio = processor.process(audio_data)
-        # logger.debug(f"🎤 WebRTC重采样后音频数据: {len(processed_audio)} bytes, RMS={processed_rms:.1f}")
-        
+        # # WebRTC客户端音频格式: PCM, 单声道, 48000Hz, int16, 小端序
+        # source_sr = 16000
+        # source_dtype = 'int16'
+        #
+        # processor = PcmResamplerProcessor(
+        #     source_sr=source_sr, source_dtype=source_dtype, target_sr=16000,  # 硬性要求
+        #     target_dtype='int16'  # 硬性要求
+        #     )
+        # processed_audio = processor.process(audio_data)
+        # # logger.debug(f"🎤 WebRTC重采样后音频数据: {len(processed_audio)} bytes, RMS={processed_rms:.1f}")
+        #
         # 只处理有足够音量的音频
-        self._handle_audio_input(processed_audio)
+        self._handle_audio_input(audio_data)
 
     def _handle_client_connected(self, client_id: str) -> None:
         """处理WebRTC客户端连接"""
