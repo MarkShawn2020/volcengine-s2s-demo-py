@@ -184,10 +184,10 @@ class Orchestrator:
         seq = 0
         try:
             while self.is_running and self.audio_adapter.is_running:
-                seq += 1
-                logger.debug(f"handing sender ({seq})")
                 chunk = await self.audio_adapter.on_push()
                 if chunk:
+                    seq += 1
+                    logger.debug(f"handing sender ({seq})")
                     await self.volcengine_client.upload_audio(chunk)
                 await asyncio.sleep(0.01)
         except Exception as e:
