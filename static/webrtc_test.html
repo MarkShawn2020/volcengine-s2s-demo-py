@@ -31,7 +31,7 @@
             display: grid;
             grid-template-columns: 320px 1fr;
             gap: 12px;
-            grid-template-rows: minmax(0, 1fr);
+            /*grid-template-rows: minmax(0, 1fr);*/
         }
 
         .left-panel {
@@ -44,6 +44,7 @@
             display: flex;
             flex-direction: column;
             min-width: 0;
+            max-height: 677px;
         }
 
         @media (max-width: 768px) {
@@ -248,7 +249,7 @@
             font-size: 12px !important;
             margin: 0 !important;
         }
-        
+
         .log-section {
             display: grid;
             grid-template-rows: auto minmax(0, 1fr);
@@ -256,7 +257,7 @@
             max-height: 100%;
             overflow: hidden;
         }
-        
+
         .log-header {
             display: flex;
             justify-content: space-between;
@@ -265,13 +266,13 @@
             padding-bottom: 6px;
             margin-bottom: 12px;
         }
-        
+
         .log-header h3 {
             margin: 0;
             border-bottom: none;
             padding-bottom: 0;
         }
-        
+
         .log-buttons {
             display: flex;
             gap: 4px;
@@ -386,7 +387,7 @@
     function toggleWrap() {
         const logElement = document.getElementById('log');
         const wrapBtn = document.getElementById('wrap-btn');
-        
+
         if (logElement.style.whiteSpace === 'nowrap' || !logElement.style.whiteSpace) {
             // 切换到换行模式
             logElement.style.whiteSpace = 'pre-wrap';
@@ -404,9 +405,9 @@
 
     // 更新连接状态
     function updateConnectionStatus(status, message) {
-        const statusElement = document.getElementById('connection-status');
-        statusElement.className = `status ${status}`;
-        statusElement.textContent = message;
+        // const statusElement = document.getElementById('connection-status');
+        // statusElement.className = `status ${status}`;
+        // statusElement.textContent = message;
     }
 
     // 修改SDP以支持16kHz采样率
@@ -472,31 +473,6 @@
         document.getElementById('start-stream-btn').disabled = !connected || !microphoneEnabled || isStreaming;
         document.getElementById('pause-stream-btn').disabled = !isStreaming;
         document.getElementById('stop-stream-btn').disabled = !isStreaming;
-    }
-
-    // 手动播放音频
-    function manualPlayAudio() {
-        if (window.remoteAudio) {
-            window.remoteAudio.play().then(() => {
-                log('手动播放音频成功', 'success');
-            }).catch(error => {
-                log(`手动播放失败: ${error.message}`, 'error');
-            });
-        } else {
-            log('没有可播放的音频', 'warning');
-        }
-    }
-
-    // 请求测试音频
-    function requestTestAudio() {
-        if (signalingSocket && signalingSocket.readyState === WebSocket.OPEN) {
-            log('请求服务器发送测试音频', 'info');
-            signalingSocket.send(JSON.stringify({
-                type: 'test-audio'
-            }));
-        } else {
-            log('连接未建立，无法请求测试音频', 'error');
-        }
     }
 
     // WebRTC统计信息监控
@@ -807,11 +783,6 @@
         };
 
         return peerConnection;
-    }
-
-    // 开始录音 (保留兼容性)
-    async function startAudio() {
-        log('请使用新的步骤式接口：1.选择设备 -> 2.启用麦克风 -> 3.连接服务器 -> 4.开始推流', 'warning');
     }
 
     // 停止录音 (保留兼容性)
