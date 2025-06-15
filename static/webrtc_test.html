@@ -364,7 +364,16 @@
         function updateButtons() {
             const connected = signalingSocket && signalingSocket.readyState === WebSocket.OPEN;
             const hasRemoteAudio = window.remoteAudio !== null && window.remoteAudio !== undefined;
-            const deviceSelected = selectedDeviceId !== null && selectedDeviceId !== '';
+            const deviceSelected = selectedDeviceId !== null && selectedDeviceId !== '' && selectedDeviceId !== undefined;
+            
+            // 调试信息
+            console.log('updateButtons debug:', {
+                selectedDeviceId,
+                selectedDeviceIdType: typeof selectedDeviceId,
+                deviceSelected,
+                microphoneEnabled
+            });
+            log(`调试: selectedDeviceId="${selectedDeviceId}", type=${typeof selectedDeviceId}, deviceSelected=${deviceSelected}`, 'info');
             
             // 步骤1: 服务器配置（完全独立）
             document.getElementById('connect-btn').disabled = connected;
@@ -372,8 +381,16 @@
             
             // 步骤2: 麦克风控制（完全独立）
             document.getElementById('refresh-devices-btn').disabled = false;
-            document.getElementById('enable-mic-btn').disabled = !deviceSelected || microphoneEnabled;
-            document.getElementById('disable-mic-btn').disabled = !microphoneEnabled;
+            const enableBtnDisabled = !deviceSelected || microphoneEnabled;
+            const disableBtnDisabled = !microphoneEnabled;
+            
+            document.getElementById('enable-mic-btn').disabled = enableBtnDisabled;
+            document.getElementById('disable-mic-btn').disabled = disableBtnDisabled;
+            
+            // 添加状态日志
+            if (enableBtnDisabled && !microphoneEnabled) {
+                log(`启用麦克风按钮被禁用，原因: deviceSelected=${deviceSelected}, microphoneEnabled=${microphoneEnabled}`, 'warning');
+            }
             
             // 步骤3: 推流控制（需要麦克风和服务器都就绪）
             document.getElementById('start-stream-btn').disabled = !connected || !microphoneEnabled || isStreaming;
@@ -808,7 +825,7 @@
                 
                 audioInputs.forEach((device, index) => {
                     const option = document.createElement('option');
-                    option.value = device.deviceId;
+                    option.value = device.deviceId || 'default'; // 如果deviceId为空，使用'default'
                     option.textContent = device.label || `麦克风设备 ${index + 1}`;
                     select.appendChild(option);
                 });
@@ -816,8 +833,14 @@
                 // 默认选择第一个可用设备
                 if (audioInputs.length > 0) {
                     select.selectedIndex = 1; // 选择第一个设备（索引1，因为0是“请选择”）
-                    selectedDeviceId = audioInputs[0].deviceId;
+                    selectedDeviceId = audioInputs[0].deviceId || 'default'; // 如果deviceId为空，使用'default'
                     log(`默认选择: ${audioInputs[0].label || '麦克风设备 1'}`, 'info');
+                    log(`设备ID: "${selectedDeviceId}", 类型: ${typeof selectedDeviceId}`, 'info');
+                    
+                    // 如果设备ID为空，说明需要权限，提示用户
+                    if (audioInputs[0].deviceId === '') {
+                        log('设备ID为空，使用默认设备。如需获取具体设备信息，请允许麦克风权限。', 'warning');
+                    }
                 }
                 
                 availableDevices = audioInputs;
