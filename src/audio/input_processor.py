@@ -91,11 +91,8 @@ class AudioFrameProcessor:
             max_amplitude = np.max(np.abs(output_samples)) if len(output_samples) > 0 else 0
             rms = np.sqrt(np.mean(output_samples.astype(np.float32)**2)) if len(output_samples) > 0 else 0
             
-            logger.info(f"🎤 AudioFrameProcessor输出(缓冲): RMS={rms:.1f}")
-            
-            # 检查是否是静音
-            if max_amplitude < 100:  # 对于int16，这是很小的声音
-                logger.warning(f"⚠️ 检测到低音量音频，可能影响ASR识别")
+            # logger.debug(f"🎤 AudioFrameProcessor输出(缓冲): RMS={rms:.1f}")
+
             
             return result
         else:

@@ -80,7 +80,7 @@ class Orchestrator:
         logger.info("🎯 音频IO已准备就绪，发送SayHello")
         logger.info(f"🎯 WebSocket连接状态: {self._is_websocket_connected()}")
         # 创建异步任务发送SayHello
-        # asyncio.create_task(self.client.say_hello(VOLCENGINE_WELCOME))
+        asyncio.create_task(self.client.say_hello(VOLCENGINE_WELCOME))
 
     def _is_websocket_connected(self) -> bool:
         """检查WebSocket连接状态"""

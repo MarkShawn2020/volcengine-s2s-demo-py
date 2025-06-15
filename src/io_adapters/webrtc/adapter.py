@@ -133,17 +133,19 @@ class WebRTCAdapter(AdapterBase):
         if not self.is_running:
             return
 
-        source_sr = self.output_config.sample_rate  # e.g., 24000
-        source_dtype = np.float32 if self.output_config.bit_size == pyaudio.paFloat32 else np.int16
+        # WebRTC客户端音频格式: PCM, 单声道, 48000Hz, int16, 小端序
+        source_sr = 48000
+        source_dtype = 'int16'
 
         processor = PcmResamplerProcessor(
             source_sr=source_sr, source_dtype=source_dtype, target_sr=16000,  # 硬性要求
             target_dtype='int16'  # 硬性要求
             )
-        audio_data = processor.process(audio_data)
-
-        # logger.debug(f"🎤 WebRTC接收到音频数据: {len(audio_data)} bytes")
-        self._handle_audio_input(audio_data)
+        processed_audio = processor.process(audio_data)
+        # logger.debug(f"🎤 WebRTC重采样后音频数据: {len(processed_audio)} bytes, RMS={processed_rms:.1f}")
+        
+        # 只处理有足够音量的音频
+        self._handle_audio_input(processed_audio)
 
     def _handle_client_connected(self, client_id: str) -> None:
         """处理WebRTC客户端连接"""

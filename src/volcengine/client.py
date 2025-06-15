@@ -88,7 +88,7 @@ class VoicengineClient:
             task_request.extend((len(payload_bytes)).to_bytes(4, 'big'))  # payload size(4 bytes)
             task_request.extend(payload_bytes)
             await self.ws.send(task_request)
-            # logger.info(f"✅ 音频数据已发送到VoiceEngine (压缩后: {len(payload_bytes)} bytes)")
+            logger.debug(f">> volcengine: {len(payload_bytes)} bytes")
         except Exception as e:
             logger.error(f"❌ 发送音频请求失败: {e}")  # 改为error级别，便于调试
             exit(-1)
