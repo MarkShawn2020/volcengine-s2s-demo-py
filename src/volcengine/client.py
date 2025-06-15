@@ -58,7 +58,9 @@ class VoicengineClient:
         say_hello_request.extend((len(self.session_id)).to_bytes(4, 'big'))
         say_hello_request.extend(str.encode(self.session_id))
 
-        payload_data = {"content": content}
+        payload_data = {
+            "content": content
+            }
         payload_bytes = str.encode(json.dumps(payload_data, ensure_ascii=False))
         payload_bytes = gzip.compress(payload_bytes)
         say_hello_request.extend((len(payload_bytes)).to_bytes(4, 'big'))

@@ -3,7 +3,6 @@ from typing import Callable, Optional, Any, Dict
 
 from src.audio.processors.base import AudioProcessor
 from src.audio.type import AudioConfig, AudioType
-from src.config import VOLCENGINE_AUDIO_TYPE
 from src.utils.logger import logger
 from src.volcengine.config import input_audio_config, ogg_output_audio_config, start_session_req
 
@@ -38,7 +37,7 @@ class AdapterBase(ABC):
     def _build_audio_pipeline(self):
         """由子类实现，用于构建自己的音频处理流水线。"""
         pass
-    
+
     async def send_audio_output(self, audio_data: bytes, audio_type: AudioType) -> None:
         """将音频数据送入流水线进行处理。"""
         if not audio_data:
@@ -78,7 +77,7 @@ class AdapterBase(ABC):
     def cleanup(self) -> None:
         """清理资源"""
         pass
-    
+
     def _cleanup_pipeline(self) -> None:
         """清理资源，包括流水线中的处理器。"""
         for processor in self.audio_pipeline:

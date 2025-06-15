@@ -1,7 +1,5 @@
 import asyncio
 import queue
-import threading
-import pyaudio
 
 from src.audio.processors import Ogg2PcmProcessor
 from src.audio.processors.base import AudioProcessor
@@ -34,27 +32,28 @@ class SystemAdapter(AdapterBase):
         self.stats = {
             'audio_queue_overflows': 0
             }
-    
+
     def _build_audio_pipeline(self):
         """构建SystemAdapter的音频处理流水线"""
+
         class SpeakerSink(AudioProcessor):
             def __init__(self, adapter):
                 self.adapter = adapter
-            
+
             def process(self, audio_data: bytes) -> bytes:
                 if self.adapter.output_stream and not self.adapter.output_stream.is_stopped():
                     self.adapter.output_stream.write(audio_data)
                 return b''  # 消费者不产生输出
 
         pipeline = []
-        
+
         # 步骤1: 如果输入是OGG，添加解码器
         if VOLCENGINE_AUDIO_TYPE == AudioType.ogg:
             pipeline.append(Ogg2PcmProcessor(self.output_config))
-        
+
         # 步骤2: SystemAdapter 不需要额外的重采样，因为解码后的格式
         #         就已经是它需要的播放格式了。
-        
+
         pipeline.append(SpeakerSink(self))
         self.audio_pipeline = pipeline
 

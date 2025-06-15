@@ -3,9 +3,9 @@ from typing import Dict, Optional, Callable, Any
 
 from aiortc import RTCPeerConnection, RTCSessionDescription, RTCIceCandidate
 
+from src.audio.audio_stream_track import AudioStreamTrack
 from src.audio.input_processor import AudioFrameProcessor
 from src.audio.type import AudioType
-from src.audio.audio_stream_track import AudioStreamTrack
 from src.io_adapters.webrtc.webrtc_signaling_server import WebRTCSignalingServer
 from src.utils.logger import logger
 
@@ -19,8 +19,7 @@ class WebRTCManager:
         self.peer_connections: Dict[str, RTCPeerConnection] = {}
         self.audio_tracks: Dict[str, AudioStreamTrack] = {}
 
-        self.frame_processor = AudioFrameProcessor() # 创建处理器实例
-
+        self.frame_processor = AudioFrameProcessor()  # 创建处理器实例
 
         # 音频处理回调
         self.audio_input_callback: Optional[Callable[[bytes], None]] = None

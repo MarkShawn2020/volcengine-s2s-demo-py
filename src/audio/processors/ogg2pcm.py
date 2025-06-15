@@ -1,9 +1,9 @@
-import ffmpeg
-import subprocess
-import pyaudio
-import threading
-import queue
 import logging
+import queue
+import threading
+
+import ffmpeg
+import pyaudio
 
 from src.audio.processors.base import AudioProcessor
 
@@ -25,7 +25,7 @@ class Ogg2PcmProcessor(AudioProcessor):
         format_map = {
             pyaudio.paFloat32: ('f32le', 4),
             pyaudio.paInt16: ('s16le', 2),
-        }
+            }
         if self.pyaudio_format not in format_map:
             raise ValueError(f"不支持的 PyAudio 格式: {self.pyaudio_format}")
 
@@ -35,7 +35,7 @@ class Ogg2PcmProcessor(AudioProcessor):
         logger.info(f"OGG解码器初始化：采样率={self.sample_rate}, 声道={self.channels}, 格式={self.ffmpeg_format}")
 
         try:
-            self.process = (
+            self.ffmpeg_process = (
                 ffmpeg
                 .input('pipe:0', format='ogg')
                 .output(
@@ -64,9 +64,18 @@ class Ogg2PcmProcessor(AudioProcessor):
         """处理OGG音频数据，返回解码后的PCM数据"""
         if not audio_data:
             return b''
-            
+
         self._feed_ogg_data(audio_data)
-        return self._get_decoded_pcm(block=False) or b''
+        
+        # 收集所有可用的解码数据
+        output_data = b''
+        while True:
+            chunk = self._get_decoded_pcm(block=False, timeout=0.01)
+            if not chunk:
+                break
+            output_data += chunk
+        
+        return output_data
 
     def flush(self) -> bytes | None:
         """获取内部缓冲的所有剩余数据"""
@@ -87,9 +96,9 @@ class Ogg2PcmProcessor(AudioProcessor):
         self._is_running.clear()
 
         # 关闭 stdin 以通知 FFmpeg 输入结束
-        if self.process and self.process.stdin:
+        if self.ffmpeg_process and self.ffmpeg_process.stdin:
             try:
-                self.process.stdin.close()
+                self.ffmpeg_process.stdin.close()
             except OSError:
                 pass
 
@@ -98,12 +107,12 @@ class Ogg2PcmProcessor(AudioProcessor):
         self.stderr_reader_thread.join(timeout=2)
 
         # 确保进程被终止
-        if self.process and self.process.poll() is None:
+        if self.ffmpeg_process and self.ffmpeg_process.poll() is None:
             logger.warning("FFmpeg 进程未正常退出，正在强制终止。")
-            self.process.kill()
+            self.ffmpeg_process.kill()
 
         logger.info("OGG解码器已关闭。")
-        self.process = None
+        self.ffmpeg_process = None
 
     def _feed_ogg_data(self, ogg_data: bytes):
         """向解码器喂入 OGG 数据 (非阻塞)"""
@@ -111,8 +120,8 @@ class Ogg2PcmProcessor(AudioProcessor):
             return
 
         try:
-            self.process.stdin.write(ogg_data)
-            self.process.stdin.flush()
+            self.ffmpeg_process.stdin.write(ogg_data)
+            self.ffmpeg_process.stdin.flush()
         except (BrokenPipeError, OSError):
             logger.warning("尝试写入已关闭的 FFmpeg stdin 管道。")
             self.close()
@@ -130,7 +139,7 @@ class Ogg2PcmProcessor(AudioProcessor):
         chunk_size = int(self.sample_rate * self.frame_size * 0.1)
         while self._is_running.is_set():
             try:
-                pcm_data = self.process.stdout.read(chunk_size)
+                pcm_data = self.ffmpeg_process.stdout.read(chunk_size)
                 if not pcm_data:
                     logger.info("FFmpeg stdout 已关闭。")
                     break
@@ -146,7 +155,7 @@ class Ogg2PcmProcessor(AudioProcessor):
         """后台线程，持续读取 FFmpeg 的 stderr 用于日志记录"""
         while self._is_running.is_set():
             try:
-                line = self.process.stderr.readline()
+                line = self.ffmpeg_process.stderr.readline()
                 if not line:
                     break
                 logger.debug(f"FFmpeg stderr: {line.decode('utf-8', errors='ignore').strip()}")
