@@ -1,3 +1,4 @@
+from src.audio.processors import PcmResamplerProcessor
 from src.io_adapters.base import AdapterBase
 from src.io_adapters.system.system_audio_manager import SystemAudioManager
 from src.volcengine.config import input_audio_config
@@ -19,7 +20,7 @@ class SystemAdapter(AdapterBase):
 
     async def on_push(self) -> bytes:
         if self.is_running and self._input_stream.is_active():
-            return self._input_stream.read(input_audio_config.chunk, exception_on_overflow=False)
+            data = self._input_stream.read(input_audio_config.chunk, exception_on_overflow=False)
         return b''
 
     async def on_pull(self, chunk: bytes) -> None:

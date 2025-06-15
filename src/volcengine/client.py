@@ -67,7 +67,7 @@ class VoicengineClient:
 
     async def request_stop_connection(self):
         """发送结束连接请求"""
-        if not self.is_active: return
+        if not self.is_connected: return
 
         self.is_connected = False
         try:
@@ -77,8 +77,9 @@ class VoicengineClient:
             payload_bytes = gzip.compress(payload_bytes)
             finish_connection_request.extend((len(payload_bytes)).to_bytes(4, 'big'))
             finish_connection_request.extend(payload_bytes)
+            logger.info("requesting stop-connection")
             await self.ws.send(finish_connection_request)
-            logger.info("FinishConnection request sent")
+            logger.info("requested stop-connection")
 
             # 尝试接收响应，但设置超时
             try:
@@ -125,10 +126,11 @@ class VoicengineClient:
             finish_session_request.extend(str.encode(self.session_id))
             finish_session_request.extend((len(payload_bytes)).to_bytes(4, 'big'))
             finish_session_request.extend(payload_bytes)
+            logger.info("requesting stop-session")
             await self.ws.send(finish_session_request)
-            logger.info("FinishSession request sent")
+            logger.info("requested stop-session")
         except Exception as e:
-            logger.warning(f"failed to finish session, reason: {e}")
+            logger.warning(f"failed to stop session, reason: {e}")
 
     async def request_say_hello(self, content: str = "你好") -> None:
         """发送SayHello事件"""
@@ -173,10 +175,14 @@ class VoicengineClient:
 
         try:
             logger.debug("waiting for response")
-            response = await self.ws.recv()
+            # 设置超时，让程序能够定期检查is_running状态
+            response = await asyncio.wait_for(self.ws.recv(), timeout=1.0)
             data = protocol.parse_response(response)
-            logger.debug(f"on parsed-response: {data}")
+            logger.debug(f"on parsed-response")
             return data
+        except asyncio.TimeoutError:
+            # 超时时返回None，让调用方重新检查is_running状态
+            return None
         except Exception as e:
             logger.warning(f"failed to receive server response, reason: {e}")
 

@@ -59,7 +59,6 @@ class Orchestrator:
                 tg.create_task(self.handle_receiver())
                 tg.create_task(self.handle_sender())
                 logger.info("started tasks")
-            logger.info("started")
         except Exception as e:
             logger.error(f"failed to start, reason: {e}")
         finally:
@@ -72,8 +71,8 @@ class Orchestrator:
         try:
             logger.info("stopping")
             async with asyncio.TaskGroup() as tg:
-                tg.create_task(self.audio_adapter.stop())
                 tg.create_task(self.volcengine_client.stop())
+                tg.create_task(self.audio_adapter.stop())
             logger.info("stopped")
         except Exception as e:
             logger.error(f"failed to stop, reason: {e}")
@@ -85,6 +84,9 @@ class Orchestrator:
                 seq += 1
                 logger.debug(f"handing receiver ({seq})")
                 response = await self.volcengine_client.on_response()
+                if response is None:
+                    # 超时或连接问题，继续循环检查is_running状态
+                    continue
                 event = response.get('event', 'unknown')
                 payload_msg = response.get('payload_msg')
                 logger.debug(
@@ -172,7 +174,7 @@ class Orchestrator:
                     logger.error(f"服务器错误: {response['payload_msg']}")
                     raise Exception("服务器错误")
 
-                await asyncio.sleep(0)
+                await asyncio.sleep(0.1)
 
         except Exception as e:
             logger.warning(f"failed to receive, reason: {e}")
@@ -185,7 +187,7 @@ class Orchestrator:
                 logger.debug(f"handing sender ({seq})")
                 chunk = await self.audio_adapter.on_push()
                 await self.volcengine_client.upload_audio(chunk)
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.1)
         except Exception as e:
             logger.warning(f"failed to send, reason: {e}")
 
