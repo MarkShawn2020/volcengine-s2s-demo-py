@@ -317,22 +317,6 @@
         let streamPaused = false;
         let availableDevices = [];
 
-            const logElement = document.getElementById('log');
-    const getDevicesBtn = document.getElementById('get-devices-btn');
-
-    function log(message) {
-        console.log(message);
-        logElement.textContent += `${message}\n`;
-    }
-
-    getDevicesBtn.onclick = async () => {
-        logElement.textContent = ''; // 清空日志
-        const devices = await getFullDeviceList();
-        if (devices) {
-            log("\nFinal device list with full info:");
-            log(JSON.stringify(devices, null, 2));
-        }
-    };
         
         // 日志函数
         function log(message, type = 'info') {
@@ -933,11 +917,6 @@
                 setupVolumeMonitoring();
                 
                 log('麦克风已启用', 'success');
-                
-                // 麦克风启用后，重新获取设备列表以显示真实名称
-                log('重新获取设备列表以显示真实设备名称...');
-                setTimeout(() => refreshDevices(), 100); // 短暂延迟确保权限已生效
-                
                 updateButtons();
                 
             } catch (error) {
@@ -1055,10 +1034,82 @@
             updateButtons();
         }
         
+        // 自动获取麦克风权限并选择默认设备
+        async function autoSetupMicrophone() {
+            try {
+                log('🚀 开始自动设置麦克风...');
+                
+                // 先请求权限
+                log('1. 请求麦克风权限...');
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                stream.getTracks().forEach(track => track.stop()); // 立即停止
+                log('✅ 麦克风权限获取成功', 'success');
+                
+                // 获取设备列表
+                log('2. 获取设备列表...');
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const audioInputs = devices.filter(device => device.kind === 'audioinput');
+                log(`📱 找到 ${audioInputs.length} 个音频输入设备`, 'info');
+                
+                if (audioInputs.length > 0) {
+                    // 更新下拉列表
+                    log('3. 更新设备下拉列表...');
+                    const select = document.getElementById('microphone-select');
+                    select.innerHTML = '<option value="">请选择麦克风设备</option>';
+                    
+                    audioInputs.forEach((device, index) => {
+                        const option = document.createElement('option');
+                        option.value = device.deviceId || 'default';
+                        option.textContent = device.label || `麦克风设备 ${index + 1}`;
+                        select.appendChild(option);
+                        log(`  - 设备 ${index + 1}: ${device.label || '未知设备'} (ID: ${device.deviceId || 'default'})`, 'info');
+                    });
+                    
+                    // 自动选择第一个设备
+                    log('4. 自动选择第一个设备...');
+                    select.selectedIndex = 1;
+                    selectedDeviceId = audioInputs[0].deviceId || 'default';
+                    availableDevices = audioInputs;
+                    
+                    log(`✅ 自动选择设备: ${audioInputs[0].label || '麦克风设备 1'}`, 'success');
+                    log(`📍 设备ID: "${selectedDeviceId}"`, 'info');
+                    
+                    // 设置选择事件
+                    select.onchange = (e) => {
+                        selectedDeviceId = e.target.value || null;
+                        if (selectedDeviceId) {
+                            const selectedDevice = availableDevices.find(d => d.deviceId === selectedDeviceId);
+                            log(`选择设备: ${selectedDevice?.label || '未知设备'}`, 'info');
+                        }
+                        updateButtons();
+                    };
+                    
+                    // 自动启用麦克风
+                    log('5. 自动启用麦克风...');
+                    await enableMicrophone();
+                    
+                    log('🎉 自动设置完成！', 'success');
+                    
+                } else {
+                    log('❌ 未找到音频输入设备', 'error');
+                }
+                
+            } catch (error) {
+                log(`❌ 自动设置麦克风失败: ${error.message}`, 'error');
+                console.error('详细错误:', error);
+                // fallback 到手动模式
+                log('🔄 fallback 到手动模式...', 'warning');
+                refreshDevices();
+            }
+        }
+
         // 页面加载完成
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
             log('页面加载完成');
-            refreshDevices(); // 自动加载设备列表
+            
+            // 自动设置麦克风
+            await autoSetupMicrophone();
+            
             updateButtons();
             
             // 定期发送心跳

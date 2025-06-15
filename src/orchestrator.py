@@ -365,9 +365,10 @@ class Orchestrator:
         except asyncio.CancelledError:
             logger.info("接收任务已取消")
         except Exception as e:
+            logger.warning(f"接收消息主循环异常： {e}")
             # 检查是否为WebSocket正常关闭
             if "received 1000" in str(e) or "ConnectionClosed" in str(e) or "connection is closed" in str(e).lower():
-                logger.info("WebSocket连接已正常关闭，退出接收循环")
+                logger.warning("WebSocket连接已正常关闭，退出接收循环")
                 self.is_running = False
             else:
                 logger.error(f"接收消息错误: {e}")
