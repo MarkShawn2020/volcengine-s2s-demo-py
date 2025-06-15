@@ -54,14 +54,13 @@ class WebRTCAdapter(AdapterBase):
 
         pipeline = []
 
-        source_sr = self.output_config.sample_rate  # e.g., 24000
-        source_dtype = np.float32 if self.output_config.bit_size == pyaudio.paFloat32 else np.int16
-
         # 步骤1: 如果输入是OGG，添加解码器
         if VOLCENGINE_AUDIO_TYPE == AudioType.ogg:
             pipeline.append(Ogg2PcmProcessor(self.output_config))
 
         # 步骤2: 添加一个处理器，它负责将上一步的输出转换为WebRTC的格式
+        source_sr = self.output_config.sample_rate  # e.g., 24000
+        source_dtype = np.float32 if self.output_config.bit_size == pyaudio.paFloat32 else np.int16
         pipeline.append(
             PcmResamplerProcessor(
                 source_sr=source_sr, source_dtype=source_dtype, target_sr=48000,  # 硬性要求
