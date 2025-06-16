@@ -50,6 +50,12 @@ class RealTimeAudioApp:
             event = response.get('event')
             if event == protocol.ServerEvent.TTS_RESPONSE:
                 self.play_queue.put(response)
+            elif event == protocol.ServerEvent.ASR_INFO:
+                logger.info("empty queue...")
+
+                # 重要：打断AI上面还没说完的话
+                while not self.play_queue.empty():
+                    self.play_queue.get_nowait()
             elif event:
                 logger.info(
                     f"收到事件: {protocol.ServerEvent(event).name} - "
