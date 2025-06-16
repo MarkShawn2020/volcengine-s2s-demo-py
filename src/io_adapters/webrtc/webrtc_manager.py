@@ -19,8 +19,8 @@ class WebRTCManager:
         self.signaling_server = WebRTCSignalingServer(self.config)
         self.peer_connections: Dict[str, RTCPeerConnection] = {}
         # 分离发送轨道和接收轨道
-        self.send_tracks: Dict[str, AudioStreamTrack] = {}  # server2client: 发送AI音频到浏览器
-        self.recv_tracks: Dict[str, Any] = {}  # client2server: 接收浏览器麦克风音频
+        self.server2client_tracks: Dict[str, AudioStreamTrack] = {}  # 发送AI音频到浏览器
+        self.client2server_tracks: Dict[str, Any] = {}  # 接收浏览器麦克风音频
 
         # 音频处理回调
         self.on_client_connected: Optional[Callable[[str], Awaitable[None]]] = None
@@ -61,14 +61,14 @@ class WebRTCManager:
             self._track_handlers.clear()
 
         # 关闭所有音频轨道
-        for client_id, send_track in list(self.send_tracks.items()):
+        for client_id, server2client_track in list(self.server2client_tracks.items()):
             try:
-                if hasattr(send_track, 'stop'):
-                    send_track.stop()
+                if hasattr(server2client_track, 'stop'):
+                    server2client_track.stop()
             except Exception as e:
-                logger.debug(f"停止发送轨道错误: {e}")
+                logger.debug(f"停止server2client轨道错误: {e}")
         
-        # 接收轨道通常不需要手动停止，由WebRTC自动处理
+        # client2server轨道通常不需要手动停止，由WebRTC自动处理
 
         # 关闭所有peer connections
         for pc in self.peer_connections.values():
@@ -79,8 +79,8 @@ class WebRTCManager:
 
         # 清理所有资源
         self.peer_connections.clear()
-        self.send_tracks.clear()
-        self.recv_tracks.clear()
+        self.server2client_tracks.clear()
+        self.client2server_tracks.clear()
 
         await self.signaling_server.stop()
 
@@ -93,11 +93,11 @@ class WebRTCManager:
         self.peer_connections[client_id] = pc
 
         # 创建发送轨道用于发送AI音频给浏览器 (server2client)
-        send_track = AudioStreamTrack(sample_rate=self.config.sample_rate)
-        self.send_tracks[client_id] = send_track
+        server2client_track = AudioStreamTrack(sample_rate=self.config.sample_rate)
+        self.server2client_tracks[client_id] = server2client_track
 
         # 添加发送轨道到连接
-        pc.addTransceiver(send_track, direction="sendrecv")
+        pc.addTransceiver(server2client_track, direction="sendrecv")
 
         # 设置连接状态变化回调
         @pc.on("connectionstatechange")
@@ -129,8 +129,8 @@ class WebRTCManager:
             logger.info(f"🎤 接收到音频轨道: {client_id} -> {track.kind}")
             if track.kind == "audio":
                 # 存储接收轨道用于获取浏览器麦克风音频
-                self.recv_tracks[client_id] = track
-                logger.info(f"✅ 已保存接收轨道: {client_id}")
+                self.client2server_tracks[client_id] = track
+                logger.info(f"✅ 已保存client2server轨道: {client_id}")
 
     def handle_client_disconnected(self, client_id: str):
         """处理客户端断开连接"""
@@ -149,21 +149,21 @@ class WebRTCManager:
                 logger.debug(f"🛑 已取消音频轨道处理任务: {client_id}")
             del self._track_handlers[client_id]
 
-        # 停止发送轨道
-        if client_id in self.send_tracks:
+        # 停止server2client轨道
+        if client_id in self.server2client_tracks:
             try:
-                send_track = self.send_tracks[client_id]
-                if hasattr(send_track, 'stop'):
-                    send_track.stop()
-                    logger.debug(f"🛑 已停止发送轨道: {client_id}")
+                server2client_track = self.server2client_tracks[client_id]
+                if hasattr(server2client_track, 'stop'):
+                    server2client_track.stop()
+                    logger.debug(f"🛑 已停止server2client轨道: {client_id}")
             except Exception as e:
-                logger.debug(f"停止发送轨道错误: {e}")
-            del self.send_tracks[client_id]
+                logger.debug(f"停止server2client轨道错误: {e}")
+            del self.server2client_tracks[client_id]
 
-        # 清理接收轨道
-        if client_id in self.recv_tracks:
-            logger.debug(f"🗑️ 清理接收轨道: {client_id}")
-            del self.recv_tracks[client_id]
+        # 清理client2server轨道
+        if client_id in self.client2server_tracks:
+            logger.debug(f"🗑️ 清理client2server轨道: {client_id}")
+            del self.client2server_tracks[client_id]
 
         # 清理peer connection
         if client_id in self.peer_connections:
@@ -318,10 +318,20 @@ class WebRTCManager:
     def audio_tracks(self):
         """兼容性属性，返回包含两种轨道的字典"""
         tracks = {}
-        # 添加发送轨道 (server2client)
-        for client_id, track in self.send_tracks.items():
+        # 添加server2client轨道
+        for client_id, track in self.server2client_tracks.items():
             tracks[f"server2client"] = track
-        # 添加接收轨道 (client2server) 
-        for client_id, track in self.recv_tracks.items():
+        # 添加client2server轨道
+        for client_id, track in self.client2server_tracks.items():
             tracks[f"client2server"] = track
         return tracks
+
+    @property
+    def send_tracks(self):
+        """兼容性属性，映射到server2client_tracks"""
+        return self.server2client_tracks
+
+    @property
+    def recv_tracks(self):
+        """兼容性属性，映射到client2server_tracks"""
+        return self.client2server_tracks

@@ -150,7 +150,7 @@ class VoicengineClient:
         await self.ws.send(say_hello_request)
         logger.info(f"requested say-hello")
 
-    async def upload_audio(self, audio: bytes) -> None:
+    async def push_audio(self, audio: bytes) -> None:
         if not self.is_active: return
 
         try:

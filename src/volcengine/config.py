@@ -4,6 +4,9 @@ import pyaudio
 
 from src.audio.type import AudioType, AudioConfig
 from src.config import VOLCENGINE_AUDIO_TYPE, VOLCENGINE_APP_ID, VOLCENGINE_ACCESS_TOKEN, VOLCENGINE_BOT_NAME
+from src.io_adapters.webrtc.constants import (
+    VOLCENGINE_SEND_AUDIO_SAMPLE_RATE, VOLCENGINE_RECV_PCM_AUDIO_SAMPLE_RATE,
+    )
 
 ws_connect_config = {
     "base_url": "wss://openspeech.bytedance.com/api/v3/realtime/dialogue",
@@ -22,33 +25,23 @@ ws_connect_config = {
 - chunk 在使用耳机的时候，要低于1600
 - channels 始终为 1 即可
 """
-input_audio_config = AudioConfig.model_validate(
+send_audio_config = AudioConfig.model_validate(
     {
         "bit_size": pyaudio.paInt16,
         "chunk": 3200,
         "format": "pcm",
         "channels": 1,
-        "sample_rate": 16000,
+        "sample_rate": VOLCENGINE_SEND_AUDIO_SAMPLE_RATE,
         }
     )
 
-ogg_output_audio_config = AudioConfig.model_validate(
+recv_pcm_audio_config = AudioConfig.model_validate(
     {
         "bit_size": pyaudio.paFloat32,
         "chunk": 3200,
         "format": "pcm",
         "channels": 1,
-        "sample_rate": 24000,
-        }
-    )
-
-pcm_output_audio_config = AudioConfig.model_validate(
-    {
-        "bit_size": pyaudio.paFloat32,
-        "chunk": 3200,
-        "format": "pcm",
-        "channels": 1,
-        "sample_rate": 24000,
+        "sample_rate": VOLCENGINE_RECV_PCM_AUDIO_SAMPLE_RATE,
         }
     )
 
@@ -62,5 +55,5 @@ start_session_req = {
 # 开启OGG后，服务器将只返回ogg封装的opus音频，客户端自行解码后播放，性能较高
 if VOLCENGINE_AUDIO_TYPE == AudioType.pcm:
     start_session_req["tts"] = {
-        "audio_config": pcm_output_audio_config.model_dump()
+        "audio_config": recv_pcm_audio_config.model_dump()
         }

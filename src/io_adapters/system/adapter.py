@@ -5,7 +5,7 @@ from src.audio.type import AudioType
 from src.config import VOLCENGINE_AUDIO_TYPE
 from src.io_adapters.base import AdapterBase
 from src.io_adapters.system.system_audio_manager import SystemAudioManager
-from src.volcengine.config import input_audio_config, ogg_output_audio_config
+from src.volcengine.config import send_audio_config, recv_pcm_audio_config
 
 
 class SystemAdapter(AdapterBase):
@@ -15,35 +15,34 @@ class SystemAdapter(AdapterBase):
         super().__init__(config)
 
         self._audio_device = SystemAudioManager()
-        self._input_stream: Stream | None = None
-        self._output_stream: Stream | None = None
-        self.ogg2pcm = Ogg2PcmProcessor(ogg_output_audio_config)
-
+        self._send_stream: Stream | None = None
+        self._recv_stream: Stream | None = None
+        self.ogg2pcm = Ogg2PcmProcessor(recv_pcm_audio_config)
         self.is_running = False
 
     async def start(self):
         self.is_running = True
-        self._input_stream = self._audio_device.open_input_stream()
-        self._output_stream = self._audio_device.open_output_stream()
+        self._send_stream = self._audio_device.open_send_stream()
+        self._recv_stream = self._audio_device.open_recv_stream()
         if self.on_prepared: await self.on_prepared()
 
     async def get_next_client_chunk(self) -> bytes | None:
-        if self.is_running and self._input_stream.is_active():
-            data = self._input_stream.read(input_audio_config.chunk, exception_on_overflow=False)
-            return data
+        if self.is_running and self._send_stream.is_active():
+            chunk = self._send_stream.read(send_audio_config.chunk, exception_on_overflow=False)
+            return chunk
 
     async def on_get_next_server_chunk(self, chunk: bytes) -> None:
-        if self.is_running and self._output_stream.is_active():
+        if self.is_running and self._recv_stream.is_active():
             if VOLCENGINE_AUDIO_TYPE == AudioType.ogg:
                 chunk = self.ogg2pcm.process(chunk)
-            self._output_stream.write(chunk)
+            self._recv_stream.write(chunk)
 
     async def stop(self):
         self.is_running = False
-        if self._input_stream:
-            self._input_stream.close()
-        if self._output_stream:
-            self._output_stream.close()
+        if self._send_stream:
+            self._send_stream.close()
+        if self._recv_stream:
+            self._recv_stream.close()
 
     def display_welcome_screen(self) -> None:
         """显示欢迎界面"""

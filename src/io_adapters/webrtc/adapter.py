@@ -10,9 +10,9 @@ from src.audio.type import AudioType
 from src.config import VOLCENGINE_AUDIO_TYPE
 from src.io_adapters.base import AdapterBase
 from src.io_adapters.webrtc.config import WebrtcConfig
-from src.io_adapters.webrtc.constants import VOLCENGINE_TTS_MODE_SAMPLE_RATE, VOLCENGINE_TTS_MODE_SOURCE_DTYPE
+from src.io_adapters.webrtc.constants import VOLCENGINE_RECV_PCM_AUDIO_SAMPLE_RATE, VOLCENGINE_RECV_PCM_AUDIO_SOURCE_DTYPE
 from src.io_adapters.webrtc.webrtc_manager import WebRTCManager
-from src.volcengine.config import ogg_output_audio_config
+from src.volcengine.config import recv_pcm_audio_config
 
 logger = logging.getLogger(__name__)
 
@@ -35,23 +35,26 @@ class WebRTCAdapter(AdapterBase):
         self._webrtc_manager.set_on_client_connected(self.on_client_connected)
 
         # 初始化音频处理器
-        self.ogg2pcm = Ogg2PcmProcessor(ogg_output_audio_config)
-        self.pcm_resampler = PcmResamplerProcessor(
-            VOLCENGINE_TTS_MODE_SAMPLE_RATE, VOLCENGINE_TTS_MODE_SOURCE_DTYPE, self.config.sample_rate, "int16"
-            )
+        self.ogg2pcm = Ogg2PcmProcessor(recv_pcm_audio_config)
         self.frame2pcm = Frame2PcmProcessor(self.config.sample_rate, "int16", 20)
+        self.pcm_resampler_server2client = PcmResamplerProcessor(
+            VOLCENGINE_RECV_PCM_AUDIO_SAMPLE_RATE, VOLCENGINE_RECV_PCM_AUDIO_SOURCE_DTYPE, self.config.sample_rate, "int16"
+            )
+        self.pcm_resampler_client2server = PcmResamplerProcessor(
+            self.config.sample_rate, "int16", VOLCENGINE_RECV_PCM_AUDIO_SAMPLE_RATE, VOLCENGINE_RECV_PCM_AUDIO_SOURCE_DTYPE,
+            )
 
     @property
-    def first_send_track(self):
-        client_id = next(iter(self._webrtc_manager.send_tracks))
-        send_track = self._webrtc_manager.send_tracks[client_id]
-        return send_track
+    def first_server2client_track(self):
+        client_id = next(iter(self._webrtc_manager.server2client_tracks))
+        server2client_track = self._webrtc_manager.server2client_tracks[client_id]
+        return server2client_track
 
     @property
-    def first_recv_track(self):
-        client_id = next(iter(self._webrtc_manager.recv_tracks))
-        recv_track = self._webrtc_manager.recv_tracks[client_id]
-        return recv_track
+    def first_client2server_track(self):
+        client_id = next(iter(self._webrtc_manager.client2server_tracks))
+        client2server_track = self._webrtc_manager.client2server_tracks[client_id]
+        return client2server_track
 
     async def start(self) -> None:
         """在单独线程中启动 WebRTC 管理器"""
@@ -67,11 +70,11 @@ class WebRTCAdapter(AdapterBase):
             # processors
             if VOLCENGINE_AUDIO_TYPE == AudioType.ogg:
                 chunk = self.ogg2pcm.process(chunk)
-            chunk = self.pcm_resampler.process(chunk)
+            chunk = self.pcm_resampler_server2client.process(chunk)
 
             # 发送到WebRTC客户端
-            if self._webrtc_manager.send_tracks and self.first_send_track:
-                await self.first_send_track.add_pcm_data(chunk)
+            if self.first_server2client_track:
+                await self.first_server2client_track.add_pcm_data(chunk)
 
         except Exception as e:
             logger.error(f"failed to get next server chunk, reason: {e}")
@@ -81,12 +84,11 @@ class WebRTCAdapter(AdapterBase):
         获取用户音频输入 (client2server)
         """
         try:
-            if self.is_running:
-                # 直接从接收轨道获取音频数据
-                if self._webrtc_manager.recv_tracks and self.first_recv_track:
-                    frame: AudioFrame = await asyncio.wait_for(self.first_recv_track.recv(), timeout=1.0)
-                    chunk = self.frame2pcm.process(frame)
-                    return chunk
+            if self.is_running and self.first_client2server_track:
+                frame: AudioFrame = await asyncio.wait_for(self.first_client2server_track.recv(), timeout=1.0)
+                chunk = self.frame2pcm.process(frame)
+                chunk = self.pcm_resampler_client2server.process(chunk)
+                return chunk
         except Exception as e:
             logger.debug(f"failed to get next client chunk, reason: {e}")
         finally:

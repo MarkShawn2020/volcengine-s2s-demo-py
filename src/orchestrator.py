@@ -191,8 +191,8 @@ class Orchestrator:
                 logger.debug(f"pushing ({seq})")
                 chunk = await self.audio_adapter.get_next_client_chunk()
                 if chunk:
-                    await self.volcengine_client.upload_audio(chunk)
-                await asyncio.sleep(0.5)
+                    await self.volcengine_client.push_audio(chunk)
+                await asyncio.sleep(0.01)
         except Exception as e:
             logger.warning(f"failed to push, reason: {e}")
 
@@ -206,7 +206,7 @@ class Orchestrator:
             """处理音频输入数据"""
             if not self.is_running or not self.volcengine_client.is_active:
                 return
-            asyncio.create_task(self.volcengine_client.upload_audio(audio_data))
+            asyncio.create_task(self.volcengine_client.push_audio(audio_data))
 
         def on_adapter_prepared() -> None:
             """音频IO准备就绪回调"""

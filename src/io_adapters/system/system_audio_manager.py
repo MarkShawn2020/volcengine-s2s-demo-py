@@ -4,9 +4,7 @@ import logging
 import pyaudio
 from typing_extensions import Optional
 
-from src.audio.type import AudioType
-from src.config import VOLCENGINE_AUDIO_TYPE
-from src.volcengine.config import input_audio_config, pcm_output_audio_config, ogg_output_audio_config
+from src.volcengine.config import send_audio_config, recv_pcm_audio_config
 
 logger = logging.getLogger(__name__)
 
@@ -16,25 +14,23 @@ class SystemAudioManager:
 
     def __init__(self):
         logger.info("initializing")
-        self.input_config = input_audio_config
-        self.output_config = ogg_output_audio_config
-        if VOLCENGINE_AUDIO_TYPE == AudioType.pcm:
-            self.output_config = pcm_output_audio_config
+        self.send_audio_config = send_audio_config
+        self.recv_audio_config = recv_pcm_audio_config
         self.pyaudio = pyaudio.PyAudio()
         self.input_stream: Optional[pyaudio.Stream] = None
         self.output_stream: Optional[pyaudio.Stream] = None
         logger.info("initialized")
 
-    def open_input_stream(self) -> pyaudio.Stream:
+    def open_send_stream(self) -> pyaudio.Stream:
         """打开音频输入流"""
         default_input_device = self.pyaudio.get_default_input_device_info()
         logger.info(f"opening input stream from device(name={default_input_device['name']})")
         params = {
             "input_device_index": default_input_device["index"],
-            "channels": self.input_config.channels,
-            "rate": self.input_config.sample_rate,
-            "frames_per_buffer": self.input_config.chunk,
-            "format": self.input_config.bit_size,
+            "channels": self.send_audio_config.channels,
+            "rate": self.send_audio_config.sample_rate,
+            "frames_per_buffer": self.send_audio_config.chunk,
+            "format": self.send_audio_config.bit_size,
             "input": True,  # Add low latency settings for AirPods compatibility
             "input_host_api_specific_stream_info": None
             }
@@ -43,16 +39,16 @@ class SystemAudioManager:
         logger.info("opened input stream")
         return self.input_stream
 
-    def open_output_stream(self) -> pyaudio.Stream:
+    def open_recv_stream(self) -> pyaudio.Stream:
         """打开音频输出流"""
         default_output_device = self.pyaudio.get_default_output_device_info()
         logger.info(f"opening output stream from device(name={default_output_device['name']})")
         params = {
-            "format": self.output_config.bit_size,
-            "channels": self.output_config.channels,
-            "rate": self.output_config.sample_rate,
+            "format": self.recv_audio_config.bit_size,
+            "channels": self.recv_audio_config.channels,
+            "rate": self.recv_audio_config.sample_rate,
             "output": True,
-            "frames_per_buffer": self.output_config.chunk,
+            "frames_per_buffer": self.recv_audio_config.chunk,
             "output_device_index": default_output_device["index"],
             }
         logger.debug(f"输出参数：{json.dumps(params, indent=2)}")
