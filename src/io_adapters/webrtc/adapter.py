@@ -10,7 +10,12 @@ from src.audio.type import AudioType
 from src.config import VOLCENGINE_AUDIO_TYPE
 from src.io_adapters.base import AdapterBase
 from src.io_adapters.webrtc.config import WebrtcConfig
-from src.io_adapters.webrtc.constants import VOLCENGINE_RECV_PCM_AUDIO_SAMPLE_RATE, VOLCENGINE_RECV_PCM_AUDIO_SOURCE_DTYPE
+from src.io_adapters.webrtc.constants import (
+    VOLCENGINE_RECV_PCM_AUDIO_SAMPLE_RATE,
+    VOLCENGINE_RECV_PCM_AUDIO_SOURCE_DTYPE,
+    VOLCENGINE_SEND_AUDIO_SAMPLE_RATE,
+    VOLCENGINE_SEND_AUDIO_SOURCE_DTYPE,
+    )
 from src.io_adapters.webrtc.webrtc_manager import WebRTCManager
 from src.volcengine.config import recv_pcm_audio_config
 
@@ -36,13 +41,14 @@ class WebRTCAdapter(AdapterBase):
 
         # 初始化音频处理器
         self.ogg2pcm = Ogg2PcmProcessor(recv_pcm_audio_config)
-        self.frame2pcm = Frame2PcmProcessor(self.config.sample_rate, "int16", 20)
         self.pcm_resampler_server2client = PcmResamplerProcessor(
-            VOLCENGINE_RECV_PCM_AUDIO_SAMPLE_RATE, VOLCENGINE_RECV_PCM_AUDIO_SOURCE_DTYPE, self.config.sample_rate, "int16"
+            VOLCENGINE_RECV_PCM_AUDIO_SAMPLE_RATE,
+            VOLCENGINE_RECV_PCM_AUDIO_SOURCE_DTYPE,
+            self.config.sample_rate,
+            "int16"
             )
-        self.pcm_resampler_client2server = PcmResamplerProcessor(
-            self.config.sample_rate, "int16", VOLCENGINE_RECV_PCM_AUDIO_SAMPLE_RATE, VOLCENGINE_RECV_PCM_AUDIO_SOURCE_DTYPE,
-            )
+
+        self.frame2pcm = Frame2PcmProcessor(VOLCENGINE_SEND_AUDIO_SAMPLE_RATE, VOLCENGINE_SEND_AUDIO_SOURCE_DTYPE, 200)
 
     @property
     def first_server2client_track(self):
@@ -87,12 +93,9 @@ class WebRTCAdapter(AdapterBase):
             if self.is_running and self.first_client2server_track:
                 frame: AudioFrame = await asyncio.wait_for(self.first_client2server_track.recv(), timeout=1.0)
                 chunk = self.frame2pcm.process(frame)
-                chunk = self.pcm_resampler_client2server.process(chunk)
                 return chunk
         except Exception as e:
             logger.debug(f"failed to get next client chunk, reason: {e}")
-        finally:
-            await asyncio.sleep(0.1)
 
     async def on_client_connected(self, client_id: str) -> None:
         """处理WebRTC客户端连接"""

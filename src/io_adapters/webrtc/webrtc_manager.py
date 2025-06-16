@@ -20,7 +20,7 @@ class WebRTCManager:
         self.peer_connections: Dict[str, RTCPeerConnection] = {}
         # 分离发送轨道和接收轨道
         self.server2client_tracks: Dict[str, AudioStreamTrack] = {}  # 发送AI音频到浏览器
-        self.client2server_tracks: Dict[str, Any] = {}  # 接收浏览器麦克风音频
+        self.client2server_tracks: Dict[str, AudioStreamTrack] = {}  # 接收浏览器麦克风音频
 
         # 音频处理回调
         self.on_client_connected: Optional[Callable[[str], Awaitable[None]]] = None

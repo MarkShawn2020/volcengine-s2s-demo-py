@@ -161,8 +161,8 @@ class VoicengineClient:
             payload_bytes = gzip.compress(audio)
             task_request.extend((len(payload_bytes)).to_bytes(4, 'big'))  # payload size(4 bytes)
             task_request.extend(payload_bytes)
-            await self.ws.send(task_request)
-            logger.debug(f"🏠 --> 📡 {len(payload_bytes)} bytes")
+            push_result = await self.ws.send(task_request)
+            logger.debug(f"🏠 --> 📡 {len(payload_bytes)} bytes, result: {push_result}")
         except Exception as e:
             logger.warning(f"failed to upload audio, reason: {e}")
 

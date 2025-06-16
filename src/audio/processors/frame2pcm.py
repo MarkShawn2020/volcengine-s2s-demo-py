@@ -12,18 +12,18 @@ class Frame2PcmProcessor:
     处理输入的音频帧（例如从WebRTC），将其转换为目标格式。
     """
 
-    def __init__(self, from_sample_rate: int = 48000, from_dtype: str = 'int16', buffer_duration_ms: int = 20):
-        self.from_sample_rate = from_sample_rate
-        self.from_dtype = from_dtype
+    def __init__(self, target_sample_rate: int = 48000, target_dtype: str = 'int16', buffer_duration_ms: int = 20):
+        self.from_sample_rate = target_sample_rate
+        self.from_dtype = target_dtype
         self.buffer_duration_ms = buffer_duration_ms
 
         # 音频缓冲区 - 累积小的音频块
         self.buffer = np.array([], dtype=np.int16)
-        self.min_buffer_samples = int(from_sample_rate * buffer_duration_ms / 1000)  # 例如100ms的音频
+        self.min_buffer_samples = int(target_sample_rate * buffer_duration_ms / 1000)  # 例如100ms的音频
 
         logger.info(
             f"音频输入处理器已初始化: "
-            f"目标采样率={from_sample_rate}Hz, 目标格式={from_dtype}, "
+            f"目标采样率={target_sample_rate}Hz, 目标格式={target_dtype}, "
             f"缓冲时长={buffer_duration_ms}ms ({self.min_buffer_samples} samples)"
             )
 
