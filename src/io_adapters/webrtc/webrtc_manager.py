@@ -3,15 +3,9 @@ import logging
 from typing import Dict, Optional, Callable, Any, Awaitable
 
 from aiortc import RTCPeerConnection, RTCSessionDescription, RTCIceCandidate
-from aiortc.rtcrtpreceiver import RemoteStreamTrack
-from av.audio.frame import AudioFrame
 
 from src.audio.audio_stream_track import AudioStreamTrack
-from src.audio.processors import PcmResamplerProcessor
-from src.audio.processors.frame2pcm import Frame2PcmProcessor
-from src.audio.type import AudioType
 from src.io_adapters.webrtc.config import WebrtcConfig
-from src.io_adapters.webrtc.constants import VOLCENGINE_TTS_MODE_SAMPLE_RATE, VOLCENGINE_TTS_MODE_SOURCE_DTYPE
 from src.io_adapters.webrtc.webrtc_signaling_server import WebRTCSignalingServer
 
 logger = logging.getLogger(__name__)
@@ -20,20 +14,14 @@ logger = logging.getLogger(__name__)
 class WebRTCManager:
     """WebRTC管理器，处理与浏览器的WebRTC连接"""
 
-    def __init__(self, config: WebrtcConfig):
+    def __init__(self, config: WebrtcConfig) -> None:
         self.config = config
         self.signaling_server = WebRTCSignalingServer(self.config)
         self.peer_connections: Dict[str, RTCPeerConnection] = {}
         self.audio_tracks: Dict[str, AudioStreamTrack] = {}
 
-        self.frame2pcm = Frame2PcmProcessor(self.config.sample_rate, "int16", 20)  # 创建处理器实例
-        self.volcengine2browser_pcm_resampler = PcmResamplerProcessor(
-            VOLCENGINE_TTS_MODE_SAMPLE_RATE, VOLCENGINE_TTS_MODE_SOURCE_DTYPE, self.config.sample_rate, "int16"
-            )
-
         # 音频处理回调
-        self.audio_input_callback: Optional[Callable[[bytes], Awaitable[None]]] = None
-        self.client_connected_callback: Optional[Callable[[str], Awaitable[None]]] = None
+        self.on_client_connected: Optional[Callable[[str], Awaitable[None]]] = None
 
         # 管理器运行状态
         self.is_running = False
@@ -91,71 +79,6 @@ class WebRTCManager:
 
         await self.signaling_server.stop()
 
-    async def handle_client2server(self, client_id: str, track: RemoteStreamTrack):
-        """
-        从音频轨道接收帧，并委托给 AudioFrameProcessor 处理。
-        (此版本更健壮、更简洁)
-        """
-        logger.info(f"🎵 开始处理音频轨道: {client_id}, track: {track}")
-        pc = self.peer_connections.get(client_id)
-        if not pc:
-            logger.warning(f"处理音频轨道时，找不到 PeerConnection: {client_id}")
-            return
-
-        try:
-            while self.is_running and pc.connectionState in ["new", "connecting", "connected"]:
-                try:
-                    frame: AudioFrame = await asyncio.wait_for(track.recv(), timeout=1.0)
-                    # --- 核心委托步骤 ---
-                    chunk = self.frame2pcm.process(frame)
-                    # chunk = self.volcengine2browser_pcm_resampler.process(chunk)
-                    # logger.debug(f"🎤 处理音频帧: 输入={len(frame.to_ndarray().tobytes()) if frame else 0} bytes,
-                    # 输出={len(processed_data) if processed_data else 0} bytes")
-
-                    if chunk and self.audio_input_callback:
-                        # logger.debug(f"🎯 调用音频输入回调: {len(processed_data)} bytes")
-                        # 将处理好的、符合ASR要求的字节流传递给上层
-                        await self.audio_input_callback(chunk)
-                        await asyncio.sleep(0.01)
-                    elif not self.audio_input_callback:
-                        logger.warning("⚠️ 音频输入回调未设置")
-                    elif not chunk:
-                        pass  # logger.debug("处理后的音频数据为空，跳过回调")
-                except asyncio.TimeoutError:
-                    logger.debug(f"从客户端 {client_id} 接收音频超时，继续等待...")
-                    if pc.connectionState not in ["new", "connecting", "connected"]:
-                        logger.warning(f"客户端 {client_id} 连接状态恶化 ({pc.connectionState})，停止接收。")
-                        break
-                    continue
-                except asyncio.CancelledError:
-                    logger.info(f"音频轨道接收任务被取消: {client_id}")
-                    break
-
-
-
-        except Exception as e:
-            logger.error(f"❌ 处理音频轨道时发生意外错误 ({client_id}): {e}", exc_info=True)
-        finally:
-            logger.info(f"🔚 音频轨道处理循环结束: {client_id}")
-
-
-    # 这个也变成 async def
-    async def handle_server2clients(self, pcm_data: bytes, audio_type: AudioType):
-        async def send_audio_to_client(client_id: str, pcm_data: bytes):
-            if client_id in self.audio_tracks:
-                track = self.audio_tracks[client_id]
-                await track.add_p_c_m_data(pcm_data)
-            else:
-                logger.warning(f"⚠️ 客户端音频轨道不存在: {client_id}")
-
-        if not pcm_data or audio_type != AudioType.pcm:
-            return
-
-        # 使用 asyncio.gather 并行地向所有客户端发送
-        tasks = [send_audio_to_client(client_id, pcm_data) for client_id in self.audio_tracks.keys()]
-        if tasks:
-            await asyncio.gather(*tasks)
-
     def handle_client_connected(self, client_id: str):
         """处理客户端连接"""
         logger.info(f"🔗 WebRTC客户端连接: {client_id}")
@@ -192,18 +115,15 @@ class WebRTCManager:
             elif state == "connected":
                 logger.info(f"✅ WebRTC连接已建立: {client_id}")
                 # 触发客户端连接回调
-                if self.client_connected_callback:
-                    asyncio.create_task(self.client_connected_callback(client_id))
+                if self.on_client_connected:
+                    asyncio.create_task(self.on_client_connected(client_id))
 
         # 设置接收音频轨道回调
         @pc.on("track")
         def on_track(track):
-            logger.info(f"🎤 接收到音频轨道: {client_id} -> {track.kind}")
-            if track.kind == "audio":
-                # 记录音频轨道，用于重连时的清理
-                self._track_handlers = getattr(self, '_track_handlers', {})
-                task = asyncio.create_task(self.handle_client2server(client_id, track))
-                self._track_handlers[client_id] = task
+            logger.info(
+                f"🎤 接收到音频轨道: {client_id} -> {track.kind}"
+                )  # if track.kind == "audio":  #     self.audio_tracks[client_id] = track
 
     def handle_client_disconnected(self, client_id: str):
         """处理客户端断开连接"""
@@ -354,13 +274,8 @@ class WebRTCManager:
         except Exception as e:
             logger.error(f"❌ 添加ICE候选错误: {e}")
 
-    def set_audio_input_callback(self, callback: Callable[[bytes], Awaitable[None]]):
-        """设置音频输入回调函数"""
-        self.audio_input_callback = callback
-
-    def set_client_connected_callback(self, callback: Callable[[str], Awaitable[None]]):
-        """设置客户端连接回调函数"""
-        self.client_connected_callback = callback
+    def set_on_client_connected(self, callback: Callable[[str], Awaitable[None]]):
+        self.on_client_connected = callback
 
     def _modify_sdp_for_16khz(self, sdp: str) -> str:
         """修改SDP以支持16000采样率"""

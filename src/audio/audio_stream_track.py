@@ -35,7 +35,7 @@ class AudioStreamTrack(MediaStreamTrack):
         self._is_stopped.set()
         logger.info("AudioStreamTrack 已标记为停止。")
 
-    async def add_p_c_m_data(self, pcm_s16le_data: bytes):
+    async def add_pcm_data(self, pcm_s16le_data: bytes):
         async with self._buffer_lock:
             self._buffer.extend(pcm_s16le_data)
 

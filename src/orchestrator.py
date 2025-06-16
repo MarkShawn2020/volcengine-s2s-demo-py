@@ -23,6 +23,7 @@ class Orchestrator:
 
         # 初始化音频IO
         self.audio_adapter = self._create_audio_adapter(ADAPTER_MODE)
+        self.audio_adapter.set_on_prepared(self._request_say_hello)
 
         # 会话控制
         self.is_running = False
@@ -62,8 +63,8 @@ class Orchestrator:
                 # 根据官方代码经验
                 # receiver 里不要加任何的await，因为recv本来就在等
                 # sender里要加一点await，否则cpu会过高
-                tg.create_task(self.handle_pull())
-                tg.create_task(self.handle_push())
+                tg.create_task(self.thread_server2client())
+                tg.create_task(self.thread_client2server())
                 logger.info("started tasks")
         except Exception as e:
             logger.error(f"failed to start, reason: {e}")
@@ -83,18 +84,12 @@ class Orchestrator:
         except Exception as e:
             logger.error(f"failed to stop, reason: {e}")
 
-    async def handle_pull(self):
+    async def thread_server2client(self):
         seq = 0
         try:
             while self.is_running and self.volcengine_client.is_active:
-                # 检查是否需要发送say-hello
-                if self._should_send_hello:
-                    self._should_send_hello = False
-                    logger.info("🚀 发送WebRTC连接后的SayHello")
-                    await self.volcengine_client.request_say_hello(VOLCENGINE_WELCOME)
-                
                 seq += 1
-                logger.debug(f"handing receiver ({seq})")
+                logger.debug(f"pulling ({seq})")
                 response = await self.volcengine_client.on_response()
                 if response is None:
                     # 超时或连接问题，继续循环检查is_running状态
@@ -112,7 +107,7 @@ class Orchestrator:
 
                     if isinstance(payload_msg, bytes):
                         # 【重要】当中控收到了AI音频，交给代理器处理
-                        await self.audio_adapter.on_pull(payload_msg)
+                        await self.audio_adapter.on_get_next_server_chunk(payload_msg)
 
                     elif isinstance(payload_msg, dict):
                         ai_content = payload_msg.get('content', '')
@@ -130,9 +125,6 @@ class Orchestrator:
                     elif event == ServerEvent.SESSION_STARTED:
                         dialog_id = payload_msg.get('dialog_id', '')
                         logger.info(f"🚀 会话已启动 (Dialog ID: {dialog_id[:8]}...)")
-                        # 对于system模式立即发送say-hello，WebRTC模式等待连接建立
-                        if ADAPTER_MODE == AdapterMode.system:
-                            await self.volcengine_client.request_say_hello(VOLCENGINE_WELCOME)
 
                     elif event == ServerEvent.SESSION_FINISHED:
                         logger.info("✅ 会话已结束")
@@ -189,20 +181,23 @@ class Orchestrator:
                     raise Exception("服务器错误")
 
         except Exception as e:
-            logger.warning(f"failed to receive, reason: {e}")
+            logger.warning(f"failed to pull, reason: {e}")
 
-    async def handle_push(self):
+    async def thread_client2server(self):
         seq = 0
         try:
             while self.is_running and self.audio_adapter.is_running:
-                chunk = await self.audio_adapter.on_push()
+                seq += 1
+                logger.debug(f"pushing ({seq})")
+                chunk = await self.audio_adapter.get_next_client_chunk()
                 if chunk:
-                    seq += 1
-                    logger.debug(f"handing sender ({seq})")
                     await self.volcengine_client.upload_audio(chunk)
-                await asyncio.sleep(0.01)
+                await asyncio.sleep(0.5)
         except Exception as e:
-            logger.warning(f"failed to send, reason: {e}")
+            logger.warning(f"failed to push, reason: {e}")
+
+    async def _request_say_hello(self):
+        await self.volcengine_client.request_say_hello(VOLCENGINE_WELCOME)
 
     def _create_audio_adapter(self, adapter_mode: AdapterMode) -> AdapterBase:
         """创建音频IO实例"""
@@ -309,7 +304,7 @@ class Orchestrator:
             if hasattr(self.audio_adapter, '_webrtc_manager') and self.audio_adapter._webrtc_manager:
                 self.audio_adapter._webrtc_manager.is_running = False
                 logger.info("已设置WebRTC停止标志")
-        
+
         # 对于Python信号处理，我们需要安排异步停止
         # 创建一个新的线程来执行停止操作
         import threading
@@ -322,10 +317,10 @@ class Orchestrator:
                 loop.close()
             except Exception as e:
                 logger.error(f"异步停止失败: {e}")
-        
+
         stop_thread = threading.Thread(target=async_stop, daemon=True)
         stop_thread.start()
-        
+
         # 给线程一些时间来清理
         stop_thread.join(timeout=3.0)
         logger.info("信号处理完成")

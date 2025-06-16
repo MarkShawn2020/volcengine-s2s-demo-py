@@ -25,13 +25,14 @@ class SystemAdapter(AdapterBase):
         self.is_running = True
         self._input_stream = self._audio_device.open_input_stream()
         self._output_stream = self._audio_device.open_output_stream()
+        if self.on_prepared: await self.on_prepared()
 
-    async def on_push(self) -> bytes | None:
+    async def get_next_client_chunk(self) -> bytes | None:
         if self.is_running and self._input_stream.is_active():
             data = self._input_stream.read(input_audio_config.chunk, exception_on_overflow=False)
             return data
 
-    async def on_pull(self, chunk: bytes) -> None:
+    async def on_get_next_server_chunk(self, chunk: bytes) -> None:
         if self.is_running and self._output_stream.is_active():
             if VOLCENGINE_AUDIO_TYPE == AudioType.ogg:
                 chunk = self.ogg2pcm.process(chunk)

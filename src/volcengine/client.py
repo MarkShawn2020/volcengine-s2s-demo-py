@@ -174,11 +174,11 @@ class VoicengineClient:
         if not self.is_active: return None
 
         try:
-            logger.debug("waiting for response")
+            # logger.debug("waiting for response")
             # 设置超时，让程序能够定期检查is_running状态
             response = await asyncio.wait_for(self.ws.recv(), timeout=1.0)
             data = protocol.parse_response(response)
-            logger.debug(f"on parsed-response")
+            # logger.debug(f"on parsed-response")
             return data
         except asyncio.TimeoutError:
             # 超时时返回None，让调用方重新检查is_running状态
