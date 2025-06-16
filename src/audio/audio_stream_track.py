@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from fractions import Fraction  # <--- 1. 导入 Fraction 类
+from fractions import Fraction
 
 from aiortc import MediaStreamTrack
 from av import AudioFrame

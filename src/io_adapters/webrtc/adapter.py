@@ -48,19 +48,8 @@ class WebRTCAdapter(AdapterBase):
             "int16"
             )
 
-        self.frame2pcm = Frame2PcmProcessor(VOLCENGINE_SEND_AUDIO_SAMPLE_RATE, VOLCENGINE_SEND_AUDIO_SOURCE_DTYPE, 200)
+        self.frame2pcm = Frame2PcmProcessor(VOLCENGINE_SEND_AUDIO_SAMPLE_RATE, VOLCENGINE_SEND_AUDIO_SOURCE_DTYPE, 20)
 
-    @property
-    def first_server2client_track(self):
-        client_id = next(iter(self._webrtc_manager.server2client_tracks))
-        server2client_track = self._webrtc_manager.server2client_tracks[client_id]
-        return server2client_track
-
-    @property
-    def first_client2server_track(self):
-        client_id = next(iter(self._webrtc_manager.client2server_tracks))
-        client2server_track = self._webrtc_manager.client2server_tracks[client_id]
-        return client2server_track
 
     async def start(self) -> None:
         """在单独线程中启动 WebRTC 管理器"""
@@ -136,3 +125,14 @@ class WebRTCAdapter(AdapterBase):
             )
         print("请在浏览器中打开测试页面进行连接...")
         print("=" * 80 + "\n")
+    @property
+    def first_server2client_track(self):
+        client_id = next(iter(self._webrtc_manager.server2client_tracks))
+        server2client_track = self._webrtc_manager.server2client_tracks[client_id]
+        return server2client_track
+
+    @property
+    def first_client2server_track(self):
+        client_id = next(iter(self._webrtc_manager.client2server_tracks))
+        client2server_track = self._webrtc_manager.client2server_tracks[client_id]
+        return client2server_track

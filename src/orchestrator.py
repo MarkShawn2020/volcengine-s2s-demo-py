@@ -188,7 +188,7 @@ class Orchestrator:
                 chunk = await self.audio_adapter.get_next_client_chunk()
                 if chunk:
                     await self.volcengine_client.push_audio(chunk)
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(0.01)
         except Exception as e:
             logger.warning(f"failed to push, reason: {e}")
 
