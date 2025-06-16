@@ -2,7 +2,6 @@ import asyncio
 import logging
 from asyncio import Queue
 
-import numpy as np
 from av.audio import AudioFrame
 
 from src.audio.processors import Ogg2PcmProcessor, PcmResamplerProcessor
@@ -42,6 +41,18 @@ class WebRTCAdapter(AdapterBase):
             )
         self.frame2pcm = Frame2PcmProcessor(self.config.sample_rate, "int16", 20)
 
+    @property
+    def first_send_track(self):
+        client_id = next(iter(self._webrtc_manager.send_tracks))
+        send_track = self._webrtc_manager.send_tracks[client_id]
+        return send_track
+
+    @property
+    def first_recv_track(self):
+        client_id = next(iter(self._webrtc_manager.recv_tracks))
+        recv_track = self._webrtc_manager.recv_tracks[client_id]
+        return recv_track
+
     async def start(self) -> None:
         """在单独线程中启动 WebRTC 管理器"""
         if self.is_running: return
@@ -49,7 +60,7 @@ class WebRTCAdapter(AdapterBase):
         await self._webrtc_manager.start()
 
     async def on_get_next_server_chunk(self, chunk: bytes) -> None:
-        """播放AI回复音频"""
+        """播放AI回复音频 (server2client)"""
         if not self.is_running or not chunk: return
 
         try:
@@ -59,23 +70,21 @@ class WebRTCAdapter(AdapterBase):
             chunk = self.pcm_resampler.process(chunk)
 
             # 发送到WebRTC客户端
-            server2client_track = self._webrtc_manager.audio_tracks.get('server2client')
-            if server2client_track:
-                await server2client_track.add_pcm_data(chunk)
+            if self._webrtc_manager.send_tracks and self.first_send_track:
+                await self.first_send_track.add_pcm_data(chunk)
 
         except Exception as e:
             logger.error(f"failed to get next server chunk, reason: {e}")
 
     async def get_next_client_chunk(self) -> bytes | None:
         """
-        获取用户音频输入
+        获取用户音频输入 (client2server)
         """
         try:
             if self.is_running:
-                # todo: 未来考虑多用户多track怎么做，目前就一个
-                track = self._webrtc_manager.audio_tracks.get("client2server")
-                if track:
-                    frame: AudioFrame = await asyncio.wait_for(track.recv(), timeout=1.0)
+                # 直接从接收轨道获取音频数据
+                if self._webrtc_manager.recv_tracks and self.first_recv_track:
+                    frame: AudioFrame = await asyncio.wait_for(self.first_recv_track.recv(), timeout=1.0)
                     chunk = self.frame2pcm.process(frame)
                     return chunk
         except Exception as e:
