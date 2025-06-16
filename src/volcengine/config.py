@@ -21,14 +21,14 @@ ws_connect_config = {
 
 """
 【重要】
-- bitsize（如果指定tts回复，则要f32，否则i16）
+- bitsize（如果指定tts/pcm回复，则要f32，否则i16）
 - chunk 在使用耳机的时候，要低于1600
 - channels 始终为 1 即可
 """
 send_audio_config = AudioConfig.model_validate(
     {
         "bit_size": pyaudio.paInt16,
-        "chunk": 3200,
+        "chunk": 1600,
         "format": "pcm",
         "channels": 1,
         "sample_rate": VOLCENGINE_SEND_AUDIO_SAMPLE_RATE,
