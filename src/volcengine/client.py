@@ -156,19 +156,17 @@ class VoicengineClient:
         try:
             task_request = bytearray(
                 protocol.generate_header(
-                    message_type=protocol.CLIENT_AUDIO_ONLY_REQUEST, 
-                    serial_method=protocol.NO_SERIALIZATION,
-                    compression_type=protocol.NO_COMPRESSION  # 不压缩音频数据
+                    message_type=protocol.CLIENT_AUDIO_ONLY_REQUEST, serial_method=protocol.NO_SERIALIZATION
                     )
                 )
             task_request.extend(int(200).to_bytes(4, 'big'))
             task_request.extend((len(self.session_id)).to_bytes(4, 'big'))
             task_request.extend(str.encode(self.session_id))
-            # 直接使用原始音频数据，不压缩
-            task_request.extend((len(audio)).to_bytes(4, 'big'))
-            task_request.extend(audio)
+            payload_bytes = gzip.compress(audio)
+            task_request.extend((len(payload_bytes)).to_bytes(4, 'big'))  # payload size(4 bytes)
+            task_request.extend(payload_bytes)
             push_result = await self.ws.send(task_request)
-            logger.debug(f"🏠 --> 📡 {len(audio)} bytes (uncompressed)")
+            logger.debug(f"🏠 --> 📡 {len(payload_bytes)} bytes, result: {push_result}")
         except Exception as e:
             logger.warning(f"failed to upload audio, reason: {e}")
 

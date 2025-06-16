@@ -160,7 +160,7 @@ class UnifiedAudioApp:
         max_failures = 10
         
         # 创建语音活动检测器
-        vad = VoiceActivityDetector(threshold=0.005, min_speech_frames=2)
+        vad = VoiceActivityDetector(threshold=0.001, min_speech_frames=2)
         
         while not self.stop_event.is_set() and self.adapter and self.adapter.is_connected:
             try:
@@ -169,7 +169,7 @@ class UnifiedAudioApp:
                 audio_count += 1
                 
                 # 检测语音活动
-                should_send = vad.process_frame(audio_chunk)
+                should_send = True # vad.process_frame(audio_chunk)
                 
                 if should_send:
                     # 发送音频数据
