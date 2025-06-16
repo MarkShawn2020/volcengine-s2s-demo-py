@@ -17,8 +17,11 @@ class SystemAdapter(AdapterBase):
         self._audio_device = SystemAudioManager()
         self._send_stream: Stream | None = None
         self._recv_stream: Stream | None = None
-        self.ogg2pcm = Ogg2PcmProcessor(recv_pcm_audio_config)
         self.is_running = False
+
+        self.server2client_pipeline = []
+        if VOLCENGINE_AUDIO_TYPE == AudioType.ogg:
+            self.server2client_pipeline.append(Ogg2PcmProcessor(recv_pcm_audio_config))
 
     async def start(self):
         self.is_running = True
@@ -33,8 +36,8 @@ class SystemAdapter(AdapterBase):
 
     async def on_get_next_server_chunk(self, chunk: bytes) -> None:
         if self.is_running and self._recv_stream.is_active():
-            if VOLCENGINE_AUDIO_TYPE == AudioType.ogg:
-                chunk = self.ogg2pcm.process(chunk)
+            for processor in self.server2client_pipeline:
+                chunk = processor.process(chunk)
             self._recv_stream.write(chunk)
 
     async def stop(self):

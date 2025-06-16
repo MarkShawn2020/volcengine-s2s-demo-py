@@ -41,6 +41,11 @@ class VoicengineClient:
                 )
             self.logid = self.ws.response_headers.get("X-Tt-Logid") if hasattr(self.ws, 'response_headers') else None
             logger.info(f"dialog server response logid: {self.logid}")
+
+            await self.request_start_connection()
+
+            await self.request_start_session()
+
         except Exception as e:
             logger.warning(f"failed to connect, reason: {e}")
 

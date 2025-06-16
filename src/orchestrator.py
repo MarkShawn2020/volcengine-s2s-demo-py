@@ -50,13 +50,9 @@ class Orchestrator:
         logger.info("starting")
         try:
 
-            logger.info("starting volcengine client")
-            await self.volcengine_client.start()
-            await self.volcengine_client.request_start_connection()
-            await self.volcengine_client.request_start_session()
-            logger.info("started volcengine client")
-
             await self.audio_adapter.start()
+            
+            await self.volcengine_client.start()
 
             async with asyncio.TaskGroup() as tg:
                 logger.info("starting tasks")
