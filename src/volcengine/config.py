@@ -28,20 +28,20 @@ ws_connect_config = {
 send_audio_config = AudioConfig.model_validate(
     {
         "bit_size": pyaudio.paInt16,
-        "chunk": 1600,
         "format": "pcm",
         "channels": 1,
         "sample_rate": VOLCENGINE_SEND_AUDIO_SAMPLE_RATE,
+        "chunk": 1600
         }
     )
 
 recv_pcm_audio_config = AudioConfig.model_validate(
     {
         "bit_size": pyaudio.paFloat32,
-        "chunk": 3200,
         "format": "pcm",
         "channels": 1,
         "sample_rate": VOLCENGINE_RECV_PCM_AUDIO_SAMPLE_RATE,
+        "chunk": 1600
         }
     )
 

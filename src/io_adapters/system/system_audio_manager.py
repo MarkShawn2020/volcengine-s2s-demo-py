@@ -4,6 +4,7 @@ import logging
 import pyaudio
 from typing_extensions import Optional
 
+from src.io_adapters.webrtc.constants import VOLCENGINE_SEND_AUDIO_SOURCE_DTYPE, VOLCENGINE_SEND_AUDIO_SAMPLE_RATE
 from src.volcengine.config import send_audio_config, recv_pcm_audio_config
 
 logger = logging.getLogger(__name__)
@@ -24,15 +25,22 @@ class SystemAudioManager:
     def open_send_stream(self) -> pyaudio.Stream:
         """打开音频输入流"""
         default_input_device = self.pyaudio.get_default_input_device_info()
-        logger.info(f"opening input stream from device(name={default_input_device['name']})")
+        logger.info(f"opening input stream from default device: {default_input_device}")
+        
+        # 使用设备默认采样率和声道
+        device_sample_rate = int(default_input_device["defaultSampleRate"])
+        device_channels = min(default_input_device["maxInputChannels"], self.send_audio_config.channels)
+        
         params = {
             "input_device_index": default_input_device["index"],
-            "channels": self.send_audio_config.channels,
-            "rate": self.send_audio_config.sample_rate,
+            "format": pyaudio.paInt16,
+            # "format": self.send_audio_config.bit_size,
+            "channels": 1,
+            "rate": VOLCENGINE_SEND_AUDIO_SAMPLE_RATE,
             "frames_per_buffer": self.send_audio_config.chunk,
-            "format": self.send_audio_config.bit_size,
-            "input": True,  # Add low latency settings for AirPods compatibility
-            "input_host_api_specific_stream_info": None
+            "input": True,
+            "input_host_api_specific_stream_info": None,
+
             }
         logger.debug(f"输入参数：{json.dumps(params, indent=2)}")
         self.input_stream = self.pyaudio.open(**params)
@@ -42,13 +50,19 @@ class SystemAudioManager:
     def open_recv_stream(self) -> pyaudio.Stream:
         """打开音频输出流"""
         default_output_device = self.pyaudio.get_default_output_device_info()
-        logger.info(f"opening output stream from device(name={default_output_device['name']})")
+        logger.info(f"opening output stream from default device: {default_output_device}")
+        
+        # 使用设备默认采样率和声道
+        device_sample_rate = int(default_output_device["defaultSampleRate"])
+        device_channels = min(default_output_device["maxOutputChannels"], self.recv_audio_config.channels)
+        
         params = {
-            "format": self.recv_audio_config.bit_size,
-            "channels": self.recv_audio_config.channels,
-            "rate": self.recv_audio_config.sample_rate,
+            "format": pyaudio.paInt16,
+            # "format": self.recv_audio_config.bit_size,
+            "channels": device_channels,
+            "rate": device_sample_rate,
             "output": True,
-            "frames_per_buffer": self.recv_audio_config.chunk,
+            # "frames_per_buffer": self.recv_audio_config.chunk,
             "output_device_index": default_output_device["index"],
             }
         logger.debug(f"输出参数：{json.dumps(params, indent=2)}")
