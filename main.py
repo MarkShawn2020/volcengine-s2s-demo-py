@@ -11,13 +11,19 @@ def main():
     """主函数"""
     parser = argparse.ArgumentParser(description="统一音频应用")
     parser.add_argument(
-        "--adapter", choices=["local", "browser"], default="local", help="选择适配器类型"
+        "--adapter", choices=["local", "browser", "touchdesigner"], default="local", help="选择适配器类型"
         )
     parser.add_argument(
         "--proxy-url", default="ws://localhost:8765", help="代理服务器URL（仅browser模式需要）"
         )
     parser.add_argument(
         "--use-pcm", action="store_true", default=True, help="使用PCM格式请求TTS音频（默认启用）"
+        )
+    parser.add_argument(
+        "--td-ip", default="localhost", help="TouchDesigner IP地址（仅touchdesigner模式需要）"
+        )
+    parser.add_argument(
+        "--td-port", type=int, default=7000, help="TouchDesigner端口（仅touchdesigner模式需要）"
         )
 
     args = parser.parse_args()
@@ -43,6 +49,17 @@ def main():
             "proxy_url": args.proxy_url,
             "app_id": VOLCENGINE_APP_ID,
             "access_token": VOLCENGINE_ACCESS_TOKEN
+            }
+    elif args.adapter == "touchdesigner":
+        adapter_type = AdapterType.TOUCHDESIGNER
+        config = {
+            "app_id": VOLCENGINE_APP_ID,
+            "access_token": VOLCENGINE_ACCESS_TOKEN,
+            "td_ip": args.td_ip,
+            "td_port": args.td_port,
+            "audio_input_port": 7001,
+            "audio_output_port": 7002,
+            "control_port": 7003
             }
     else:
         logger.error(f"不支持的适配器类型: {args.adapter}")

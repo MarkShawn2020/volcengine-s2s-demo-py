@@ -3,7 +3,6 @@ import json
 import uuid
 import logging
 import websockets
-from websockets.server import WebSocketServerProtocol
 from typing import Dict, Any
 
 from src.volcengine.client import VoicengineClient
@@ -23,10 +22,15 @@ class ProxyServer:
     async def start(self):
         """启动代理服务器"""
         logger.info(f"启动代理服务器 ws://{self.host}:{self.port}")
-        async with websockets.serve(self.handle_client, self.host, self.port):
+        
+        # 兼容新版本websockets库的处理方法
+        async def handler(websocket):
+            return await self.handle_client(websocket)
+        
+        async with websockets.serve(handler, self.host, self.port):
             await asyncio.Future()  # 运行forever
     
-    async def handle_client(self, websocket: WebSocketServerProtocol, path: str):
+    async def handle_client(self, websocket):
         """处理客户端连接"""
         client_id = str(uuid.uuid4())
         logger.info(f"新客户端连接: {client_id}")
@@ -36,9 +40,13 @@ class ProxyServer:
         
         try:
             await proxy_client.handle()
+        except websockets.exceptions.ConnectionClosed:
+            logger.info(f"客户端 {client_id} 正常断开连接")
         except Exception as e:
             logger.error(f"客户端 {client_id} 处理异常: {e}")
         finally:
+            # 清理资源
+            await proxy_client.cleanup()
             if client_id in self.clients:
                 del self.clients[client_id]
             logger.info(f"客户端 {client_id} 连接关闭")
@@ -47,24 +55,32 @@ class ProxyServer:
 class ProxyClient:
     """代理客户端 - 管理单个浏览器连接"""
     
-    def __init__(self, client_id: str, websocket: WebSocketServerProtocol):
+    def __init__(self, client_id: str, websocket):
         self.client_id = client_id
         self.websocket = websocket
         self.volcengine_client = None
         self.is_authenticated = False
         self.receive_task = None
+        self.running = True
     
     async def handle(self):
         """处理客户端消息"""
-        async for message in self.websocket:
-            try:
-                data = json.loads(message)
-                await self._handle_message(data)
-            except json.JSONDecodeError:
-                await self._send_error("Invalid JSON format")
-            except Exception as e:
-                logger.error(f"处理消息异常: {e}")
-                await self._send_error(str(e))
+        try:
+            async for message in self.websocket:
+                if not self.running:
+                    break
+                try:
+                    data = json.loads(message)
+                    await self._handle_message(data)
+                except json.JSONDecodeError:
+                    await self._send_error("Invalid JSON format")
+                except Exception as e:
+                    logger.error(f"处理消息异常: {e}")
+                    await self._send_error(str(e))
+        except websockets.exceptions.ConnectionClosed:
+            logger.info(f"客户端 {self.client_id} WebSocket连接关闭")
+        except Exception as e:
+            logger.error(f"处理客户端消息失败: {e}")
     
     async def _handle_message(self, data: Dict[str, Any]):
         """处理具体消息"""
@@ -157,14 +173,19 @@ class ProxyClient:
     
     async def _receive_from_volcengine(self):
         """从火山引擎接收响应"""
-        while self.is_authenticated and self.volcengine_client:
+        while self.running and self.is_authenticated and self.volcengine_client:
             try:
                 response = await self.volcengine_client.on_response()
                 if response:
                     await self._handle_volcengine_response(response)
+                elif not self.volcengine_client.is_active:
+                    logger.warning("火山引擎连接已断开")
+                    break
             except Exception as e:
                 logger.error(f"接收火山引擎响应失败: {e}")
                 break
+        
+        logger.info(f"客户端 {self.client_id} 火山引擎接收任务结束")
     
     async def _handle_volcengine_response(self, response: Dict[str, Any]):
         """处理火山引擎响应"""
@@ -188,8 +209,14 @@ class ProxyClient:
     
     async def _send_message(self, message: Dict[str, Any]):
         """发送消息到浏览器"""
+        if not self.running:
+            return
+        
         try:
-            await self.websocket.send(json.dumps(message))
+            await self.websocket.send(json.dumps(message, ensure_ascii=False))
+        except websockets.exceptions.ConnectionClosed:
+            logger.info(f"客户端 {self.client_id} 连接已关闭，无法发送消息")
+            self.running = False
         except Exception as e:
             logger.error(f"发送消息失败: {e}")
     
@@ -202,6 +229,8 @@ class ProxyClient:
     
     async def cleanup(self):
         """清理资源"""
+        self.running = False
+        
         if self.receive_task:
             self.receive_task.cancel()
             try:
@@ -210,14 +239,35 @@ class ProxyClient:
                 pass
         
         if self.volcengine_client:
-            await self.volcengine_client.stop()
+            try:
+                await self.volcengine_client.stop()
+            except Exception as e:
+                logger.error(f"关闭火山引擎客户端失败: {e}")
             self.volcengine_client = None
 
 
 if __name__ == "__main__":
     # 运行代理服务器
     import logging
-    logging.basicConfig(level=logging.INFO)
+    import argparse
     
-    server = ProxyServer()
-    asyncio.run(server.start())
+    # 命令行参数
+    parser = argparse.ArgumentParser(description="代理服务器")
+    parser.add_argument("--host", default="localhost", help="服务器主机")
+    parser.add_argument("--port", type=int, default=8765, help="服务器端口")
+    parser.add_argument("--verbose", action="store_true", help="详细日志")
+    
+    args = parser.parse_args()
+    
+    # 设置日志
+    log_level = logging.DEBUG if args.verbose else logging.INFO
+    logging.basicConfig(
+        level=log_level,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    
+    server = ProxyServer(host=args.host, port=args.port)
+    try:
+        asyncio.run(server.start())
+    except KeyboardInterrupt:
+        logger.info("代理服务器停止")

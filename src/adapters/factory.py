@@ -6,6 +6,7 @@ from src.adapters.base import (
 )
 from src.adapters.local_adapter import LocalAudioAdapter
 from src.adapters.browser_adapter import BrowserAudioAdapter
+from src.adapters.touchdesigner_adapter import TouchDesignerAdapter
 
 
 class AdapterFactory:
@@ -33,8 +34,10 @@ class AdapterFactory:
             return BrowserAudioAdapter(connection_config)
         
         elif adapter_type == AdapterType.TOUCHDESIGNER:
-            # TouchDesigner适配器待实现
-            raise NotImplementedError("TouchDesigner adapter not implemented yet")
+            connection_config = TouchDesignerConnectionConfig(
+                **config
+            )
+            return TouchDesignerAdapter(connection_config)
         
         else:
             raise ValueError(f"Unsupported adapter type: {adapter_type}")
@@ -42,7 +45,7 @@ class AdapterFactory:
     @staticmethod
     def get_available_adapters() -> list[AdapterType]:
         """获取可用的适配器类型"""
-        return [AdapterType.LOCAL, AdapterType.BROWSER]
+        return [AdapterType.LOCAL, AdapterType.BROWSER, AdapterType.TOUCHDESIGNER]
     
     @staticmethod
     def get_adapter_requirements(adapter_type: AdapterType) -> Dict[str, Any]:
@@ -64,9 +67,9 @@ class AdapterFactory:
         
         elif adapter_type == AdapterType.TOUCHDESIGNER:
             return {
-                "required": [],
-                "optional": [],
-                "description": "TouchDesigner适配器（待实现）"
+                "required": ["app_id", "access_token"],
+                "optional": ["td_ip", "td_port", "audio_input_port", "audio_output_port", "control_port"],
+                "description": "TouchDesigner适配器，通过UDP/TCP协议与TouchDesigner通信"
             }
         
         else:
