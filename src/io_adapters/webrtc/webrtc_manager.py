@@ -28,7 +28,7 @@ class WebRTCManager:
         self.client_connected_callback: Optional[Callable[[str], None]] = None
 
         # 管理器运行状态
-        self.is_running = True
+        self.is_running = False
 
         # 错误计数器，避免重复错误日志
         self._error_counters = {}
@@ -44,6 +44,7 @@ class WebRTCManager:
     async def start(self):
         """启动WebRTC管理器"""
         logger.info("🚀 启动WebRTC管理器")
+        self.is_running = True
         await self.signaling_server.start()
 
     async def stop(self):

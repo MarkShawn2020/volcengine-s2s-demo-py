@@ -1,3 +1,5 @@
+from pyaudio import Stream
+
 from src.audio.processors import Ogg2PcmProcessor
 from src.audio.type import AudioType
 from src.config import VOLCENGINE_AUDIO_TYPE
@@ -10,17 +12,19 @@ class SystemAdapter(AdapterBase):
     """系统音频输入输出实现 - 声明式配置"""
 
     def __init__(self, config=None):
-        self._input_stream = None
-        self._output_stream = None
-        self._audio_queue = None
         super().__init__(config)
 
         self._audio_device = SystemAudioManager()
+        self._input_stream: Stream | None = None
+        self._output_stream: Stream | None = None
+        self.ogg2pcm = Ogg2PcmProcessor(ogg_output_audio_config)
+
+        self.is_running = False
+
+    async def start(self):
+        self.is_running = True
         self._input_stream = self._audio_device.open_input_stream()
         self._output_stream = self._audio_device.open_output_stream()
-        self.is_running = True
-
-        self.ogg2pcm = Ogg2PcmProcessor(ogg_output_audio_config)
 
     async def on_push(self) -> bytes | None:
         if self.is_running and self._input_stream.is_active():

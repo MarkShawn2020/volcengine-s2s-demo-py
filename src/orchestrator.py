@@ -55,6 +55,8 @@ class Orchestrator:
             await self.volcengine_client.request_start_session()
             logger.info("started volcengine client")
 
+            await self.audio_adapter.start()
+
             async with asyncio.TaskGroup() as tg:
                 logger.info("starting tasks")
                 # 根据官方代码经验

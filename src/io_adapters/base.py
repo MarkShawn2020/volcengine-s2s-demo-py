@@ -12,6 +12,10 @@ class AdapterBase(ABC):
         self.is_running = False
 
     @abstractmethod
+    async def start(self):
+        pass
+
+    @abstractmethod
     async def on_pull(self, audio_chunk: bytes) -> None:
         """
         本函数接收上层程序的AI回复，转换播放或者推送到下游
