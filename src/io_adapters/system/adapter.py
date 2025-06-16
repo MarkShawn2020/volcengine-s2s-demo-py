@@ -1,4 +1,7 @@
+import asyncio
+from asyncio import Queue
 from pyaudio import Stream
+import pyaudio
 
 from src.audio.processors import Ogg2PcmProcessor
 from src.audio.processors.pcm_resampler import PcmResamplerProcessor
@@ -25,11 +28,39 @@ class SystemAdapter(AdapterBase):
         
         # 服务端音频处理管道：火山音频 -> 设备播放格式  
         self.server2client_pipeline = []
+        
+        # 事件驱动音频队列
+        self.audio_queue = Queue(maxsize=50)  # 最大缓存50个音频块
 
+    def _audio_callback(self, in_data, frame_count, time_info, status):
+        """PyAudio回调函数 - 实时音频处理"""
+        if status:
+            if status & pyaudio.paInputOverflow:
+                logger.warning("Audio input overflow detected")
+            if status & pyaudio.paInputUnderflow:
+                logger.warning("Audio input underflow detected")
+            
+        # 处理音频管道
+        chunk = in_data
+        try:
+            for processor in self.client2server_pipeline:
+                chunk = processor.process(chunk)
+                
+            # 非阻塞放入队列
+            try:
+                self.audio_queue.put_nowait(chunk)
+            except asyncio.QueueFull:
+                logger.warning("Audio queue full, dropping frame")
+                
+        except Exception as e:
+            logger.error(f"Audio processing error in callback: {e}")
+            
+        return (None, pyaudio.paContinue)
 
     async def start(self):
         self.is_running = True
-        self._send_stream = self._audio_device.open_send_stream()
+        # 使用回调模式打开音频输入流
+        self._send_stream = self._audio_device.open_send_stream_with_callback(self._audio_callback)
         self._recv_stream = self._audio_device.open_recv_stream()
         
         # 根据实际设备参数配置重采样器
@@ -64,31 +95,59 @@ class SystemAdapter(AdapterBase):
                 target_dtype='int16'
             )
             self.server2client_pipeline.append(output_resampler)
+        
+        # 启动音频流    
+        self._send_stream.start_stream()
+        logger.info("Audio input stream started with callback mode")
             
         if self.on_prepared: await self.on_prepared()
 
     async def get_next_client_chunk(self) -> bytes | None:
-        if self.is_running and self._send_stream.is_active():
-            chunk = self._send_stream.read(send_audio_config.chunk, exception_on_overflow=False)
+        """从事件驱动队列获取音频数据"""
+        if not self.is_running:
+            return None
             
-            # 应用客户端音频处理管道
-            for processor in self.client2server_pipeline:
-                chunk = processor.process(chunk)
-                
-            return chunk
+        try:
+            # 阻塞等待音频数据，有数据时立即返回，无数据时不消耗CPU
+            return await asyncio.wait_for(self.audio_queue.get(), timeout=0.1)
+        except asyncio.TimeoutError:
+            # 超时返回None，继续等待下一次
+            return None
+        except Exception as e:
+            logger.error(f"Error getting audio chunk: {e}")
+            return None
 
     async def on_get_next_server_chunk(self, chunk: bytes) -> None:
         if self.is_running and self._recv_stream.is_active():
-            for processor in self.server2client_pipeline:
-                chunk = processor.process(chunk)
-            self._recv_stream.write(chunk)
+            try:
+                # 处理音频管道
+                for processor in self.server2client_pipeline:
+                    chunk = processor.process(chunk)
+                
+                # 检查音频数据有效性，避免播放无效数据
+                if chunk and len(chunk) > 0:
+                    self._recv_stream.write(chunk, exception_on_underflow=False)
+                    
+            except Exception as e:
+                logger.error(f"Error processing server audio chunk: {e}")
 
     async def stop(self):
         self.is_running = False
         if self._send_stream:
+            if self._send_stream.is_active():
+                self._send_stream.stop_stream()
             self._send_stream.close()
         if self._recv_stream:
+            if self._recv_stream.is_active():
+                self._recv_stream.stop_stream()
             self._recv_stream.close()
+        
+        # 清空音频队列
+        while not self.audio_queue.empty():
+            try:
+                self.audio_queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
 
     def display_welcome_screen(self) -> None:
         """显示欢迎界面"""

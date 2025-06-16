@@ -18,7 +18,8 @@ CLIENT_FULL_REQUEST = 0b0001
 CLIENT_AUDIO_ONLY_REQUEST = 0b0010
 
 SERVER_FULL_RESPONSE = 0b1001
-SERVER_ACK = 0b1011
+SERVER_AUDIO_ONLY_RESPONSE = 0b1011  # <--- **新增**: 根据文档，这是音频响应
+SERVER_ACK = 0b1011 # 文档显示 ACK 和 Audio-only response 值相同，但我们可以区分使用
 SERVER_ERROR_RESPONSE = 0b1111
 
 # Message Type Specific Flags
@@ -86,53 +87,55 @@ def parse_response(res):
         - (4 bytes)data len
         - data
     """
-    if isinstance(res, str):
+
+    if not isinstance(res, bytes) or len(res) < 4:
         return {}
-    protocol_version = res[0] >> 4
+
     header_size = res[0] & 0x0f
     message_type = res[1] >> 4
     message_type_specific_flags = res[1] & 0x0f
     serialization_method = res[2] >> 4
     message_compression = res[2] & 0x0f
-    reserved = res[3]
-    header_extensions = res[4:header_size * 4]
-    payload = res[header_size * 4:]
-    result = {}
-    payload_msg = None
-    payload_size = 0
-    start = 0
-    if message_type == SERVER_FULL_RESPONSE or message_type == SERVER_ACK:
-        result['message_type'] = 'SERVER_FULL_RESPONSE'
-        if message_type == SERVER_ACK:
-            result['message_type'] = 'SERVER_ACK'
-        if message_type_specific_flags & NEG_SEQUENCE > 0:
-            result['seq'] = int.from_bytes(payload[:4], "big", signed=False)
-            start += 4
-        if message_type_specific_flags & MSG_WITH_EVENT > 0:
-            result['event'] = int.from_bytes(payload[:4], "big", signed=False)
-            start += 4
-        payload = payload[start:]
-        session_id_size = int.from_bytes(payload[:4], "big", signed=True)
-        session_id = payload[4:session_id_size]
-        result['session_id'] = str(session_id)
-        payload = payload[4 + session_id_size:]
-        payload_size = int.from_bytes(payload[:4], "big", signed=False)
-        payload_msg = payload[4:]
-    elif message_type == SERVER_ERROR_RESPONSE:
-        code = int.from_bytes(payload[:4], "big", signed=False)
-        result['code'] = code
-        payload_size = int.from_bytes(payload[4:8], "big", signed=False)
-        payload_msg = payload[8:]
-    if payload_msg is None:
-        return result
-    if message_compression == GZIP:
-        payload_msg = gzip.decompress(payload_msg)
-    if serialization_method == JSON:
-        payload_msg = json.loads(str(payload_msg, "utf-8"))
-    elif serialization_method != NO_SERIALIZATION:
-        payload_msg = str(payload_msg, "utf-8")
-    result['payload_msg'] = payload_msg
-    result['payload_size'] = payload_size
+
+    payload_start_offset = header_size * 4
+    payload = res[payload_start_offset:]
+
+    result = {
+        'message_type': message_type
+        }
+
+    # 根据文档，可选字段在payload的开头
+    current_offset = 0
+
+    # 文档指出 event 是必须的，所以我们总是先解析它
+    if message_type_specific_flags & MSG_WITH_EVENT > 0:
+        result['event'] = int.from_bytes(payload[current_offset:current_offset + 4], "big")
+        current_offset += 4
+
+    # Session ID
+    session_id_size = int.from_bytes(payload[current_offset:current_offset + 4], "big")
+    current_offset += 4
+    result['session_id'] = payload[current_offset:current_offset + session_id_size].decode('utf-8')
+    current_offset += session_id_size
+
+    # 最后的 payload
+    payload_size = int.from_bytes(payload[current_offset:current_offset + 4], "big")
+    current_offset += 4
+    payload_msg = payload[current_offset:current_offset + payload_size]
+
+    # 只有在不是音频的情况下才尝试解压和解码
+    # 服务端事件TTSResponse(352)是音频裸流
+    event_id = result.get('event')
+    if event_id == 352:  # TTSResponse, payload 是音频
+        result['payload_msg'] = payload_msg
+    else:  # 其他是JSON
+        if message_compression == GZIP:
+            payload_msg = gzip.decompress(payload_msg)
+        if serialization_method == JSON and payload_msg:
+            result['payload_msg'] = json.loads(payload_msg.decode('utf-8'))
+        else:
+            result['payload_msg'] = payload_msg  # 保留原始字节
+
     return result
 
 

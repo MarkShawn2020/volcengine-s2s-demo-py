@@ -14,6 +14,12 @@ from src.volcengine.config import start_session_req
 logger = logging.getLogger(__name__)
 
 
+async def connect_ws(config):
+    return await websockets.connect(
+        config['base_url'], additional_headers=config['headers'], ping_interval=5
+        )
+
+
 class VoicengineClient:
     def __init__(self, config: Dict[str, Any]):
         self.config = config
@@ -36,9 +42,7 @@ class VoicengineClient:
         try:
             self.is_running = True
             logger.info(f"url: {self.config['base_url']}, headers: {self.config['headers']}")
-            self.ws = await websockets.connect(
-                self.config['base_url'], additional_headers=self.config['headers'], ping_interval=5
-                )
+            self.ws = await connect_ws(self.config)
             self.logid = self.ws.response_headers.get("X-Tt-Logid") if hasattr(self.ws, 'response_headers') else None
             logger.info(f"dialog server response logid: {self.logid}")
 

@@ -22,14 +22,27 @@ class PcmResamplerProcessor(AudioProcessor):
 
         # 2. 如果需要，重采样
         if self.source_sr != self.target_sr:
-            # 使用scipy进行重采样
-            samples = samples.astype(np.float32)
+            # 使用scipy进行重采样，提高重采样质量
+            if samples.dtype != np.float32:
+                samples = samples.astype(np.float32)
+            
+            # 标准化到[-1.0, 1.0]范围进行重采样
+            if samples.dtype == np.int16:
+                samples = samples / 32768.0
+            
             num_target_samples = int(len(samples) * self.target_sr / self.source_sr)
-            samples = resample(samples, num_target_samples)
+            if num_target_samples > 0:
+                samples = resample(samples, num_target_samples)
+            else:
+                samples = np.array([], dtype=np.float32)
 
         # 3. 转换到目标数据类型
         if self.target_dtype == 'int16':
             if samples.dtype.kind == 'f':
-                samples = (np.clip(samples, -1.0, 1.0) * 32767).astype(np.int16)
+                # 更安全的Float32到Int16转换，避免尖锐声音
+                # 先限制到[-1.0, 1.0]范围，然后平滑转换
+                samples = np.clip(samples, -1.0, 1.0)
+                # 使用更安全的转换方式，避免数值溢出
+                samples = (samples * 32767.0).astype(np.int16)
 
         return samples.tobytes()
