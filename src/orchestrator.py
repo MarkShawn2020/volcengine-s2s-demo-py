@@ -305,22 +305,4 @@ class Orchestrator:
                 self.audio_adapter._webrtc_manager.is_running = False
                 logger.info("已设置WebRTC停止标志")
 
-        # 对于Python信号处理，我们需要安排异步停止
-        # 创建一个新的线程来执行停止操作
-        import threading
-        def async_stop():
-            import asyncio
-            try:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                loop.run_until_complete(self.stop())
-                loop.close()
-            except Exception as e:
-                logger.error(f"异步停止失败: {e}")
-
-        stop_thread = threading.Thread(target=async_stop, daemon=True)
-        stop_thread.start()
-
-        # 给线程一些时间来清理
-        stop_thread.join(timeout=3.0)
         logger.info("信号处理完成")

@@ -81,15 +81,6 @@ class VoicengineClient:
             await self.ws.send(finish_connection_request)
             logger.info("requested stop-connection")
 
-            # 尝试接收响应，但设置超时
-            try:
-                response = await asyncio.wait_for(self.ws.recv(), timeout=3.0)
-                logger.info(f"FinishConnection response: {protocol.parse_response(response)}")
-            except asyncio.TimeoutError:
-                logger.warning("等待FinishConnection响应超时")
-            except Exception as e:
-                logger.warning(f"接收FinishConnection响应失败: {e}")
-
         except Exception as e:
             logger.warning(f"failed to finish connection: {e}")
 
