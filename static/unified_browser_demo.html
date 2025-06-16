@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>统一音频应用 - 浏览器端</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        
+        .section {
+            margin-bottom: 25px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            background-color: #fafafa;
+        }
+        
+        .section h3 {
+            margin-top: 0;
+            color: #555;
+        }
+        
+        .config-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            gap: 10px;
+        }
+        
+        .config-row label {
+            min-width: 120px;
+            font-weight: bold;
+        }
+        
+        .config-row input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+        }
+        
+        button:hover:not(:disabled) {
+            background-color: #0056b3;
+        }
+        
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        
+        button.success {
+            background-color: #28a745;
+        }
+        
+        button.success:hover:not(:disabled) {
+            background-color: #1e7e34;
+        }
+        
+        button.danger {
+            background-color: #dc3545;
+        }
+        
+        button.danger:hover:not(:disabled) {
+            background-color: #bd2130;
+        }
+        
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        
+        .status.connected {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f1b2b2;
+        }
+        
+        .status.connecting {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        
+        .log {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+        
+        .audio-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .volume-meter {
+            flex: 1;
+            min-width: 200px;
+            height: 20px;
+            background-color: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        .volume-bar {
+            height: 100%;
+            background: linear-gradient(to right, #28a745, #ffc107, #dc3545);
+            width: 0%;
+            transition: width 0.1s;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎙️ 统一音频应用 - 浏览器端</h1>
+        
+        <!-- 连接配置 -->
+        <div class="section">
+            <h3>🔧 连接配置</h3>
+            <div class="config-row">
+                <label>代理服务器:</label>
+                <input type="text" id="proxyUrl" value="ws://localhost:8765">
+            </div>
+            <div class="config-row">
+                <label>App ID:</label>
+                <input type="text" id="appId" placeholder="请输入火山引擎App ID">
+            </div>
+            <div class="config-row">
+                <label>Access Token:</label>
+                <input type="text" id="accessToken" placeholder="请输入火山引擎Access Token">
+            </div>
+            <div id="connectionStatus" class="status disconnected">🔴 未连接</div>
+            <button id="connectBtn" onclick="connect()">连接</button>
+            <button id="disconnectBtn" onclick="disconnect()" disabled>断开连接</button>
+        </div>
+        
+        <!-- 音频控制 -->
+        <div class="section">
+            <h3>🎤 音频控制</h3>
+            <div class="audio-controls">
+                <button id="startAudioBtn" onclick="startAudio()" disabled>开始录音</button>
+                <button id="stopAudioBtn" onclick="stopAudio()" disabled>停止录音</button>
+                <div class="volume-meter">
+                    <div id="volumeBar" class="volume-bar"></div>
+                </div>
+                <span id="volumeText">0%</span>
+            </div>
+        </div>
+        
+        <!-- 消息发送 -->
+        <div class="section">
+            <h3>💬 文本消息</h3>
+            <div class="config-row">
+                <input type="text" id="messageInput" placeholder="输入要发送的消息" value="你好">
+                <button onclick="sendMessage()">发送</button>
+            </div>
+        </div>
+        
+        <!-- 日志 -->
+        <div class="section">
+            <h3>📋 日志</h3>
+            <div id="log" class="log"></div>
+            <button onclick="clearLog()">清空日志</button>
+        </div>
+    </div>
+
+    <script>
+        let websocket = null;
+        let mediaStream = null;
+        let audioContext = null;
+        let processor = null;
+        let isRecording = false;
+        let isConnected = false;
+
+        // 日志函数
+        function log(message, type = 'info') {
+            const logElement = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const logMessage = `[${timestamp}] ${message}\n`;
+            logElement.textContent += logMessage;
+            logElement.scrollTop = logElement.scrollHeight;
+            console.log(`[${type.toUpperCase()}] ${message}`);
+        }
+
+        function clearLog() {
+            document.getElementById('log').textContent = '';
+        }
+
+        // 更新UI状态
+        function updateUI() {
+            document.getElementById('connectBtn').disabled = isConnected;
+            document.getElementById('disconnectBtn').disabled = !isConnected;
+            document.getElementById('startAudioBtn').disabled = !isConnected || isRecording;
+            document.getElementById('stopAudioBtn').disabled = !isRecording;
+        }
+
+        // 更新连接状态
+        function updateConnectionStatus(status, message) {
+            const statusElement = document.getElementById('connectionStatus');
+            statusElement.className = `status ${status}`;
+            statusElement.textContent = message;
+        }
+
+        // 连接到代理服务器
+        async function connect() {
+            const proxyUrl = document.getElementById('proxyUrl').value;
+            const appId = document.getElementById('appId').value;
+            const accessToken = document.getElementById('accessToken').value;
+
+            if (!appId || !accessToken) {
+                alert('请填写App ID和Access Token');
+                return;
+            }
+
+            try {
+                updateConnectionStatus('connecting', '🟡 连接中...');
+                log('开始连接代理服务器...');
+
+                websocket = new WebSocket(proxyUrl);
+
+                websocket.onopen = () => {
+                    log('WebSocket连接成功，发送认证信息...');
+                    
+                    // 发送认证信息
+                    const authMessage = {
+                        type: 'auth',
+                        app_id: appId,
+                        access_token: accessToken
+                    };
+                    websocket.send(JSON.stringify(authMessage));
+                };
+
+                websocket.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        handleMessage(data);
+                    } catch (e) {
+                        log(`解析消息失败: ${e.message}`, 'error');
+                    }
+                };
+
+                websocket.onclose = () => {
+                    isConnected = false;
+                    updateConnectionStatus('disconnected', '🔴 连接断开');
+                    log('WebSocket连接已断开');
+                    updateUI();
+                };
+
+                websocket.onerror = (error) => {
+                    log(`WebSocket错误: ${error}`, 'error');
+                    updateConnectionStatus('disconnected', '🔴 连接错误');
+                    updateUI();
+                };
+
+            } catch (error) {
+                log(`连接失败: ${error.message}`, 'error');
+                updateConnectionStatus('disconnected', '🔴 连接失败');
+                updateUI();
+            }
+        }
+
+        // 处理服务器消息
+        function handleMessage(data) {
+            switch (data.type) {
+                case 'auth_success':
+                    isConnected = true;
+                    updateConnectionStatus('connected', '🟢 已连接');
+                    log(`认证成功，会话ID: ${data.session_id}`, 'success');
+                    updateUI();
+                    break;
+                
+                case 'audio':
+                    // 接收到音频数据
+                    const audioData = new Uint8Array(
+                        data.data.match(/.{1,2}/g).map(byte => parseInt(byte, 16))
+                    );
+                    playAudio(audioData);
+                    break;
+                
+                case 'event':
+                    log(`收到事件: ${data.event} - ${JSON.stringify(data.data)}`, 'info');
+                    break;
+                
+                case 'error':
+                    log(`服务器错误: ${data.message}`, 'error');
+                    break;
+                
+                case 'pong':
+                    log('收到心跳回复');
+                    break;
+                
+                default:
+                    log(`未知消息类型: ${data.type}`, 'warning');
+            }
+        }
+
+        // 断开连接
+        function disconnect() {
+            if (websocket) {
+                websocket.close();
+                websocket = null;
+            }
+            
+            if (isRecording) {
+                stopAudio();
+            }
+            
+            isConnected = false;
+            updateConnectionStatus('disconnected', '🔴 未连接');
+            updateUI();
+        }
+
+        // 开始录音
+        async function startAudio() {
+            try {
+                log('请求麦克风权限...');
+                
+                mediaStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        sampleRate: 16000,
+                        channelCount: 1,
+                        echoCancellation: true,
+                        noiseSuppression: true
+                    }
+                });
+
+                audioContext = new (window.AudioContext || window.webkitAudioContext)({
+                    sampleRate: 16000
+                });
+
+                const source = audioContext.createMediaStreamSource(mediaStream);
+                
+                // 创建音频处理节点
+                if (audioContext.createScriptProcessor) {
+                    processor = audioContext.createScriptProcessor(4096, 1, 1);
+                } else {
+                    // 使用AudioWorklet (现代浏览器)
+                    processor = audioContext.createScriptProcessor(4096, 1, 1);
+                }
+
+                // 设置音量监测
+                const analyser = audioContext.createAnalyser();
+                analyser.fftSize = 256;
+                source.connect(analyser);
+
+                const dataArray = new Uint8Array(analyser.frequencyBinCount);
+                function updateVolume() {
+                    if (!isRecording) return;
+                    
+                    analyser.getByteFrequencyData(dataArray);
+                    const average = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
+                    const percentage = Math.round((average / 255) * 100);
+                    
+                    document.getElementById('volumeBar').style.width = `${percentage}%`;
+                    document.getElementById('volumeText').textContent = `${percentage}%`;
+                    
+                    requestAnimationFrame(updateVolume);
+                }
+
+                // 音频数据处理
+                processor.onaudioprocess = (event) => {
+                    if (!isRecording || !websocket || websocket.readyState !== WebSocket.OPEN) {
+                        return;
+                    }
+
+                    const inputBuffer = event.inputBuffer;
+                    const inputData = inputBuffer.getChannelData(0);
+                    
+                    // 转换为16位PCM
+                    const pcmData = new Int16Array(inputData.length);
+                    for (let i = 0; i < inputData.length; i++) {
+                        pcmData[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32768));
+                    }
+
+                    // 发送音频数据
+                    const message = {
+                        type: 'audio',
+                        data: Array.from(new Uint8Array(pcmData.buffer))
+                            .map(byte => byte.toString(16).padStart(2, '0'))
+                            .join('')
+                    };
+                    websocket.send(JSON.stringify(message));
+                };
+
+                source.connect(processor);
+                processor.connect(audioContext.destination);
+
+                isRecording = true;
+                updateVolume();
+                log('开始录音', 'success');
+                updateUI();
+
+            } catch (error) {
+                log(`启动录音失败: ${error.message}`, 'error');
+            }
+        }
+
+        // 停止录音
+        function stopAudio() {
+            if (processor) {
+                processor.disconnect();
+                processor = null;
+            }
+
+            if (audioContext) {
+                audioContext.close();
+                audioContext = null;
+            }
+
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+                mediaStream = null;
+            }
+
+            isRecording = false;
+            
+            // 重置音量显示
+            document.getElementById('volumeBar').style.width = '0%';
+            document.getElementById('volumeText').textContent = '0%';
+            
+            log('停止录音');
+            updateUI();
+        }
+
+        // 播放音频
+        function playAudio(audioData) {
+            try {
+                if (!audioContext) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                }
+
+                // 假设接收到的是PCM数据，需要转换为AudioBuffer
+                const buffer = audioContext.createBuffer(1, audioData.length / 2, 24000);
+                const channelData = buffer.getChannelData(0);
+                
+                // 将字节数据转换为浮点数
+                for (let i = 0; i < channelData.length; i++) {
+                    const sample = (audioData[i * 2] | (audioData[i * 2 + 1] << 8));
+                    channelData[i] = sample / 32768.0;
+                }
+
+                const source = audioContext.createBufferSource();
+                source.buffer = buffer;
+                source.connect(audioContext.destination);
+                source.start();
+
+                log(`播放音频: ${audioData.length} 字节`);
+
+            } catch (error) {
+                log(`播放音频失败: ${error.message}`, 'error');
+            }
+        }
+
+        // 发送文本消息
+        function sendMessage() {
+            const messageInput = document.getElementById('messageInput');
+            const message = messageInput.value.trim();
+            
+            if (!message) {
+                alert('请输入消息内容');
+                return;
+            }
+
+            if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+                alert('请先连接服务器');
+                return;
+            }
+
+            const textMessage = {
+                type: 'text',
+                content: message
+            };
+
+            websocket.send(JSON.stringify(textMessage));
+            log(`发送文本消息: ${message}`);
+            messageInput.value = '';
+        }
+
+        // 页面加载完成
+        document.addEventListener('DOMContentLoaded', () => {
+            log('页面加载完成');
+            updateUI();
+            
+            // 回车发送消息
+            document.getElementById('messageInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    sendMessage();
+                }
+            });
+
+            // 定期发送心跳
+            setInterval(() => {
+                if (websocket && websocket.readyState === WebSocket.OPEN) {
+                    websocket.send(JSON.stringify({type: 'ping'}));
+                }
+            }, 30000);
+        });
+
+        // 页面卸载时清理
+        window.addEventListener('beforeunload', () => {
+            disconnect();
+        });
+    </script>
+</body>
+</html>
