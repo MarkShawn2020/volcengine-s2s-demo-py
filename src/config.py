@@ -20,8 +20,9 @@ ADAPTER_MODE: AdapterMode = os.getenv("ADAPTER_MODE", AdapterMode.system)
 logger.info(f"Adapter Mode: {ADAPTER_MODE}")
 
 webrtc_config = WebrtcConfig(
-    host=os.getenv("WEBRTC_HOST", "localhost"), port=os.getenv("WEBRTC_PORT", 8765)
-    )
+    host=os.getenv("WEBRTC_HOST", "localhost"),
+    port=os.getenv("WEBRTC_PORT", 8765),
+    sample_rate=os.getenv("WEBRTC_SAMPLE_RATE", 48000), )
 
 
 def validate_config():

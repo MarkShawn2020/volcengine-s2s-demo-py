@@ -2,16 +2,17 @@
 import logging
 
 import numpy as np
+from av.audio import AudioFrame
 
 logger = logging.getLogger(__name__)
 
 
-class AudioFrameProcessor:
+class Frame2PcmProcessor:
     """
     处理输入的音频帧（例如从WebRTC），将其转换为目标格式。
     """
 
-    def __init__(self, target_sample_rate: int = 16000, target_dtype: str = 'int16', buffer_duration_ms: int = 50):
+    def __init__(self, target_sample_rate: int = 48000, target_dtype: str = 'int16', buffer_duration_ms: int = 20):
         self.target_sample_rate = target_sample_rate
         self.target_dtype = target_dtype
         self.buffer_duration_ms = buffer_duration_ms
@@ -26,7 +27,7 @@ class AudioFrameProcessor:
             f"缓冲时长={buffer_duration_ms}ms ({self.min_buffer_samples} samples)"
             )
 
-    def process_frame(self, frame) -> bytes | None:
+    def process_frame(self, frame: AudioFrame) -> bytes | None:
         """
         处理一个 av.AudioFrame 对象。
         - 转换为 NumPy 数组

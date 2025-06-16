@@ -15,7 +15,7 @@ class AudioStreamTrack(MediaStreamTrack):
     """
     kind = "audio"
 
-    def __init__(self, sample_rate: int = 24000):
+    def __init__(self, sample_rate: int = 48000):
         super().__init__()
         self._buffer = bytearray()
         self._buffer_lock = asyncio.Lock()

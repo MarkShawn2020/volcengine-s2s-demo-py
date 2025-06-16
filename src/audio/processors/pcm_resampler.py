@@ -7,7 +7,7 @@ from src.audio.processors.base import AudioProcessor
 class PcmResamplerProcessor(AudioProcessor):
     """一个无状态的处理器，负责重采样和格式转换。"""
 
-    def __init__(self, source_sr, source_dtype, target_sr, target_dtype='int16'):
+    def __init__(self, source_sr: int, source_dtype: str, target_sr: int, target_dtype='int16'):
         self.source_sr = source_sr
         self.source_dtype = source_dtype
         self.target_sr = target_sr

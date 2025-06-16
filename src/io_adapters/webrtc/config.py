@@ -1,6 +1,8 @@
-from typing_extensions import TypedDict
+from pydantic import BaseModel
 
 
-class WebrtcConfig(TypedDict):
+class WebrtcConfig(BaseModel):
     host: str
     port: int
+
+    sample_rate: int

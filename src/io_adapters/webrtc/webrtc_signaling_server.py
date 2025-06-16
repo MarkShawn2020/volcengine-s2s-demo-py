@@ -4,15 +4,17 @@ from typing import Dict, Optional, Callable, Any
 import websockets
 from websockets.legacy.server import WebSocketServerProtocol
 
+from src.io_adapters.webrtc.config import WebrtcConfig
 from src.utils.logger import logger
 
 
 class WebRTCSignalingServer:
     """WebRTC信令服务器"""
 
-    def __init__(self, host: str = "localhost", port: int = 8765):
-        self.host = host
-        self.port = port
+    def __init__(self, config: WebrtcConfig):
+        self.config = config
+        self.host = self.config.host
+        self.port = self.config.port
         self.clients: Dict[str, WebSocketServerProtocol] = {}
         self.server = None
 
@@ -89,8 +91,7 @@ class WebRTCSignalingServer:
             elif message_type == "ping":
                 # 心跳包
                 await self.send_to_client(
-                    client_id,
-                    {
+                    client_id, {
                         "type": "pong"
                         }
                     )
