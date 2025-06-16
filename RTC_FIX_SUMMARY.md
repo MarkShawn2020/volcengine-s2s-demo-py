@@ -27,12 +27,13 @@
 ## 🛠️ 修复方案
 
 ### 1. 重新启用音频输出 ✅
+
 ```python
 # dialog_session.py:174-177
 if self.webrtc_mode:
     logger.debug(f"🎵 发送AI音频回复 ({audio_format}): {len(audio_data)}字节")
     if self.webrtc_manager:
-        self.webrtc_manager.send_audio_to_all_clients(audio_data)
+        self.webrtc_manager.handle_server2clients(audio_data)
 ```
 
 ### 2. 优化音频处理 ✅

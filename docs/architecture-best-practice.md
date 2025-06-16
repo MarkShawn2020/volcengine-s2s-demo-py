@@ -194,9 +194,9 @@ class WebRTCAdapter(AdapterBase):
         # 定义最终的消费者：发送到 WebRTC
         def final_consumer(pcm_data: bytes):
             asyncio.run_coroutine_threadsafe(
-                self.webrtc_manager.send_audio_to_all_clients(pcm_data, AudioType.pcm),
+                self.webrtc_manager.handle_server2clients(pcm_data, AudioType.pcm),
                 loop
-            )
+                )
 
         class WebRTCSink(AudioProcessor):
             def process(self, audio_data: bytes) -> bytes:
@@ -204,22 +204,24 @@ class WebRTCAdapter(AdapterBase):
                 return b''
 
         pipeline = []
-        
-        source_sr = self.output_config.sample_rate # e.g., 24000
+
+        source_sr = self.output_config.sample_rate  # e.g., 24000
         source_dtype = np.float32 if self.output_config.bit_size == pyaudio.paFloat32 else np.int16
 
         # 步骤1: 如果输入是OGG，添加解码器
         if VOLCENGINE_AUDIO_TYPE == AudioType.ogg:
             pipeline.append(OggDecoderProcessor(self.output_config))
             # 解码器的输出是 24kHz, float32 (根据 self.output_config)
-            
+
         # 步骤2: 添加一个处理器，它负责将上一步的输出转换为WebRTC的格式
-        pipeline.append(PcmResamplerProcessor(
-            source_sr=source_sr,
-            source_dtype=source_dtype,
-            target_sr=48000, # 硬性要求
-            target_dtype='int16' # 硬性要求
-        ))
+        pipeline.append(
+            PcmResamplerProcessor(
+                source_sr=source_sr,
+                source_dtype=source_dtype,
+                target_sr=48000,  # 硬性要求
+                target_dtype='int16'  # 硬性要求
+                )
+            )
 
         pipeline.append(WebRTCSink())
         self.audio_pipeline = pipeline

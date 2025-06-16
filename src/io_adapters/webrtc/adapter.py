@@ -2,8 +2,10 @@ import asyncio
 from asyncio import Queue
 
 import numpy as np
+from av.audio import AudioFrame
 
 from src.audio.processors import Ogg2PcmProcessor, PcmResamplerProcessor
+from src.audio.processors.frame2pcm import Frame2PcmProcessor
 from src.audio.type import AudioType
 from src.config import VOLCENGINE_AUDIO_TYPE
 from src.io_adapters.base import AdapterBase
@@ -37,6 +39,7 @@ class WebRTCAdapter(AdapterBase):
         self.pcm_resampler = PcmResamplerProcessor(
             VOLCENGINE_TTS_MODE_SAMPLE_RATE, VOLCENGINE_TTS_MODE_SOURCE_DTYPE, self.config.sample_rate, "int16"
             )
+        self.frame2pcm = Frame2PcmProcessor(self.config.sample_rate, "int16", 20)
 
         # WebRTC 管理器将在外部异步启动  # 不在构造函数中同步启动，避免 asyncio.run() 冲突
 
@@ -54,21 +57,17 @@ class WebRTCAdapter(AdapterBase):
             chunk = self.pcm_resampler.process(chunk)
 
             # 发送到WebRTC客户端
-            await self._webrtc_manager.send_audio_to_all_clients(chunk, VOLCENGINE_AUDIO_TYPE)
+            await self._webrtc_manager.handle_server2clients(chunk, VOLCENGINE_AUDIO_TYPE)
         except Exception as e:
             logger.error(f"处理音频输出失败: {e}")
 
     async def on_push(self) -> bytes | None:
         """获取用户音频输入"""
-        if not self.is_running: return None
-
-        try:
+        if self.is_running:
             if not self._audio_input_queue.empty():
-                return await self._audio_input_queue.get()
-        except Exception as e:
-            logger.debug(f"从音频队列获取数据失败: {e}")
-
-        return None
+                frame: AudioFrame = await self._audio_input_queue.get()
+                chunk = self.frame2pcm.process(frame)
+                return chunk
 
     async def start(self) -> None:
         """在单独线程中启动 WebRTC 管理器"""

@@ -12,22 +12,22 @@ class Frame2PcmProcessor:
     处理输入的音频帧（例如从WebRTC），将其转换为目标格式。
     """
 
-    def __init__(self, target_sample_rate: int = 48000, target_dtype: str = 'int16', buffer_duration_ms: int = 20):
-        self.target_sample_rate = target_sample_rate
-        self.target_dtype = target_dtype
+    def __init__(self, from_sample_rate: int = 48000, from_dtype: str = 'int16', buffer_duration_ms: int = 20):
+        self.from_sample_rate = from_sample_rate
+        self.from_dtype = from_dtype
         self.buffer_duration_ms = buffer_duration_ms
 
         # 音频缓冲区 - 累积小的音频块
         self.buffer = np.array([], dtype=np.int16)
-        self.min_buffer_samples = int(target_sample_rate * buffer_duration_ms / 1000)  # 例如100ms的音频
+        self.min_buffer_samples = int(from_sample_rate * buffer_duration_ms / 1000)  # 例如100ms的音频
 
         logger.info(
             f"音频输入处理器已初始化: "
-            f"目标采样率={target_sample_rate}Hz, 目标格式={target_dtype}, "
+            f"目标采样率={from_sample_rate}Hz, 目标格式={from_dtype}, "
             f"缓冲时长={buffer_duration_ms}ms ({self.min_buffer_samples} samples)"
             )
 
-    def process_frame(self, frame: AudioFrame) -> bytes | None:
+    def process(self, frame: AudioFrame) -> bytes | None:
         """
         处理一个 av.AudioFrame 对象。
         - 转换为 NumPy 数组
@@ -52,13 +52,13 @@ class Frame2PcmProcessor:
 
         # 2. 重采样
         source_sample_rate = frame.sample_rate
-        if source_sample_rate != self.target_sample_rate:
+        if source_sample_rate != self.from_sample_rate:
             if source_sample_rate == 0:
                 logger.warning("音频帧采样率为0，无法重采样，跳过。")
                 return None
 
             num_source_samples = len(audio_array)
-            num_target_samples = int(num_source_samples * self.target_sample_rate / source_sample_rate)
+            num_target_samples = int(num_source_samples * self.from_sample_rate / source_sample_rate)
 
             if num_target_samples == 0:
                 return None
@@ -71,10 +71,10 @@ class Frame2PcmProcessor:
 
         # 3. 转换数据类型
         if audio_array.dtype.kind == 'f':  # 如果是浮点数
-            if self.target_dtype == 'int16':
+            if self.from_dtype == 'int16':
                 audio_array = (np.clip(audio_array, -1.0, 1.0) * 32767).astype(np.int16)
-        elif audio_array.dtype != self.target_dtype:  # 如果是其他整数类型
-            audio_array = audio_array.astype(self.target_dtype)
+        elif audio_array.dtype != self.from_dtype:  # 如果是其他整数类型
+            audio_array = audio_array.astype(self.from_dtype)
 
         # 4. 添加到缓冲区
         self.buffer = np.concatenate([self.buffer, audio_array])
@@ -86,7 +86,7 @@ class Frame2PcmProcessor:
             self.buffer = self.buffer[self.min_buffer_samples:]  # 保留剩余部分
 
             result = output_samples.tobytes()
-            duration_ms = len(output_samples) / self.target_sample_rate * 1000
+            duration_ms = len(output_samples) / self.from_sample_rate * 1000
 
             # 添加音频质量检查
             max_amplitude = np.max(np.abs(output_samples)) if len(output_samples) > 0 else 0
@@ -104,7 +104,7 @@ class Frame2PcmProcessor:
         """刷新缓冲区，输出所有剩余的音频数据"""
         if len(self.buffer) > 0:
             result = self.buffer.tobytes()
-            duration_ms = len(self.buffer) / self.target_sample_rate * 1000
+            duration_ms = len(self.buffer) / self.from_sample_rate * 1000
             logger.info(
                 f"🎤 AudioFrameProcessor刷新: {len(result)} bytes, {len(self.buffer)} samples, {duration_ms:.1f}ms"
                 )
