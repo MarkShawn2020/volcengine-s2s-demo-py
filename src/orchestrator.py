@@ -49,9 +49,9 @@ class Orchestrator:
         self.is_running = True
         logger.info("starting")
         try:
-
+            # 得先启动火山服务，再启动 adapter 相关，否则会报错
             await self.volcengine_client.start()
-            
+
             await self.audio_adapter.start()
 
             async with asyncio.TaskGroup() as tg:
