@@ -28,6 +28,7 @@ class Orchestrator:
         self.is_running = False
         self.is_session_finished = False
         self.is_stopping = False
+        self._should_send_hello = False
 
         # 信号处理
         signal.signal(signal.SIGINT, self._keyboard_signal)
@@ -84,6 +85,12 @@ class Orchestrator:
         seq = 0
         try:
             while self.is_running and self.volcengine_client.is_active:
+                # 检查是否需要发送say-hello
+                if self._should_send_hello:
+                    self._should_send_hello = False
+                    logger.info("🚀 发送WebRTC连接后的SayHello")
+                    await self.volcengine_client.request_say_hello(VOLCENGINE_WELCOME)
+                
                 seq += 1
                 logger.debug(f"handing receiver ({seq})")
                 response = await self.volcengine_client.on_response()
@@ -120,8 +127,10 @@ class Orchestrator:
 
                     elif event == ServerEvent.SESSION_STARTED:
                         dialog_id = payload_msg.get('dialog_id', '')
-                        logger.info(f"🚀 会话已启动 (Dialog ID: {dialog_id[:8]}...)")  # SayHello将在音频IO准备就绪时发送
-                        await self.volcengine_client.request_say_hello(VOLCENGINE_WELCOME)
+                        logger.info(f"🚀 会话已启动 (Dialog ID: {dialog_id[:8]}...)")
+                        # 对于system模式立即发送say-hello，WebRTC模式等待连接建立
+                        if ADAPTER_MODE == AdapterMode.system:
+                            await self.volcengine_client.request_say_hello(VOLCENGINE_WELCOME)
 
                     elif event == ServerEvent.SESSION_FINISHED:
                         logger.info("✅ 会话已结束")
@@ -204,8 +213,9 @@ class Orchestrator:
 
         def on_adapter_prepared() -> None:
             """音频IO准备就绪回调"""
-            logger.info("🎯 音频IO已准备就绪，发送SayHello")
-            asyncio.create_task(self.volcengine_client.request_say_hello(VOLCENGINE_WELCOME))
+            logger.info("🎯 WebRTC连接已建立，发送SayHello")
+            # 设置标志，在主事件循环中发送say-hello
+            self._should_send_hello = True
 
         if adapter_mode == AdapterMode.system:
             from src.io_adapters.system.adapter import SystemAdapter
@@ -214,7 +224,10 @@ class Orchestrator:
         if adapter_mode == AdapterMode.webrtc:
             from src.io_adapters.webrtc.adapter import WebRTCAdapter
             from src.config import webrtc_config
-            return WebRTCAdapter(webrtc_config)
+            adapter = WebRTCAdapter(webrtc_config)
+            # 设置WebRTC准备就绪回调
+            adapter._on_prepared = on_adapter_prepared
+            return adapter
 
         raise Exception(f"invalid adapter mode: {adapter_mode}")
 

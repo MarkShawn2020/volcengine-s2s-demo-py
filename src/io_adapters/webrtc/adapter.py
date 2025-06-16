@@ -72,7 +72,10 @@ class WebRTCAdapter(AdapterBase):
             self._prepared_triggered = True
             logger.debug("🎯 WebRTC已准备就绪，触发prepared回调")
             if hasattr(self, '_on_prepared'):
-                self._on_prepared()
+                try:
+                    self._on_prepared()
+                except Exception as e:
+                    logger.error(f"触发prepared回调失败: {e}")
 
     def _send_webrtc_output(self, audio_data: bytes) -> None:
         """发送音频到WebRTC客户端"""
