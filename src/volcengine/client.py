@@ -8,8 +8,8 @@ from typing import Dict, Any
 import websockets
 from websockets import ClientConnection, State
 
-from v2.volcengine import protocol
-from v2.volcengine.config import start_session_req
+from src.volcengine import protocol
+from src.volcengine.config import start_session_req
 
 logger = logging.getLogger(__name__)
 

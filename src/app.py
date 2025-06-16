@@ -1,5 +1,4 @@
 import asyncio
-import io
 import json
 import logging
 import queue
@@ -7,60 +6,13 @@ import threading
 
 import pyaudio
 
-from v2.audio.utils.select_audio_device import select_audio_device
-from v2.volcengine import protocol
-from v2.volcengine.client import VoicengineClient
-from v2.volcengine.config import start_session_req, ws_connect_config
+from src.audio.utils.select_audio_device import select_audio_device
+from src.utils import recorder_thread, player_thread
+from src.volcengine import protocol
+from src.volcengine.client import VoicengineClient
+from src.volcengine.config import ws_connect_config, start_session_req
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-
-
-def recorder_thread(p, device_index, send_q, chunk_size, stop_event):
-    stream = p.open(
-        format=pyaudio.paInt16,
-        channels=1,
-        rate=16000,
-        input=True,
-        frames_per_buffer=chunk_size,
-        input_device_index=device_index
-        )
-    logger.info("录音线程已启动...");
-    while not stop_event.is_set():
-        try:
-            data = stream.read(chunk_size, exception_on_overflow=False);
-            send_q.put(data)
-        except IOError:
-            break
-    stream.stop_stream();
-    stream.close();
-    logger.info("录音线程已停止。")
-
-
-def player_thread(p, device_index, play_q, chunk_size, stop_event):
-    stream = p.open(
-        format=pyaudio.paFloat32,
-        channels=1,
-        rate=24000,
-        output=True,
-        frames_per_buffer=chunk_size,
-        output_device_index=device_index
-        )
-    logger.info("播放线程已启动...");
-    opus_buffer = io.BytesIO()
-    while not stop_event.is_set():
-        try:
-            item = play_q.get(timeout=1);
-            if item is None: continue
-            payload = item.get('payload_msg')
-            if isinstance(payload, bytes):
-                # 'format'现在可以省略，因为播放器只处理它认识的格式
-                stream.write(payload)
-        except queue.Empty:
-            continue
-    stream.stop_stream();
-    stream.close();
-    logger.info("播放线程已停止。")
 
 
 class RealTimeAudioApp:
@@ -149,13 +101,3 @@ class RealTimeAudioApp:
             if self.player and self.player.is_alive(): self.player.join()
             self.p.terminate()
             logger.info("清理完毕，程序退出。")
-
-
-if __name__ == "__main__":
-    use_pcm = True
-    print("默认使用PCM模式请求TTS音频。")
-    app = RealTimeAudioApp(use_tts_pcm=use_pcm)
-    try:
-        asyncio.run(app.run())
-    except KeyboardInterrupt:
-        logger.info("\n检测到用户中断 (Ctrl+C)。")
