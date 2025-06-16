@@ -14,6 +14,7 @@ from src.audio.utils.select_audio_device import select_audio_device
 from src.utils import recorder_thread, player_thread
 from src.config import VOLCENGINE_APP_ID, VOLCENGINE_ACCESS_TOKEN
 from src.volcengine import protocol
+from src.audio_utils import VoiceActivityDetector
 
 logger = logging.getLogger(__name__)
 
@@ -28,8 +29,9 @@ class UnifiedAudioApp:
         
         # 音频相关
         self.p = pyaudio.PyAudio()
-        self.send_queue = queue.Queue()
-        self.play_queue = queue.Queue()
+        # 使用有限队列避免延迟累积
+        self.send_queue = queue.Queue()  # 最多缓存50个音频块
+        self.play_queue = queue.Queue()  # 播放队列更小，减少延迟
         self.stop_event = threading.Event()
         
         # 线程
@@ -47,7 +49,7 @@ class UnifiedAudioApp:
         """初始化应用"""
         try:
             # 如果是本地适配器，需要配置TTS音频格式
-            if self.adapter_type == AdapterType.LOCAL and self.use_tts_pcm:
+            if self.use_tts_pcm:
                 # 临时导入配置
                 from src.volcengine.config import start_session_req
                 logger.info("配置为请求 PCM 格式的TTS音频流 (24kHz, Float32)")
@@ -87,14 +89,15 @@ class UnifiedAudioApp:
             if output_device_index is None:
                 return False
             
-            # 启动录音和播放线程
+            # 启动录音和播放线程，使用更大的chunk_size
+            chunk_size = 1600  # 使用1600帧，约100ms的音频
             self.recorder = threading.Thread(
                 target=recorder_thread, 
-                args=(self.p, input_device_index, self.send_queue, 1024, self.stop_event)
+                args=(self.p, input_device_index, self.send_queue, chunk_size, self.stop_event)
             )
             self.player = threading.Thread(
                 target=player_thread, 
-                args=(self.p, output_device_index, self.play_queue, 1024, self.stop_event)
+                args=(self.p, output_device_index, self.play_queue, chunk_size, self.stop_event)
             )
             
             self.recorder.start()
@@ -124,6 +127,16 @@ class UnifiedAudioApp:
             await self.adapter.send_text("你好")
             logger.info("已发送初始问候消息")
             
+            # 提示用户如何使用
+            print("\n" + "="*60)
+            print("🎤 语音对话已就绪！")
+            print("💡 使用提示：")
+            print("   - 正常音量说话即可，系统会自动检测语音活动")
+            print("   - 说话时会看到 🎤 发送语音 的提示")
+            print("   - 静音时会显示 🔇 静音检测中 的状态")
+            print("   - 按 Ctrl+C 退出程序")
+            print("="*60 + "\n")
+            
             # 启动发送和接收任务
             self.sender_task = asyncio.create_task(self._sender_task())
             self.receiver_task = asyncio.create_task(self._receiver_task())
@@ -140,27 +153,56 @@ class UnifiedAudioApp:
     
     async def _sender_task(self):
         """发送音频数据任务"""
-        logger.info("发送任务启动")
+        logger.info("发送任务启动，启用语音活动检测")
         audio_count = 0
+        sent_count = 0
+        failed_count = 0
+        max_failures = 10
+        
+        # 创建语音活动检测器
+        vad = VoiceActivityDetector(threshold=0.005, min_speech_frames=2)
         
         while not self.stop_event.is_set() and self.adapter and self.adapter.is_connected:
             try:
-                # 从队列获取音频数据
-                audio_chunk = await asyncio.to_thread(self.send_queue.get, timeout=1.0)
+                # 更短的超时，保证实时性
+                audio_chunk = await asyncio.to_thread(self.send_queue.get, timeout=0.2)
                 audio_count += 1
                 
-                # 发送给适配器
-                success = await self.adapter.send_audio(audio_chunk)
-                if not success:
-                    logger.warning("发送音频数据失败")
+                # 检测语音活动
+                should_send = vad.process_frame(audio_chunk)
+                
+                if should_send:
+                    # 发送音频数据
+                    success = await self.adapter.send_audio(audio_chunk)
+                    if success:
+                        sent_count += 1
+                        failed_count = 0  # 重置失败计数
+                        
+                        # 显示音量指示
+                        volume = vad.get_volume(audio_chunk)
+                        if sent_count % 20 == 0:  # 每20个包显示一次
+                            logger.debug(f"🎤 发送语音 #{sent_count}, 音量: {volume:.3f}")
+                    else:
+                        failed_count += 1
+                        logger.warning(f"发送音频失败 ({failed_count}/{max_failures})")
+                        if failed_count >= max_failures:
+                            logger.error("连续发送失败过多，可能连接有问题")
+                            break
+                else:
+                    # 静音期间，偶尔打印状态
+                    if audio_count % 100 == 0:
+                        volume = vad.get_volume(audio_chunk)
+                        logger.debug(f"🔇 静音检测中... 音量: {volume:.3f}")
                     
             except queue.Empty:
+                # 短暂等待，避免占用过多CPU
+                await asyncio.sleep(0.01)
                 continue
             except Exception as e:
                 logger.error(f"发送任务异常: {e}")
                 break
         
-        logger.info(f"发送任务结束，总共发送 {audio_count} 个音频chunk")
+        logger.info(f"发送任务结束，处理 {audio_count} 个音频包，实际发送 {sent_count} 个")
     
     async def _receiver_task(self):
         """接收音频数据任务"""
@@ -185,8 +227,16 @@ class UnifiedAudioApp:
                 
                 event = response.get('event')
                 if event == protocol.ServerEvent.TTS_RESPONSE:
-                    # 音频响应
-                    self.play_queue.put(response)
+                    # 音频响应 - 优化队列处理
+                    try:
+                        self.play_queue.put_nowait(response)
+                    except queue.Full:
+                        # 播放队列满时，移除最老的数据再放入新数据
+                        try:
+                            self.play_queue.get_nowait()
+                            self.play_queue.put_nowait(response)
+                        except queue.Empty:
+                            pass
                 elif event:
                     # 其他事件，友好显示
                     try:
@@ -221,7 +271,12 @@ class UnifiedAudioApp:
                 try:
                     self.play_queue.put_nowait({"payload_msg": audio_data})
                 except queue.Full:
-                    logger.warning("播放队列已满，丢弃音频数据")
+                    # 播放队列满时，移除最老的数据再放入新数据
+                    try:
+                        self.play_queue.get_nowait()
+                        self.play_queue.put_nowait({"payload_msg": audio_data})
+                    except queue.Empty:
+                        pass
                     
         except Exception as e:
             logger.error(f"接收任务异常: {e}")
