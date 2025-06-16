@@ -2,9 +2,9 @@ import uuid
 
 import pyaudio
 
-from src.audio.type import AudioType, AudioConfig
-from src.config import VOLCENGINE_AUDIO_TYPE, VOLCENGINE_APP_ID, VOLCENGINE_ACCESS_TOKEN, VOLCENGINE_BOT_NAME
-from src.io_adapters.webrtc.constants import (
+from v2.audio.type import AudioType, AudioConfig
+from v2.config import VOLCENGINE_AUDIO_TYPE, VOLCENGINE_APP_ID, VOLCENGINE_ACCESS_TOKEN, VOLCENGINE_BOT_NAME
+from v2.constants import (
     VOLCENGINE_SEND_AUDIO_SAMPLE_RATE, VOLCENGINE_RECV_PCM_AUDIO_SAMPLE_RATE,
     )
 

@@ -4,9 +4,9 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from src.audio.type import AudioType
-from src.io_adapters.type import AdapterMode
-from src.io_adapters.webrtc.config import WebrtcConfig
+from v2.audio.type import AudioType
+from v2.adapters.io.type import AdapterMode
+from v2.adapters.io.webrtc.config import WebrtcConfig
 
 logger = logging.getLogger(__name__)
 

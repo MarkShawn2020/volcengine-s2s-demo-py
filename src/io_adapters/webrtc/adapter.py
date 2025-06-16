@@ -6,18 +6,18 @@ from av.audio import AudioFrame
 
 from src.audio.processors import Ogg2PcmProcessor, PcmResamplerProcessor
 from src.audio.processors.frame2pcm import Frame2PcmProcessor
-from src.audio.type import AudioType
-from src.config import VOLCENGINE_AUDIO_TYPE
+from v2.audio.type import AudioType
+from v2.config import VOLCENGINE_AUDIO_TYPE
 from src.io_adapters.base import AdapterBase
-from src.io_adapters.webrtc.config import WebrtcConfig
-from src.io_adapters.webrtc.constants import (
+from v2.adapters.io.webrtc.config import WebrtcConfig
+from v2.constants import (
     VOLCENGINE_RECV_PCM_AUDIO_SAMPLE_RATE,
     VOLCENGINE_RECV_PCM_AUDIO_SOURCE_DTYPE,
     VOLCENGINE_SEND_AUDIO_SAMPLE_RATE,
     VOLCENGINE_SEND_AUDIO_SOURCE_DTYPE,
     )
 from src.io_adapters.webrtc.webrtc_manager import WebRTCManager
-from src.volcengine.config import recv_pcm_audio_config
+from v2.volcengine import recv_pcm_audio_config
 
 logger = logging.getLogger(__name__)
 

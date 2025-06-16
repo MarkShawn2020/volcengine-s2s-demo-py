@@ -6,7 +6,7 @@ import ffmpeg
 import pyaudio
 
 from src.audio.processors.base import AudioProcessor
-from src.audio.type import AudioConfig
+from v2.audio.type import AudioConfig
 
 logger = logging.getLogger(__name__)
 

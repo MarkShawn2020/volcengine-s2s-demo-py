@@ -4,7 +4,7 @@ from typing import Dict, Optional, Callable, Any
 import websockets
 from websockets.legacy.server import WebSocketServerProtocol
 
-from src.io_adapters.webrtc.config import WebrtcConfig
+from v2.adapters.io.webrtc.config import WebrtcConfig
 from src.utils.logger import logger
 
 

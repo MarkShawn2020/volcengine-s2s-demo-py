@@ -5,11 +5,11 @@ import pyaudio
 
 from src.audio.processors import Ogg2PcmProcessor
 from src.audio.processors.pcm_resampler import PcmResamplerProcessor
-from src.audio.type import AudioType
-from src.config import VOLCENGINE_AUDIO_TYPE, logger
+from v2.audio.type import AudioType
+from v2.config import VOLCENGINE_AUDIO_TYPE, logger
 from src.io_adapters.base import AdapterBase
 from src.io_adapters.system.system_audio_manager import SystemAudioManager
-from src.volcengine.config import send_audio_config, recv_pcm_audio_config
+from v2.volcengine import send_audio_config, recv_pcm_audio_config
 
 
 class SystemAdapter(AdapterBase):

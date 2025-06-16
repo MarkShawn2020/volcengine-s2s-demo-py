@@ -5,12 +5,12 @@ import signal
 import threading
 import time
 
-from src.config import (ADAPTER_MODE, VOLCENGINE_WELCOME, )
+from v2.config import (ADAPTER_MODE, VOLCENGINE_WELCOME, )
 from src.io_adapters.base import AdapterBase
-from src.io_adapters.type import AdapterMode
-from src.volcengine.client import VoicengineClient
-from src.volcengine.config import ws_connect_config
-from src.volcengine.protocol import ServerEvent
+from v2.adapters.io.type import AdapterMode
+from v2.volcengine.client import VoicengineClient
+from v2.volcengine import ws_connect_config
+from v2.volcengine import ServerEvent
 
 logger = logging.getLogger(__name__)
 
@@ -216,7 +216,7 @@ class Orchestrator:
 
         if adapter_mode == AdapterMode.webrtc:
             from src.io_adapters.webrtc.adapter import WebRTCAdapter
-            from src.config import webrtc_config
+            from v2.config import webrtc_config
             adapter = WebRTCAdapter(webrtc_config)
             # 设置WebRTC准备就绪回调
             adapter._on_prepared = on_adapter_prepared

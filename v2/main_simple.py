@@ -7,10 +7,10 @@ import threading
 
 import pyaudio
 
-from src.audio.utils.select_audio_device import select_audio_device
-from src.volcengine import protocol
-from src.volcengine.client import VoicengineClient
-from src.volcengine.config import start_session_req, ws_connect_config
+from v2.audio.utils.select_audio_device import select_audio_device
+from v2.volcengine import protocol
+from v2.volcengine.client import VoicengineClient
+from v2.volcengine.config import start_session_req, ws_connect_config
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)

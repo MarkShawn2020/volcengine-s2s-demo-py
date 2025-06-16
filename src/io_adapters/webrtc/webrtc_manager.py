@@ -5,7 +5,7 @@ from typing import Dict, Optional, Callable, Any, Awaitable
 from aiortc import RTCPeerConnection, RTCSessionDescription, RTCIceCandidate
 
 from src.audio.audio_stream_track import AudioStreamTrack
-from src.io_adapters.webrtc.config import WebrtcConfig
+from v2.adapters.io.webrtc.config import WebrtcConfig
 from src.io_adapters.webrtc.webrtc_signaling_server import WebRTCSignalingServer
 
 logger = logging.getLogger(__name__)

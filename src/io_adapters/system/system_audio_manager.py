@@ -4,8 +4,8 @@ import logging
 import pyaudio
 from typing_extensions import Optional
 
-from src.io_adapters.webrtc.constants import VOLCENGINE_SEND_AUDIO_SOURCE_DTYPE, VOLCENGINE_SEND_AUDIO_SAMPLE_RATE
-from src.volcengine.config import send_audio_config, recv_pcm_audio_config
+from v2.constants import VOLCENGINE_SEND_AUDIO_SAMPLE_RATE
+from v2.volcengine import send_audio_config, recv_pcm_audio_config
 
 logger = logging.getLogger(__name__)
 
