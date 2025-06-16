@@ -59,8 +59,8 @@ class Orchestrator:
                 # 根据官方代码经验
                 # receiver 里不要加任何的await，因为recv本来就在等
                 # sender里要加一点await，否则cpu会过高
-                tg.create_task(self.thread_server2client())
                 tg.create_task(self.thread_client2server())
+                tg.create_task(self.thread_server2client())
                 logger.info("started tasks")
         except Exception as e:
             logger.error(f"failed to start, reason: {e}")
