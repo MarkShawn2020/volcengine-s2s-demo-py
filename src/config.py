@@ -4,9 +4,9 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
+from src.adapters.base import AdapterType
+from src.adapters.webrtc.config import WebrtcConfig
 from src.audio.type import AudioType
-from src.adapters.io.type import AdapterMode
-from src.adapters.io.webrtc.config import WebrtcConfig
 
 logger = logging.getLogger(__name__)
 
@@ -16,8 +16,8 @@ VOLCENGINE_AUDIO_TYPE: AudioType = os.getenv("VOLCENGINE_AUDIO_TYPE", AudioType.
 VOLCENGINE_BOT_NAME = "小塔"
 VOLCENGINE_WELCOME = f"你好，我是{VOLCENGINE_BOT_NAME}，今天很高兴遇见你~"
 
-ADAPTER_MODE: AdapterMode = os.getenv("ADAPTER_MODE", AdapterMode.system)
-logger.info(f"Adapter Mode: {ADAPTER_MODE}")
+ADAPTER_TYPE: AdapterType = os.getenv("ADAPTER_TYPE", AdapterType.LOCAL)
+logger.info(f"Adapter Type: {ADAPTER_TYPE}")
 
 webrtc_config = WebrtcConfig(
     host=os.getenv("WEBRTC_HOST", "localhost"),
@@ -36,7 +36,7 @@ def validate_config():
         welcome: Optional[str] = Field(min_length=1)
 
     class AdaptersConfig(BaseModel):
-        mode: AdapterMode
+        type: AdapterType
         webrtc: Optional[WebrtcConfig]
 
     class GlobalConfig(BaseModel):
@@ -54,7 +54,7 @@ def validate_config():
                 ),
 
             adapter=AdaptersConfig(
-                mode=ADAPTER_MODE, webrtc=webrtc_config
+                type=ADAPTER_TYPE, webrtc=webrtc_config
                 )
             )
         logger.info(f"global_config: {global_config.model_dump_json(indent=2)}")
