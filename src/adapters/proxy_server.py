@@ -121,6 +121,18 @@ class ProxyClient:
             
             # 建立与火山引擎的连接
             self.volcengine_client = VoicengineClient(ws_config)
+            
+            # 配置PCM音频格式请求 (与main_simple.py保持一致)
+            from src.volcengine.config import start_session_req
+            start_session_req["tts"] = {
+                "audio_config": {
+                    "format": "pcm",
+                    "sample_rate": 24000,
+                    "channel": 1
+                }
+            }
+            logger.info("已配置PCM音频格式请求：24kHz Float32")
+            
             await self.volcengine_client.start()
             
             if self.volcengine_client.is_active:
