@@ -2,11 +2,11 @@ from typing import Dict, Any
 
 from src.adapters.base import (
     AudioAdapter, AdapterType, 
-    LocalConnectionConfig, BrowserConnectionConfig, TouchDesignerConnectionConfig
+    LocalConnectionConfig, BrowserConnectionConfig
 )
 from src.adapters.local_adapter import LocalAudioAdapter
 from src.adapters.browser_adapter import BrowserAudioAdapter
-from src.adapters.touchdesigner_adapter import TouchDesignerAdapter
+from src.adapters.touchdesigner_adapter import TouchDesignerAdapter, TouchDesignerConnectionConfig
 
 
 class AdapterFactory:

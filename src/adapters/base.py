@@ -85,8 +85,3 @@ class BrowserConnectionConfig(ConnectionConfig):
         )
 
 
-class TouchDesignerConnectionConfig(ConnectionConfig):
-    """TouchDesigner连接配置"""
-    
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
