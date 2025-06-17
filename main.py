@@ -1,17 +1,20 @@
 import argparse
 import asyncio
-import logging
 
 from src.adapters.base import AdapterType
 from src.config import VOLCENGINE_APP_ID, VOLCENGINE_ACCESS_TOKEN
-from src.unified_app import logger, UnifiedAudioApp
+from src.unified_app import  UnifiedAudioApp
+from src.utils import logger
 
 
 def main():
     """主函数"""
     parser = argparse.ArgumentParser(description="统一音频应用")
     parser.add_argument(
-        "--adapter", choices=["local", "browser", "touchdesigner"], default="local", help="选择适配器类型"
+        "--adapter",
+        choices=["local", "browser", "touchdesigner"],
+        default="local",
+        help="选择适配器类型"
         )
     parser.add_argument(
         "--proxy-url", default="ws://localhost:8765", help="代理服务器URL（仅browser模式需要）"
@@ -27,11 +30,6 @@ def main():
         )
 
     args = parser.parse_args()
-
-    # 设置日志
-    logging.basicConfig(
-        level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        )
 
     if args.use_pcm:
         print("默认使用PCM模式请求TTS音频")
@@ -51,7 +49,7 @@ def main():
             "access_token": VOLCENGINE_ACCESS_TOKEN
             }
     elif args.adapter == "touchdesigner":
-        adapter_type = AdapterType.TOUCHDESIGNER
+        adapter_type = AdapterType.TOUCH_DESIGNER
         config = {
             "app_id": VOLCENGINE_APP_ID,
             "access_token": VOLCENGINE_ACCESS_TOKEN,

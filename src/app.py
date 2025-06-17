@@ -7,7 +7,7 @@ import threading
 import pyaudio
 
 from src.audio.utils.select_audio_device import select_audio_device
-from src.utils import recorder_thread, player_thread
+from src.audio.threads import recorder_thread, player_thread
 from src.volcengine import protocol
 from src.volcengine.client import VoicengineClient
 from src.volcengine.config import ws_connect_config, start_session_req

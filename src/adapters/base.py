@@ -6,7 +6,7 @@ from enum import Enum
 class AdapterType(Enum):
     LOCAL = "local"
     BROWSER = "browser"
-    TOUCHDESIGNER = "touchdesigner"
+    TOUCH_DESIGNER = "touchdesigner"
 
 
 class AudioAdapter(ABC):

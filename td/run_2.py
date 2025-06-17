@@ -1,4 +1,4 @@
-import json
+﻿import json
 import struct
 import time
 
@@ -9,9 +9,12 @@ class VolcEngineInterface:
         self.tcpDat = op('tcp1')  # 你的TCP DAT名称
         self.udpInDat = op('udp_in1')  # UDP接收DAT名称
         self.udpOutDat = op('udp_out1')  # UDP发送DAT名称
+        print("[core] init ok")
+
 
     def onReceive(self, dat):
         """处理接收到的TCP控制消息"""
+        print(f"[core] onReceive: {dat}")
         if dat == self.tcpDat:
             # 处理控制消息
             data = dat.text
@@ -30,12 +33,14 @@ class VolcEngineInterface:
             # 处理音频数据
             self.handleAudioData(dat.bytes)
 
+
     def handleControlMessage(self, message):
         """处理控制消息"""
+        print(f"[core] handleControlMessage: {message}")
         msg_type = message.get('type')
 
         if msg_type == 'init':
-            print("收到初始化消息")
+            print("[core] 收到初始化消息")
             # 发送响应
             response = {
                 'type': 'init_response',
@@ -45,7 +50,7 @@ class VolcEngineInterface:
 
         elif msg_type == 'text':
             content = message.get('content', '')
-            print(f"收到文本: {content}")
+            print(f"[core] 收到文本: {content}")
 
         elif msg_type == 'ping':
             # 回复pong
@@ -55,17 +60,21 @@ class VolcEngineInterface:
                     }
                 )
 
+
     def sendControlMessage(self, message):
         """发送控制消息"""
+        print(f"[core] sendControlMessage: {message}")
         try:
             message_json = json.dumps(message)
             # TCP DAT会自动处理发送
             self.tcpDat.send(message_json)
         except Exception as e:
-            print(f"发送控制消息失败: {e}")
+            print(f"[core] 发送控制消息失败: {e}")
+
 
     def handleAudioData(self, audio_bytes):
         """处理接收到的音频数据"""
+        print(f"[core] handleAudioData: {audio_bytes}")
         if len(audio_bytes) < 12:
             return
 
@@ -75,10 +84,12 @@ class VolcEngineInterface:
 
         # 在这里处理音频数据
         # 可以发送到Audio Device Out或其他音频处理组件
-        print(f"收到音频数据: {len(audio_data)} 字节")
+        print(f"[core] 收到音频数据: {len(audio_data)} 字节")
+
 
     def sendAudioData(self, audio_data):
         """发送音频数据到Python"""
+        print(f"[core] sendAudioData: {audio_data}")
         try:
             # 创建包头
             timestamp = int(time.time() * 1000000)
@@ -89,7 +100,7 @@ class VolcEngineInterface:
             self.udpOutDat.send(packet)
 
         except Exception as e:
-            print(f"发送音频失败: {e}")
+            print(f"[core] 发送音频失败: {e}")
 
 
 # 创建接口实例

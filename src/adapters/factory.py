@@ -33,7 +33,7 @@ class AdapterFactory:
             )
             return BrowserAudioAdapter(connection_config)
         
-        elif adapter_type == AdapterType.TOUCHDESIGNER:
+        elif adapter_type == AdapterType.TOUCH_DESIGNER:
             connection_config = TouchDesignerConnectionConfig(
                 **config
             )
@@ -45,7 +45,7 @@ class AdapterFactory:
     @staticmethod
     def get_available_adapters() -> list[AdapterType]:
         """获取可用的适配器类型"""
-        return [AdapterType.LOCAL, AdapterType.BROWSER, AdapterType.TOUCHDESIGNER]
+        return [AdapterType.LOCAL, AdapterType.BROWSER, AdapterType.TOUCH_DESIGNER]
     
     @staticmethod
     def get_adapter_requirements(adapter_type: AdapterType) -> Dict[str, Any]:
@@ -65,7 +65,7 @@ class AdapterFactory:
                 "description": "通过代理服务器连接，需要proxy_url、app_id和access_token"
             }
         
-        elif adapter_type == AdapterType.TOUCHDESIGNER:
+        elif adapter_type == AdapterType.TOUCH_DESIGNER:
             return {
                 "required": ["app_id", "access_token"],
                 "optional": ["td_ip", "td_port", "audio_input_port", "audio_output_port", "control_port"],

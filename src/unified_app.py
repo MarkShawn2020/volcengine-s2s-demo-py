@@ -10,7 +10,7 @@ from src.adapters.base import AdapterType
 from src.adapters.factory import AdapterFactory
 from src.audio.utils.select_audio_device import select_audio_device
 from src.audio_utils import VoiceActivityDetector
-from src.utils import recorder_thread, player_thread
+from src.audio.threads import recorder_thread, player_thread
 from src.volcengine import protocol
 
 logger = logging.getLogger(__name__)
@@ -76,6 +76,15 @@ class UnifiedAudioApp:
     async def setup_audio_devices(self) -> bool:
         """设置音频设备"""
         try:
+            # TouchDesigner和Browser模式不需要系统音频设备
+            if self.adapter_type == AdapterType.TOUCH_DESIGNER:
+                logger.info("TouchDesigner模式：音频通过UDP传输，跳过系统音频设备选择")
+                return True
+            
+            if self.adapter_type == AdapterType.BROWSER:
+                logger.info("Browser模式：音频通过WebSocket传输，跳过系统音频设备选择")
+                return True
+            
             # 选择输入设备
             input_device_index = select_audio_device(self.p, "选择输入设备 (麦克风):", 'input')
             if input_device_index is None:
@@ -148,6 +157,16 @@ class UnifiedAudioApp:
 
     async def _sender_task(self):
         """发送音频数据任务"""
+        # TouchDesigner模式下，发送任务从TouchDesigner的UDP接收音频并转发到语音服务
+        if self.adapter_type == AdapterType.TOUCH_DESIGNER:
+            await self._sender_task_touchdesigner()
+        elif self.adapter_type == AdapterType.BROWSER:
+            await self._sender_task_browser()
+        else:
+            await self._sender_task_default()
+
+    async def _sender_task_default(self):
+        """默认发送任务 - 从系统麦克风发送"""
         logger.info("发送任务启动，启用语音活动检测")
         audio_count = 0
         sent_count = 0
@@ -198,6 +217,38 @@ class UnifiedAudioApp:
                 break
 
         logger.info(f"发送任务结束，处理 {audio_count} 个音频包，实际发送 {sent_count} 个")
+
+    async def _sender_task_touchdesigner(self):
+        """TouchDesigner发送任务 - 等待TouchDesigner连接和音频数据"""
+        logger.info("TouchDesigner发送任务启动，等待TouchDesigner音频数据")
+        
+        # TouchDesigner模式下，适配器内部会处理音频转发
+        # 这里主要是保持任务运行，让控制消息和状态监控正常工作
+        try:
+            while not self.stop_event.is_set() and self.adapter and self.adapter.is_connected:
+                await asyncio.sleep(1)
+                # 可以在这里添加状态检查和日志
+                
+        except Exception as e:
+            logger.error(f"TouchDesigner发送任务异常: {e}")
+
+        logger.info("TouchDesigner发送任务结束")
+
+    async def _sender_task_browser(self):
+        """Browser发送任务 - 等待浏览器音频数据"""
+        logger.info("Browser发送任务启动，等待浏览器音频数据")
+        
+        # Browser模式下，适配器内部会处理音频转发
+        # 这里主要是保持任务运行，让控制消息和状态监控正常工作
+        try:
+            while not self.stop_event.is_set() and self.adapter and self.adapter.is_connected:
+                await asyncio.sleep(1)
+                # 可以在这里添加状态检查和日志
+                
+        except Exception as e:
+            logger.error(f"Browser发送任务异常: {e}")
+
+        logger.info("Browser发送任务结束")
 
     async def _receiver_task(self):
         """接收音频数据任务"""
@@ -259,7 +310,9 @@ class UnifiedAudioApp:
         received_count = 0
 
         try:
+            logger.info("receiving task")
             async for audio_data in self.adapter.receive_audio():
+                logger.debug(f"received audio: {audio_data}")
                 if self.stop_event.is_set():
                     break
 

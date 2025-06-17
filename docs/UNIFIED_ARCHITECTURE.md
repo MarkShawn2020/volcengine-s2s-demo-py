@@ -118,12 +118,12 @@ config = {
 class TouchDesignerAdapter(AudioAdapter):
     @property
     def adapter_type(self) -> AdapterType:
-        return AdapterType.TOUCHDESIGNER
-    
+        return AdapterType.TOUCH_DESIGNER
+
     async def connect(self) -> bool:
         # 实现TouchDesigner连接逻辑
         pass
-    
+
     # 实现其他抽象方法...
 ```
 
@@ -132,8 +132,8 @@ class TouchDesignerAdapter(AudioAdapter):
 在 `AdapterFactory` 中添加：
 
 ```python
-elif adapter_type == AdapterType.TOUCHDESIGNER:
-    return TouchDesignerAdapter(config)
+elif adapter_type == AdapterType.TOUCH_DESIGNER:
+return TouchDesignerAdapter(config)
 ```
 
 ### 3. 更新配置类
