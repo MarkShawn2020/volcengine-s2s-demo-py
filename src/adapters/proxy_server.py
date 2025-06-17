@@ -208,6 +208,14 @@ class ProxyClient:
             audio_data = response.get('payload_msg')
             if isinstance(audio_data, bytes):
                 await self._send_audio_binary(audio_data)
+        elif event == protocol.ServerEvent.ASR_INFO:
+            # ASR_INFO事件：用户开始说话，通知浏览器打断AI语音
+            logger.info("🛑 检测到用户语音活动，转发ASR_INFO事件")
+            await self._send_message({
+                "type": "event",
+                "event": event,
+                "data": response.get('payload_msg', {})
+            })
         else:
             # 其他事件
             await self._send_message({

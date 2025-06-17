@@ -652,6 +652,7 @@
                 this.audioStream = null;
                 this.audioBuffers = [];
                 this.currentPlayTime = 0;
+                this.currentAudioSources = []; // 跟踪正在播放的音频源
                 
                 // 扬声器切换支持
                 this.audioElement = null;
@@ -1228,7 +1229,7 @@
                         break;
                     
                     case 'event':
-                        this.log(`📢 收到事件: ${data.event} - ${JSON.stringify(data.data)}`, 'info');
+                        this.handleServerEvent(data.event, data.data);
                         break;
                     
                     case 'error':
@@ -1241,6 +1242,17 @@
                     
                     default:
                         this.log(`❓ 未知消息类型: ${data.type}`, 'warning');
+                }
+            }
+
+            handleServerEvent(event, data) {
+                // 处理服务器事件，包括语音打断逻辑
+                this.log(`📢 收到事件: ${event} - ${JSON.stringify(data)}`, 'info');
+                
+                // ASR_INFO事件：用户开始说话，需要打断AI语音
+                if (event === 450) { // protocol.ServerEvent.ASR_INFO
+                    this.log('🛑 检测到用户语音，打断AI播放', 'warning');
+                    this.interruptAIAudio();
                 }
             }
 
@@ -1267,6 +1279,7 @@
                 // 清理音频流
                 this.audioBuffers = [];
                 this.currentPlayTime = 0;
+                this.interruptAIAudio(); // 停止所有正在播放的音频
                 if (this.audioStream) {
                     this.audioStream.disconnect();
                     this.audioStream = null;
@@ -1526,10 +1539,49 @@
                     source.start(startTime);
                     this.currentPlayTime = startTime + buffer.duration;
                     
+                    // 跟踪正在播放的音频源，用于语音打断
+                    this.currentAudioSources.push(source);
+                    
+                    // 播放结束后从跟踪列表中移除
+                    source.onended = () => {
+                        const index = this.currentAudioSources.indexOf(source);
+                        if (index > -1) {
+                            this.currentAudioSources.splice(index, 1);
+                        }
+                    };
+                    
                     this.log(`🎵 流式播放: ${buffer.duration.toFixed(3)}秒`, 'info');
 
                 } catch (error) {
                     this.log(`❌ 播放缓冲区失败: ${error.message}`, 'error');
+                }
+            }
+
+            interruptAIAudio() {
+                // 实现语音打断功能：停止所有正在播放的AI音频
+                try {
+                    if (this.currentAudioSources.length > 0) {
+                        this.log(`🛑 打断AI语音：停止 ${this.currentAudioSources.length} 个音频源`, 'warning');
+                        
+                        // 停止所有正在播放的音频源
+                        this.currentAudioSources.forEach(source => {
+                            try {
+                                source.stop();
+                            } catch (e) {
+                                // 忽略已经停止的音频源
+                            }
+                        });
+                        
+                        // 清空音频源跟踪列表
+                        this.currentAudioSources = [];
+                        
+                        // 重置播放时间，避免音频积压
+                        this.currentPlayTime = this.audioContext ? this.audioContext.currentTime : 0;
+                        
+                        this.log('✅ AI音频已成功打断', 'success');
+                    }
+                } catch (error) {
+                    this.log(`❌ 打断AI音频失败: ${error.message}`, 'error');
                 }
             }
 
