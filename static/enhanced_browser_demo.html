@@ -648,10 +648,10 @@
                 this.volumeAnalyser = null;
                 this.volumeDataArray = null;
                 
-                // 音频队列缓冲
-                this.audioQueue = [];
-                this.isPlaying = false;
-                this.nextPlayTime = 0;
+                // 流式音频播放
+                this.audioStream = null;
+                this.audioBuffers = [];
+                this.currentPlayTime = 0;
                 
                 // 扬声器切换支持
                 this.audioElement = null;
@@ -1175,12 +1175,25 @@
                         this.websocket.send(JSON.stringify(authMessage));
                     };
 
+                    this.websocket.binaryType = 'arraybuffer'; // 强制使用ArrayBuffer
+                    
                     this.websocket.onmessage = (event) => {
                         try {
-                            const data = JSON.parse(event.data);
-                            this.handleMessage(data);
+                            if (event.data instanceof ArrayBuffer) {
+                                // 直接处理二进制音频数据
+                                this.handleAudioBinary(event.data);
+                            } else if (event.data instanceof Blob) {
+                                // 转换Blob为ArrayBuffer
+                                event.data.arrayBuffer().then(buffer => {
+                                    this.handleAudioBinary(buffer);
+                                });
+                            } else {
+                                // 处理JSON消息
+                                const data = JSON.parse(event.data);
+                                this.handleMessage(data);
+                            }
                         } catch (e) {
-                            this.log(`❌ 解析消息失败: ${e.message}`, 'error');
+                            this.log(`❌ 处理消息失败: ${e.message}`, 'error');
                         }
                     };
 
@@ -1211,14 +1224,7 @@
                         this.updateConnectionStatus('connected', '🟢 已连接');
                         this.log(`🎉 认证成功，会话ID: ${data.session_id.substring(0, 8)}...`, 'success');
                         this.updateUI();
-                        break;
-                    
-                    case 'audio':
-                        const audioData = new Uint8Array(
-                            data.data.match(/.{1,2}/g).map(byte => parseInt(byte, 16))
-                        );
-                        this.playAudio(audioData);
-                        this.addMessage('AI', '🔊 [语音回复]', true);
+                        this.initAudioStream(); // 初始化音频流
                         break;
                     
                     case 'event':
@@ -1238,6 +1244,16 @@
                 }
             }
 
+            handleAudioBinary(arrayBuffer) {
+                // 直接处理二进制音频数据
+                try {
+                    this.streamAudioData(arrayBuffer);
+                    this.addMessage('AI', '🔊 [语音回复]', true);
+                } catch (error) {
+                    this.log(`❌ 处理音频数据失败: ${error.message}`, 'error');
+                }
+            }
+
             disconnect() {
                 if (this.websocket) {
                     this.websocket.close();
@@ -1248,10 +1264,13 @@
                     this.stopRecording();
                 }
                 
-                // 清理音频队列
-                this.audioQueue = [];
-                this.isPlaying = false;
-                this.nextPlayTime = 0;
+                // 清理音频流
+                this.audioBuffers = [];
+                this.currentPlayTime = 0;
+                if (this.audioStream) {
+                    this.audioStream.disconnect();
+                    this.audioStream = null;
+                }
                 
                 // 清理音频元素
                 if (this.audioElement) {
@@ -1401,161 +1420,117 @@
                 updateVolume();
             }
 
-            async playAudio(audioData) {
+            initAudioStream() {
+                // 初始化流式音频播放系统
                 try {
                     if (!this.audioContext) {
                         this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
                     }
                     
-                    // 确保AudioContext已启动 (Chrome需要用户交互)
-                    if (this.audioContext.state === 'suspended') {
-                        await this.audioContext.resume();
-                        this.log('🎵 AudioContext已恢复', 'info');
-                    }
-
-                    // 扬声器设置在playAudioQueue中处理
-
-                    // 火山引擎TTS返回的是原始Float32 PCM数据 (24kHz, 单声道, 小端序)
-                    const sampleRate = 24000;
-                    let samples;
-                    
-                    // 检查并处理字节序和格式
-                    if (audioData.length % 4 === 0) {
-                        // 标准Float32数据，4字节对齐
-                        const buffer = audioData.buffer.slice(audioData.byteOffset, audioData.byteOffset + audioData.byteLength);
-                        samples = new Float32Array(buffer);
-                        
-                        // 检查数据范围，如果超出[-1, 1]说明可能是字节序问题
-                        const maxValue = Math.max(...samples);
-                        const minValue = Math.min(...samples);
-                        
-                        if (maxValue > 2.0 || minValue < -2.0) {
-                            // 可能的字节序问题，尝试交换字节序
-                            this.log(`⚠️ 检测到可能的字节序问题 (范围: ${minValue.toFixed(2)} ~ ${maxValue.toFixed(2)})，尝试修复`, 'warning');
-                            
-                            const dataView = new DataView(buffer);
-                            samples = new Float32Array(samples.length);
-                            for (let i = 0; i < samples.length; i++) {
-                                // 尝试大端序读取
-                                samples[i] = dataView.getFloat32(i * 4, false); // false = 大端序
-                            }
-                            
-                            const newMaxValue = Math.max(...samples);
-                            const newMinValue = Math.min(...samples);
-                            this.log(`🔧 字节序修复后范围: ${newMinValue.toFixed(2)} ~ ${newMaxValue.toFixed(2)}`, 'info');
-                        }
-                        
-                        // 添加音频质量检查日志
-                        const avgValue = samples.reduce((sum, val) => sum + Math.abs(val), 0) / samples.length;
-                        this.log(`🔊 Float32音频处理完成: ${audioData.length}字节 → ${samples.length}采样点，平均幅度: ${avgValue.toFixed(4)}`, 'info');
-                        
-                    } else {
-                        // 不规则长度，截断到4字节边界
-                        const validLength = Math.floor(audioData.length / 4) * 4;
-                        if (validLength < 4) {
-                            this.log(`⚠️ 音频数据过短: ${audioData.length}字节，跳过播放`, 'warning');
-                            return;
-                        }
-                        
-                        const validData = audioData.slice(0, validLength);
-                        const buffer = validData.buffer.slice(validData.byteOffset, validData.byteOffset + validData.byteLength);
-                        samples = new Float32Array(buffer);
-                        this.log(`⚠️ 音频数据长度异常: ${audioData.length}字节，截断为${validLength}字节处理`, 'warning');
-                    }
-
-                    // 创建AudioBuffer并应用音量控制
-                    const buffer = this.audioContext.createBuffer(1, samples.length, sampleRate);
-                    const channelData = buffer.getChannelData(0);
-                    
-                    // 复制数据并应用音量控制
-                    for (let i = 0; i < samples.length; i++) {
-                        channelData[i] = samples[i] * this.aiVolume;
-                    }
-                    
-                    this.log(`🎵 音频已处理，音量: ${Math.round(this.aiVolume * 100)}%`, 'info');
-
-                    // 将音频添加到队列而不是立即播放
-                    this.audioQueue.push(buffer);
-                    
-                    // 如果当前没有在播放，启动播放队列
-                    if (!this.isPlaying) {
-                        this.playAudioQueue();
-                    }
-
-                    this.log(`🔊 音频已加入队列: ${samples.length}采样点 @ ${sampleRate}Hz`, 'info');
-
+                    this.log('🎵 音频流系统已初始化', 'info');
                 } catch (error) {
-                    this.log(`❌ 播放音频失败: ${error.message}`, 'error');
+                    this.log(`❌ 初始化音频流失败: ${error.message}`, 'error');
                 }
             }
 
-            async playAudioQueue() {
-                if (this.audioQueue.length === 0) {
-                    this.isPlaying = false;
-                    return;
-                }
+            streamAudioData(arrayBuffer) {
+                // 流式处理音频数据
+                try {
+                    if (!this.audioContext) {
+                        this.initAudioStream();
+                    }
+                    
+                    // 确保AudioContext已启动
+                    if (this.audioContext.state === 'suspended') {
+                        this.audioContext.resume();
+                    }
 
-                this.isPlaying = true;
-                const buffer = this.audioQueue.shift();
-                
-                // 创建音频源 (音量已在AudioBuffer中处理)
-                const source = this.audioContext.createBufferSource();
-                
-                source.buffer = buffer;
-                
-                // 尝试设置输出设备（使用MediaElement方式）
-                let destination = this.audioContext.destination;
-                if (this.selectedSpeakerId && this.selectedSpeakerId !== 'default') {
-                    try {
-                        // 使用Audio元素进行输出设备切换
-                        if (!this.audioElement) {
-                            this.audioElement = new Audio();
-                            this.audioElement.controls = false;
-                            this.audioElement.style.display = 'none';
-                            document.body.appendChild(this.audioElement);
+                    // 火山引擎返回24kHz Float32 PCM数据
+                    const sampleRate = 24000;
+                    let samples;
+                    
+                    // 检查数据长度是否为4的倍数（Float32）
+                    if (arrayBuffer.byteLength % 4 === 0) {
+                        samples = new Float32Array(arrayBuffer);
+                        this.log(`🔊 接收Float32音频流: ${arrayBuffer.byteLength}字节 → ${samples.length}采样点`, 'info');
+                    } else {
+                        // 处理不规则长度，截断到4字节边界
+                        const validLength = Math.floor(arrayBuffer.byteLength / 4) * 4;
+                        if (validLength < 4) {
+                            this.log(`⚠️ 音频数据过短: ${arrayBuffer.byteLength}字节，跳过播放`, 'warning');
+                            return;
                         }
                         
-                        if (this.audioElement.setSinkId) {
-                            await this.audioElement.setSinkId(this.selectedSpeakerId);
-                            this.log(`🔊 已切换到扬声器: ${this.selectedSpeakerId}`, 'info');
-                        }
-                        
-                        // 创建MediaStreamDestination并连接到Audio元素
+                        const validBuffer = arrayBuffer.slice(0, validLength);
+                        samples = new Float32Array(validBuffer);
+                        this.log(`⚠️ 音频数据长度异常: ${arrayBuffer.byteLength}字节，截断为${validLength}字节处理`, 'warning');
+                    }
+                    
+                    // 检查音频数据范围
+                    const maxValue = Math.max(...samples);
+                    const minValue = Math.min(...samples);
+                    const avgValue = samples.reduce((sum, val) => sum + Math.abs(val), 0) / samples.length;
+                    
+                    this.log(`🎵 音频分析: 范围[${minValue.toFixed(3)}, ${maxValue.toFixed(3)}], 平均幅度: ${avgValue.toFixed(4)}`, 'info');
+
+                    // 创建AudioBuffer
+                    const buffer = this.audioContext.createBuffer(1, samples.length, sampleRate);
+                    const channelData = buffer.getChannelData(0);
+                    
+                    // 应用音量并复制数据
+                    for (let i = 0; i < samples.length; i++) {
+                        channelData[i] = samples[i] * this.aiVolume;
+                    }
+
+                    // 立即播放，无需队列管理
+                    this.playAudioBuffer(buffer);
+
+                } catch (error) {
+                    this.log(`❌ 流式音频处理失败: ${error.message}`, 'error');
+                }
+            }
+
+            async playAudioBuffer(buffer) {
+                // 直接播放AudioBuffer
+                try {
+                    const source = this.audioContext.createBufferSource();
+                    source.buffer = buffer;
+                    
+                    // 简化的设备切换
+                    let destination = this.audioContext.destination;
+                    if (this.selectedSpeakerId && this.selectedSpeakerId !== 'default') {
                         if (!this.mediaStreamDestination) {
                             this.mediaStreamDestination = this.audioContext.createMediaStreamDestination();
+                            
+                            if (!this.audioElement) {
+                                this.audioElement = new Audio();
+                                this.audioElement.style.display = 'none';
+                                document.body.appendChild(this.audioElement);
+                            }
+                            
+                            this.audioElement.srcObject = this.mediaStreamDestination.stream;
+                            if (this.audioElement.setSinkId) {
+                                await this.audioElement.setSinkId(this.selectedSpeakerId);
+                            }
+                            this.audioElement.play();
                         }
                         destination = this.mediaStreamDestination;
-                        this.audioElement.srcObject = this.mediaStreamDestination.stream;
-                        this.audioElement.play().catch(e => {
-                            this.log(`⚠️ Audio元素播放失败: ${e.message}`, 'warning');
-                        });
-                        
-                    } catch (error) {
-                        this.log(`⚠️ 扬声器切换失败，使用默认设备: ${error.message}`, 'warning');
-                        destination = this.audioContext.destination;
                     }
+                    
+                    source.connect(destination);
+                    
+                    // 计算播放时间，实现连续播放
+                    const currentTime = this.audioContext.currentTime;
+                    const startTime = Math.max(currentTime, this.currentPlayTime);
+                    
+                    source.start(startTime);
+                    this.currentPlayTime = startTime + buffer.duration;
+                    
+                    this.log(`🎵 流式播放: ${buffer.duration.toFixed(3)}秒`, 'info');
+
+                } catch (error) {
+                    this.log(`❌ 播放缓冲区失败: ${error.message}`, 'error');
                 }
-                
-                // 直接连接到目标设备
-                source.connect(destination);
-                
-                // 计算开始播放时间，确保连续播放
-                const currentTime = this.audioContext.currentTime;
-                const startTime = Math.max(currentTime, this.nextPlayTime);
-                
-                // 播放音频
-                source.start(startTime);
-                
-                // 计算下一个音频块的开始时间
-                this.nextPlayTime = startTime + buffer.duration;
-                
-                // 监听播放结束事件
-                source.onended = () => {
-                    // 继续播放队列中的下一个音频
-                    this.playAudioQueue();
-                };
-                
-                this.log(`🔊 开始播放音频: ${buffer.duration.toFixed(3)}秒, 队列剩余: ${this.audioQueue.length}`, 'info');
             }
 
             sendMessage() {

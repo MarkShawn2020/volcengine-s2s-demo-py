@@ -204,13 +204,10 @@ class ProxyClient:
         event = response.get('event')
         
         if event == protocol.ServerEvent.TTS_RESPONSE:
-            # 音频响应
+            # 音频响应 - 直接发送二进制数据
             audio_data = response.get('payload_msg')
             if isinstance(audio_data, bytes):
-                await self._send_message({
-                    "type": "audio",
-                    "data": audio_data.hex()  # 转换为十六进制字符串
-                })
+                await self._send_audio_binary(audio_data)
         else:
             # 其他事件
             await self._send_message({
@@ -231,6 +228,21 @@ class ProxyClient:
             self.running = False
         except Exception as e:
             logger.error(f"发送消息失败: {e}")
+    
+    async def _send_audio_binary(self, audio_data: bytes):
+        """直接发送二进制音频数据"""
+        if not self.running:
+            return
+        
+        try:
+            # 发送二进制数据，浏览器将收到ArrayBuffer
+            await self.websocket.send(audio_data)
+            logger.debug(f"发送二进制音频数据: {len(audio_data)}字节")
+        except websockets.exceptions.ConnectionClosed:
+            logger.info(f"客户端 {self.client_id} 连接已关闭，无法发送音频")
+            self.running = False
+        except Exception as e:
+            logger.error(f"发送音频失败: {e}")
     
     async def _send_error(self, error_message: str):
         """发送错误消息"""
