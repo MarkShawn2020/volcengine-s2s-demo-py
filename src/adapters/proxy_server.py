@@ -36,6 +36,9 @@ class ProxyServer:
         logger.info(f"新客户端连接: {client_id}")
         
         proxy_client = ProxyClient(client_id, websocket)
+        # 传递配置给ProxyClient
+        if hasattr(self, 'config'):
+            proxy_client.config = self.config
         self.clients[client_id] = proxy_client
         
         try:
@@ -100,8 +103,9 @@ class ProxyClient:
     async def _handle_auth(self, data: Dict[str, Any]):
         """处理认证"""
         try:
-            app_id = data.get("app_id")
-            access_token = data.get("access_token")
+            # 优先使用配置中的认证信息，其次使用消息中的
+            app_id = getattr(self, 'config', {}).get("app_id") or data.get("app_id")
+            access_token = getattr(self, 'config', {}).get("access_token") or data.get("access_token")
             
             if not app_id or not access_token:
                 await self._send_error("Missing app_id or access_token")
