@@ -72,7 +72,7 @@ TouchDesigner适配器启动成功
 
 #### 音频输入链
 ```
-Audio Device In CHOP → Level CHOP → Null CHOP
+Audio Device In CHOP → Math CHOP → Null CHOP
        ↓
    (命名为audioin1)    (音量控制)   (输出缓冲)
 ```
@@ -84,17 +84,23 @@ Audio Device In CHOP → Level CHOP → Null CHOP
    - Mono: On
    - Active: On
 
-2. **Level CHOP** (`input_level`):
-   - 连接到Audio Device In CHOP
-   - Gain: 1.0
+2. **Math CHOP** (`input_gain`) - 音量控制:
+   - CHOP: `audioin1`
+   - Multiply: 1.0 (可调节增益)
 
 3. **Null CHOP** (`audio_buffer`):
-   - 连接到Level CHOP
+   - CHOP: `input_gain`
    - 用于音频数据缓冲
+
+#### 简化版音频输入链（推荐）
+```
+Audio Device In CHOP → Null CHOP
+   (audioin1)        (audio_buffer)
+```
 
 #### 音频输出链
 ```
-Null CHOP → Level CHOP → Audio Device Out CHOP
+Null CHOP → Math CHOP → Audio Device Out CHOP
 (接收缓冲)   (音量控制)     (输出到扬声器)
 ```
 
@@ -102,14 +108,20 @@ Null CHOP → Level CHOP → Audio Device Out CHOP
 1. **Null CHOP** (`audio_receive`):
    - 用于接收从Python返回的音频
 
-2. **Level CHOP** (`output_level`):
-   - 连接到audio_receive
-   - Gain: 0.8 (默认音量)
+2. **Math CHOP** (`output_gain`) - 音量控制:
+   - CHOP: `audio_receive`
+   - Multiply: 0.8 (默认音量)
 
 3. **Audio Device Out CHOP** (`audioout1`):
-   - 连接到Level CHOP
+   - CHOP: `output_gain`
    - Device: 选择您的扬声器设备
    - Sample Rate: 24000
+
+#### 简化版音频输出链（推荐）
+```
+Null CHOP → Audio Device Out CHOP
+(audio_receive)    (audioout1)
+```
 
 ### 2.4 创建控制界面
 

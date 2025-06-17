@@ -91,9 +91,9 @@ class VolcEngineInterface:
         
         # 配置
         self.python_ip = 'localhost'
-        self.control_port = 7003
-        self.audio_input_port = 7002  # TD发送音频
-        self.audio_output_port = 7001  # TD接收音频
+        self.control_port = 7003  # 控制端口
+        self.audio_input_port = 7001  # TD发送音频到Python
+        self.audio_output_port = 7002  # TD接收Python音频
         
         # 音频缓冲区（循环缓冲）
         self.audio_buffer = collections.deque(maxlen=48000)  # 1秒缓冲
