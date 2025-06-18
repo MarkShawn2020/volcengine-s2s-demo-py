@@ -1,6 +1,9 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any, AsyncGenerator, Optional
 from enum import Enum
+import asyncio
+import threading
+import queue
 
 
 class AdapterType(Enum):
@@ -43,9 +46,22 @@ class AudioAdapter(ABC):
         pass
     
     @property
+    @abstractmethod
     def adapter_type(self) -> AdapterType:
         """获取适配器类型"""
-        return AdapterType.LOCAL
+        pass
+    
+    async def setup_audio_devices(self, p, stop_event: threading.Event) -> tuple[Optional[threading.Thread], Optional[threading.Thread]]:
+        """设置音频设备，返回(recorder_thread, player_thread)"""
+        return None, None
+    
+    async def run_sender_task(self, send_queue: queue.Queue, stop_event: threading.Event) -> None:
+        """运行发送任务"""
+        pass
+    
+    async def run_receiver_task(self, play_queue: queue.Queue, stop_event: threading.Event) -> None:
+        """运行接收任务"""
+        pass
 
 
 
