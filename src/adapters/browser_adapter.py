@@ -7,7 +7,6 @@ import websockets
 
 from src.adapters.base import AudioAdapter, AdapterType, BrowserConnectionConfig
 from src.adapters.proxy_server import ProxyServer
-from src.config import WEBSOCKET_ADAPTER_SERVER_URI
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +29,7 @@ class BrowserAudioAdapter(AudioAdapter):
     async def connect(self) -> bool:
         """启动内嵌代理服务器"""
         try:
-            proxy_url = WEBSOCKET_ADAPTER_SERVER_URI
+            proxy_url = self.config.get("proxy_url")
 
             # 启动内嵌代理服务器
             self.proxy_server = ProxyServer(proxy_url)
