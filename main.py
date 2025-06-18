@@ -49,6 +49,14 @@ def main():
             "app_id": VOLCENGINE_APP_ID,
             "access_token": VOLCENGINE_ACCESS_TOKEN
             }
+    elif args.adapter == "touchdesigner":
+        adapter_type = AdapterType.TOUCH_DESIGNER
+        config = {
+            "td_ip": args.td_ip,
+            "td_port": args.td_port,
+            "app_id": VOLCENGINE_APP_ID,
+            "access_token": VOLCENGINE_ACCESS_TOKEN
+            }
     else:
         logger.error(f"不支持的适配器类型: {args.adapter}")
         return
