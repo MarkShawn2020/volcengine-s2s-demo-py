@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 
 from src.volcengine.client import VoicengineClient
 from src.volcengine import protocol
+from src.volcengine.config import ws_connect_config
 
 logger = logging.getLogger(__name__)
 
@@ -124,22 +125,10 @@ class ProxyClient:
             if not app_id or not access_token:
                 await self._send_error("Missing app_id or access_token")
                 return
-            
-            # 创建火山引擎连接配置
-            ws_config = {
-                "base_url": "wss://openspeech.bytedance.com/api/v3/realtime/dialogue",
-                "headers": {
-                    "X-Api-App-ID": app_id,
-                    "X-Api-Access-Key": access_token,
-                    "X-Api-Resource-Id": "volc.speech.dialog",
-                    "X-Api-App-Key": "PlgvMymc7f3tQnJ6",
-                    "X-Api-Connect-Id": str(uuid.uuid4()),
-                }
-            }
-            
+
             # 建立与火山引擎的连接
-            self.volcengine_client = VoicengineClient(ws_config)
-            
+            self.volcengine_client = VoicengineClient(ws_connect_config)
+
             # 配置PCM音频格式请求 (与main_simple.py保持一致)
             from src.volcengine.config import start_session_req
             start_session_req["tts"] = {

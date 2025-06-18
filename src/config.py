@@ -13,7 +13,8 @@ VOLCENGINE_APP_ID = os.environ["VOLCENGINE_APP_ID"]
 VOLCENGINE_ACCESS_TOKEN = os.environ["VOLCENGINE_ACCESS_TOKEN"]
 VOLCENGINE_AUDIO_TYPE: AudioType = os.getenv("VOLCENGINE_AUDIO_TYPE", AudioType.ogg)
 VOLCENGINE_BOT_NAME = "小塔"
-VOLCENGINE_WELCOME = f"你好，我是{VOLCENGINE_BOT_NAME}，今天很高兴遇见你~"
+
+WELCOME_MESSAGE = f"你好，我是{VOLCENGINE_BOT_NAME}，今天很高兴遇见你~"
 
 ADAPTER_TYPE: AdapterType = os.getenv("ADAPTER_TYPE", AdapterType.LOCAL)
 logger.info(f"Adapter Type: {ADAPTER_TYPE}")
@@ -43,7 +44,7 @@ def validate_config():
                 access_token=VOLCENGINE_ACCESS_TOKEN,
                 audio_type=VOLCENGINE_AUDIO_TYPE,
                 bot_name=VOLCENGINE_BOT_NAME,
-                welcome=VOLCENGINE_WELCOME
+                welcome=WELCOME_MESSAGE
                 ),
 
             adapter=AdaptersConfig(

@@ -109,11 +109,6 @@ class UnifiedAudioApp:
         try:
             logger.info("启动音频处理任务")
 
-            # 发送一个初始问候来激活对话
-            await asyncio.sleep(1)  # 等待连接稳定
-            await self.adapter.send_text("你好")
-            logger.info("已发送初始问候消息")
-
             # 提示用户如何使用
             print("\n" + "=" * 60)
             print("🎤 语音对话已就绪！")
