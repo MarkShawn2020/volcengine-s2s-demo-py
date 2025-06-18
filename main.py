@@ -27,7 +27,7 @@ def main():
         "--td-ip", default="localhost", help="TouchDesigner IP地址（仅touchdesigner模式需要）"
         )
     parser.add_argument(
-        "--td-port", type=int, default=7000, help="TouchDesigner端口（仅touchdesigner模式需要）"
+        "--td-port", type=int, default=7002, help="TouchDesigner端口（仅touchdesigner模式需要）"
         )
 
     args = parser.parse_args()

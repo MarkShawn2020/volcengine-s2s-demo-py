@@ -20,7 +20,7 @@ def main():
         "--td-ip", default="localhost", help="TouchDesigner IP地址 (默认: localhost)"
         )
     parser.add_argument(
-        "--td-port", type=int, default=7000, help="TouchDesigner端口 (默认: 7000)"
+        "--td-port", type=int, default=7002, help="TouchDesigner端口 (默认: 7002)"
         )
     parser.add_argument(
         "--listen-port", type=int, default=7001, help="监听TouchDesigner音频的端口 (默认: 7001)"
