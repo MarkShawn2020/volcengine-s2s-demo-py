@@ -206,17 +206,47 @@ class TouchDesignerAudioAdapter(AudioAdapter):
     async def _send_audio_to_td(self, audio_data: bytes):
         """发送音频数据到TouchDesigner"""
         try:
-            # 构造UDP数据包: [4字节长度][4字节类型(1=音频)][音频数据]
-            length = len(audio_data)
-            msg_type = 1  # 音频类型
+            # UDP最大数据包大小限制 (通常是65507字节，但我们用更安全的大小)
+            max_udp_size = 8192 - 8  # 减去头部8字节
             
-            packet = struct.pack('<I', length) + struct.pack('<I', msg_type) + audio_data
-            
-            # 发送到TouchDesigner
-            loop = asyncio.get_event_loop()
-            await loop.sock_sendto(self.udp_socket, packet, (self.td_ip, self.td_port))
-            
-            logger.debug(f"发送音频到TD: {len(audio_data)} 字节")
+            # 如果音频数据太大，需要分片发送
+            if len(audio_data) > max_udp_size:
+                # 分片发送
+                chunk_size = max_udp_size
+                total_chunks = (len(audio_data) + chunk_size - 1) // chunk_size
+                
+                for i in range(total_chunks):
+                    start = i * chunk_size
+                    end = min(start + chunk_size, len(audio_data))
+                    chunk = audio_data[start:end]
+                    
+                    # 构造分片包: [4字节长度][4字节类型(4=音频分片)][2字节chunk_id][2字节total_chunks][音频数据]
+                    length = len(chunk) + 4  # 加上chunk_id和total_chunks的4字节
+                    msg_type = 4  # 音频分片类型
+                    
+                    packet = (struct.pack('<I', length) + 
+                             struct.pack('<I', msg_type) + 
+                             struct.pack('<H', i) + 
+                             struct.pack('<H', total_chunks) + 
+                             chunk)
+                    
+                    # 发送到TouchDesigner
+                    loop = asyncio.get_event_loop()
+                    await loop.sock_sendto(self.udp_socket, packet, (self.td_ip, self.td_port))
+                    
+                logger.debug(f"发送音频到TD (分片): {len(audio_data)} 字节, {total_chunks} 个分片")
+            else:
+                # 构造UDP数据包: [4字节长度][4字节类型(1=音频)][音频数据]
+                length = len(audio_data)
+                msg_type = 1  # 音频类型
+                
+                packet = struct.pack('<I', length) + struct.pack('<I', msg_type) + audio_data
+                
+                # 发送到TouchDesigner
+                loop = asyncio.get_event_loop()
+                await loop.sock_sendto(self.udp_socket, packet, (self.td_ip, self.td_port))
+                
+                logger.debug(f"发送音频到TD: {len(audio_data)} 字节")
             
         except Exception as e:
             logger.warning(f"发送音频到TouchDesigner失败: {e}")
