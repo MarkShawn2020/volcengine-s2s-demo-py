@@ -4,6 +4,7 @@ import uuid
 import logging
 import websockets
 from typing import Dict, Any
+from urllib.parse import urlparse
 
 from src.volcengine.client import VoicengineClient
 from src.volcengine import protocol
@@ -14,9 +15,10 @@ logger = logging.getLogger(__name__)
 class ProxyServer:
     """代理服务器 - 解决浏览器WebSocket自定义header限制"""
     
-    def __init__(self, host: str = "localhost", port: int = 8765):
-        self.host = host
-        self.port = port
+    def __init__(self, websocket_uri: str = "ws://localhost:8765"):
+        parsed_url = urlparse(websocket_uri)
+        self.host = parsed_url.hostname or "localhost"
+        self.port = parsed_url.port or (443 if parsed_url.scheme == "wss" else 8765)
         self.clients: Dict[str, 'ProxyClient'] = {}
     
     async def start(self):

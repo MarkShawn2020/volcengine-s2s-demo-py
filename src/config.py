@@ -15,6 +15,8 @@ VOLCENGINE_AUDIO_TYPE: AudioType = os.getenv("VOLCENGINE_AUDIO_TYPE", AudioType.
 VOLCENGINE_BOT_NAME = "小塔"
 VOLCENGINE_WELCOME = f"你好，我是{VOLCENGINE_BOT_NAME}，今天很高兴遇见你~"
 
+WEBSOCKET_ADAPTER_SERVER_URI = os.getenv("WEBSOCKET_ADAPTER_SERVER_URI", "ws://localhost:8765")
+
 ADAPTER_TYPE: AdapterType = os.getenv("ADAPTER_TYPE", AdapterType.LOCAL)
 logger.info(f"Adapter Type: {ADAPTER_TYPE}")
 

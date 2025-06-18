@@ -7,6 +7,7 @@ import websockets
 
 from src.adapters.base import AudioAdapter, AdapterType, BrowserConnectionConfig
 from src.adapters.proxy_server import ProxyServer
+from src.config import WEBSOCKET_ADAPTER_SERVER_URI
 
 logger = logging.getLogger(__name__)
 
@@ -29,14 +30,10 @@ class BrowserAudioAdapter(AudioAdapter):
     async def connect(self) -> bool:
         """启动内嵌代理服务器"""
         try:
-            host = "localhost"
-            port = self._find_available_port(8765)
-            proxy_url = f"ws://{host}:{port}"
+            proxy_url = WEBSOCKET_ADAPTER_SERVER_URI
 
             # 启动内嵌代理服务器
-            self.proxy_server = ProxyServer(host, port)
-            # 需要将配置传递给ProxyServer，但原实现不支持，所以暂时这样处理
-            self.proxy_server.config = self.config
+            self.proxy_server = ProxyServer(proxy_url)
             self.server_task = asyncio.create_task(self.proxy_server.start())
 
             # 等待服务器启动
@@ -95,18 +92,6 @@ class BrowserAudioAdapter(AudioAdapter):
 
         self.is_connected = False
         logger.info("浏览器适配器已断开连接")
-
-    def _find_available_port(self, start_port: int) -> int:
-        """查找可用端口"""
-        import socket
-        for port in range(start_port, start_port + 100):
-            try:
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                    s.bind(('localhost', port))
-                    return port
-            except OSError:
-                continue
-        raise RuntimeError(f"无法在{start_port}-{start_port + 99}范围内找到可用端口")
 
     async def send_audio(self, audio_data: bytes) -> bool:
         """发送音频数据"""
