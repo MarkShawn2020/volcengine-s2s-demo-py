@@ -20,6 +20,7 @@ class ProxyServer:
         self.host = parsed_url.hostname or "localhost"
         self.port = parsed_url.port or (443 if parsed_url.scheme == "wss" else 8765)
         self.clients: Dict[str, 'ProxyClient'] = {}
+        self.server = None
     
     async def start(self):
         """启动代理服务器"""
@@ -29,8 +30,19 @@ class ProxyServer:
         async def handler(websocket):
             return await self.handle_client(websocket)
         
-        async with websockets.serve(handler, self.host, self.port):
-            await asyncio.Future()  # 运行forever
+        self.server = await websockets.serve(handler, self.host, self.port)
+        try:
+            await self.server.wait_closed()
+        except asyncio.CancelledError:
+            logger.info("代理服务器已被取消")
+            await self.stop()
+    
+    async def stop(self):
+        """停止代理服务器"""
+        if self.server:
+            self.server.close()
+            await self.server.wait_closed()
+            logger.info("代理服务器已停止")
     
     async def handle_client(self, websocket):
         """处理客户端连接"""

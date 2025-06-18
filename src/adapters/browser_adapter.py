@@ -23,6 +23,8 @@ class BrowserAudioAdapter(AudioAdapter):
         self._receiver_task = None
         self.proxy_server = None
         self.server_task = None
+        self._send_queue = None
+        self._play_queue = None
 
     @property
     def adapter_type(self) -> AdapterType:
@@ -84,6 +86,9 @@ class BrowserAudioAdapter(AudioAdapter):
             await self.ws.close()
             self.ws = None
 
+        if self.proxy_server:
+            await self.proxy_server.stop()
+            
         if self.server_task:
             self.server_task.cancel()
             try:
@@ -200,20 +205,22 @@ class BrowserAudioAdapter(AudioAdapter):
                 received_count += 1
                 logger.debug(f"收到音频数据 #{received_count}，大小: {len(audio_data)} bytes")
 
-                # 将音频数据放入播放队列
-                try:
-                    play_queue.put_nowait({
-                        "payload_msg": audio_data
-                    })
-                except queue.Full:
-                    # 播放队列满时，移除最老的数据再放入新数据
+                # Browser模式下，音频数据通过WebSocket直接转发给浏览器
+                # 不需要放入播放队列，因为没有本地播放设备
+                if play_queue is not None:
                     try:
-                        play_queue.get_nowait()
                         play_queue.put_nowait({
                             "payload_msg": audio_data
                         })
-                    except queue.Empty:
-                        pass
+                    except queue.Full:
+                        # 播放队列满时，移除最老的数据再放入新数据
+                        try:
+                            play_queue.get_nowait()
+                            play_queue.put_nowait({
+                                "payload_msg": audio_data
+                            })
+                        except queue.Empty:
+                            pass
 
         except Exception as e:
             logger.error(f"Browser接收任务异常: {e}")
