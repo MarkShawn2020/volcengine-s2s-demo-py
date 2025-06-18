@@ -6,10 +6,9 @@ import threading
 
 import pyaudio
 
-from src.adapters.base import AdapterType, LocalConnectionConfig, BrowserConnectionConfig, TouchDesignerConnectionConfig
+from src.adapters.base import AdapterType, LocalConnectionConfig, BrowserConnectionConfig
 from src.adapters.browser_adapter import BrowserAudioAdapter
 from src.adapters.local_adapter import LocalAudioAdapter
-from src.adapters.touchdesigner_adapter import TouchDesignerAudioAdapter
 from src.audio.threads import recorder_thread, player_thread
 from src.audio.utils.select_audio_device import select_audio_device
 from src.audio.utils.voice_activity_detector import VoiceActivityDetector
@@ -76,15 +75,7 @@ class UnifiedAudioApp:
                     **self.config.get('extra_params', {})
                     )
                 self.adapter = BrowserAudioAdapter(connection_config)
-            
-            elif self.adapter_type == AdapterType.TOUCH_DESIGNER:
-                connection_config = TouchDesignerConnectionConfig(
-                    td_ip=self.config['td_ip'],
-                    app_id=self.config['app_id'],
-                    access_token=self.config['access_token'],
-                    **self.config.get('extra_params', {})
-                    )
-                self.adapter = TouchDesignerAudioAdapter(connection_config)
+
             else:
                 raise Exception("not defined")
             logger.info(f"创建 {self.adapter_type.value} 适配器成功")
