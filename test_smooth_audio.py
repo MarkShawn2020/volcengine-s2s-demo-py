@@ -5,7 +5,7 @@
 import asyncio
 import logging
 from src.unified_app import UnifiedAudioApp
-from src.adapters.base import AdapterType
+from src.adapters.type import AdapterType
 from src.config import VOLCENGINE_APP_ID, VOLCENGINE_ACCESS_TOKEN
 
 # 设置简洁的日志格式

@@ -6,7 +6,8 @@ import threading
 import queue
 from typing import AsyncGenerator, Optional
 
-from src.adapters.base import AudioAdapter, AdapterType, ConnectionConfig
+from src.adapters.base import AudioAdapter, ConnectionConfig
+from src.adapters.type import AdapterType
 from src.volcengine import protocol
 from src.volcengine.client import VoicengineClient
 from src.volcengine.config import ws_connect_config

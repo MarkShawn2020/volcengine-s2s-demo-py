@@ -7,7 +7,8 @@ from typing import AsyncGenerator, Optional
 
 import websockets
 
-from src.adapters.base import AudioAdapter, AdapterType, BrowserConnectionConfig
+from src.adapters.base import AudioAdapter, BrowserConnectionConfig
+from src.adapters.type import AdapterType
 from src.adapters.proxy_server import ProxyServer
 
 logger = logging.getLogger(__name__)

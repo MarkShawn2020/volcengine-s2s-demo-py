@@ -5,7 +5,8 @@ import threading
 
 import pyaudio
 
-from src.adapters.base import AdapterType, LocalConnectionConfig, BrowserConnectionConfig
+from src.adapters.base import LocalConnectionConfig, BrowserConnectionConfig
+from src.adapters.type import AdapterType
 from src.adapters.browser_adapter import BrowserAudioAdapter
 from src.adapters.local_adapter import LocalAudioAdapter
 from src.adapters.touchdesigner_adapter import TouchDesignerAudioAdapter, TouchDesignerConnectionConfig

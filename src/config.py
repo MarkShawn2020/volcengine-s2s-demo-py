@@ -4,7 +4,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from src.adapters.base import AdapterType
+from src.adapters.type import AdapterType
 from src.audio.type import AudioType
 
 logger = logging.getLogger(__name__)

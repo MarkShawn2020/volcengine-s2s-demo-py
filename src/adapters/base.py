@@ -1,16 +1,10 @@
 import queue
 import threading
 from abc import ABC, abstractmethod
-from enum import Enum
 from typing import Dict, Any, AsyncGenerator, Optional
 
+from src.adapters.type import AdapterType
 from src.config import WELCOME_MESSAGE
-
-
-class AdapterType(Enum):
-    LOCAL = "local"
-    BROWSER = "browser"
-    TOUCH_DESIGNER = "touchdesigner"
 
 
 class AudioAdapter(ABC):

@@ -5,7 +5,7 @@ import dotenv
 
 dotenv.load_dotenv()
 
-from src.adapters.base import AdapterType
+from src.adapters.type import AdapterType
 from src.config import VOLCENGINE_APP_ID, VOLCENGINE_ACCESS_TOKEN
 from src.unified_app import UnifiedAudioApp
 from src.utils.logger import logger

@@ -6,7 +6,8 @@ import queue
 import json
 from typing import Dict, Any, AsyncGenerator, Optional
 
-from src.adapters.base import AudioAdapter, AdapterType, LocalConnectionConfig
+from src.adapters.base import AudioAdapter, LocalConnectionConfig
+from src.adapters.type import AdapterType
 from src.volcengine.client import VoicengineClient
 from src.volcengine import protocol
 from src.audio.threads import recorder_thread, player_thread

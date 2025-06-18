@@ -9,7 +9,8 @@ import socket
 import struct
 from typing import AsyncGenerator
 
-from src.adapters.base import AudioAdapter, AdapterType, ConnectionConfig
+from src.adapters.base import AudioAdapter, ConnectionConfig
+from src.adapters.type import AdapterType
 from src.volcengine.client import VoicengineClient
 from src.volcengine.config import ws_connect_config
 

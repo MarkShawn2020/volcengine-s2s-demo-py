@@ -351,8 +351,11 @@ logging.basicConfig(level=logging.DEBUG)
 ### 创建新适配器
 
 1. **继承基类**：
+
 ```python
-from src.adapters.base import AudioAdapter, AdapterType
+from src.adapters.base import AudioAdapter
+from src.adapters.type import AdapterType
+
 
 class CustomAdapter(AudioAdapter):
     @property
