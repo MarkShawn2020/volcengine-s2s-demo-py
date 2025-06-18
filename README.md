@@ -16,7 +16,62 @@
 - Python 3.11+
 - 火山引擎豆包AI账号
 
+## 🖥️ Windows 部署指南
+
+### 1. 安装 Python
+从 [Python官网](https://www.python.org/downloads/) 下载并安装 Python 3.11 或更高版本
+
+### 2. 安装 Poetry
+```cmd
+pip install poetry
+```
+
+### 3. 克隆并进入项目目录
+```cmd
+git clone <项目地址>
+cd volcengine-s2s-demo\py
+```
+
+### 4. 安装依赖
+```cmd
+poetry install
+```
+
+### 5. 配置环境变量
+在 Windows 中设置环境变量：
+```cmd
+set VOLC_APP_ID=你的App ID
+set VOLC_ACCESS_KEY=你的Access Key
+set VOLC_APP_KEY=你的App Key
+```
+
+或者创建 `.env` 文件：
+```env
+VOLC_APP_ID=你的App ID
+VOLC_ACCESS_KEY=你的Access Key
+VOLC_APP_KEY=你的App Key
+```
+
+### 6. 运行程序
+```cmd
+poetry run python main.py
+```
+
 ### 安装依赖
+
+**推荐使用 Poetry（推荐）:**
+```bash
+# 安装Poetry (如果尚未安装)
+pip install poetry
+
+# 安装项目依赖
+poetry install
+
+# 激活虚拟环境
+poetry shell
+```
+
+**或使用 pip:**
 ```bash
 pip install -r requirements.txt
 ```
@@ -32,13 +87,17 @@ export VOLC_APP_KEY="你的App Key"
 
 #### 🎤 本地语音对话（最简单）
 ```bash
+# 使用Poetry (推荐)
+poetry run python main.py --adapter local
+
+# 或直接使用Python
 python main.py --adapter local
 ```
 
 #### 🌐 浏览器语音通话
 ```bash
 # 1. 启动代理服务器
-python -m src.adapters.proxy_server
+poetry run python -m src.adapters.proxy_server
 
 # 2. 打开浏览器访问
 open static/enhanced_browser_demo.html
@@ -47,7 +106,7 @@ open static/enhanced_browser_demo.html
 #### 🎨 TouchDesigner集成
 ```bash
 # 启动TouchDesigner适配器
-python main.py --adapter touchdesigner
+poetry run python main.py --adapter touchdesigner
 
 # 在TouchDesigner中加载示例代码
 # 查看: docs/touchdesigner_example.py
@@ -132,17 +191,29 @@ docs/
 
 ### 自定义音频参数
 ```bash
+# Linux/macOS
 python main.py --adapter local --use-pcm
+
+# Windows (Poetry)
+poetry run python main.py --adapter local --use-pcm
 ```
 
 ### TouchDesigner网络配置
 ```bash
+# Linux/macOS
 python main.py --adapter touchdesigner --td-ip 192.168.1.100 --td-port 7000
+
+# Windows (Poetry)
+poetry run python main.py --adapter touchdesigner --td-ip 192.168.1.100 --td-port 7000
 ```
 
 ### 代理服务器端口
 ```bash
+# Linux/macOS
 python -m src.adapters.proxy_server --port 9000
+
+# Windows (Poetry)
+poetry run python -m src.adapters.proxy_server --port 9000
 ```
 
 ## 🤝 开发指南
