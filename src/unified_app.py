@@ -338,7 +338,7 @@ class UnifiedAudioApp:
         try:
             logger.info("receiving task")
             async for audio_data in self.adapter.receive_audio():
-                logger.debug(f"received audio: {audio_data}")
+                logger.debug(f"received audio: {len(audio_data)} bytes")
                 if self.stop_event.is_set():
                     break
 

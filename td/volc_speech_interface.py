@@ -1,4 +1,4 @@
-# TouchDesigner语音接口 - 完整版
+﻿# TouchDesigner语音接口 - 完整版
 # 将此代码放入TouchDesigner的Text DAT中
 
 import socket
@@ -91,8 +91,8 @@ class VolcEngineInterface:
         
         # 配置
         self.python_ip = 'localhost'
-        self.control_port = 7003  # 控制端口
-        self.audio_input_port = 7001  # TD发送音频到Python
+        self.control_port = 7004  # 更新为实际使用的端口
+        self.audio_input_port = 7002  # TD发送音频到Python
         self.audio_output_port = 7002  # TD接收Python音频
         
         # 音频缓冲区（循环缓冲）

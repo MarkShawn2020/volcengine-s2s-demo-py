@@ -9,6 +9,7 @@ from typing import Dict, Any, AsyncGenerator
 
 from src.adapters.base import AudioAdapter, AdapterType, TouchDesignerConnectionConfig
 from src.volcengine.client import VoicengineClient
+from src.volcengine.config import ws_connect_config
 
 logger = logging.getLogger(__name__)
 
@@ -153,31 +154,8 @@ class TouchDesignerAudioAdapter(AudioAdapter):
     
     async def _setup_volcengine_client(self):
         """设置火山引擎客户端"""
-        ws_config = {
-            "base_url": "wss://openspeech.bytedance.com/api/v3/realtime/dialogue",
-            "headers": {
-                "X-Api-App-ID": self.config.get("app_id"),
-                "X-Api-Access-Key": self.config.get("access_token"),
-                "X-Api-Resource-Id": "volc.speech.dialog",
-                "X-Api-App-Key": "PlgvMymc7f3tQnJ6",
-                "X-Api-Connect-Id": f"td_{int(time.time())}"
-            }
-        }
-        
-        self.volcengine_client = VoicengineClient(ws_config)
-        
-        # 配置PCM音频格式
-        from src.volcengine.config import start_session_req
-        start_session_req["tts"] = {
-            "audio_config": {
-                "format": "pcm",
-                "sample_rate": 24000,
-                "channel": 1
-            }
-        }
-        
+        self.volcengine_client = VoicengineClient(ws_connect_config)
         await self.volcengine_client.start()
-        
         if self.volcengine_client.is_active:
             self.session_id = self.volcengine_client.session_id
             self.receive_task = asyncio.create_task(self._receive_from_volcengine())
@@ -340,19 +318,24 @@ class TouchDesignerAudioAdapter(AudioAdapter):
                 audio_data = await asyncio.wait_for(self.outgoing_audio_queue.get(), timeout=1.0)
                 
                 if audio_data and len(audio_data) > 0:
-                    # 发送到TouchDesigner
-                    timestamp = int(time.time() * 1000000)
-                    header = struct.pack('<QI', timestamp, len(audio_data))
-                    packet = header + audio_data
+                    # 分块发送大的音频数据包（UDP最大包大小限制）
+                    max_chunk_size = 1400  # 保守的UDP包大小
                     
-                    try:
-                        self.audio_output_socket.sendto(
-                            packet, 
-                            (self.config.get('td_ip'), self.config.get('audio_output_port'))
-                        )
-                        logger.debug(f"发送音频到TouchDesigner: {len(audio_data)}字节")
-                    except socket.error as e:
-                        logger.warning(f"发送音频到TouchDesigner失败: {e}")
+                    for i in range(0, len(audio_data), max_chunk_size):
+                        chunk = audio_data[i:i + max_chunk_size]
+                        timestamp = int(time.time() * 1000000)
+                        header = struct.pack('<QI', timestamp, len(chunk))
+                        packet = header + chunk
+                        
+                        try:
+                            self.audio_output_socket.sendto(
+                                packet, 
+                                (self.config.get('td_ip'), self.config.get('audio_output_port'))
+                            )
+                            logger.debug(f"[Proxy -- ({len(chunk)}b) --> TD]")
+                        except socket.error as e:
+                            logger.warning(f"failed to send to TD, reason: {e}")
+                            break
                 
             except asyncio.TimeoutError:
                 continue
