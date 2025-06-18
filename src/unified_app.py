@@ -81,6 +81,7 @@ class UnifiedAudioApp:
                 connection_config = TouchDesignerConnectionConfig(
                     td_ip=self.config['td_ip'],
                     td_port=self.config['td_port'],
+                    listen_port=self.config['listen_port'],
                     app_id=self.config['app_id'],
                     access_token=self.config['access_token'],
                     **self.config.get('extra_params', {})

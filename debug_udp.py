@@ -164,7 +164,7 @@ def test_network_connectivity():
     print("-" * 50)
     
     # 测试端口是否被占用
-    ports_to_test = [7001, 7002, 7003]
+    ports_to_test = [7001, 7002, 7000]
     
     for port in ports_to_test:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

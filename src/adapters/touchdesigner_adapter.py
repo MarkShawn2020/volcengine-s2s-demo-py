@@ -117,7 +117,7 @@ class TouchDesignerAudioAdapter(AudioAdapter):
                         if len(audio_data) > 0:
                             # 转发到豆包
                             await self.send_audio(audio_data)
-                            logger.debug(f"从TD接收并转发音频: {len(audio_data)} 字节")
+                            # logger.debug(f"从TD接收并转发音频: {len(audio_data)} 字节")
                     elif msg_type == 2:  # 文本消息类型
                         text_data = data[8:8 + length].decode('utf-8')
                         await self.send_text(text_data)
