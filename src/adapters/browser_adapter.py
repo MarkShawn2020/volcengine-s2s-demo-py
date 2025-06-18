@@ -42,9 +42,9 @@ class BrowserAudioAdapter(AudioAdapter):
 
             # 等待服务器启动
             await asyncio.sleep(0.5)
-
-            # 连接到代理服务器
-            self.ws = await websockets.connect(proxy_url)
+            
+            self.is_connected = True
+            logger.info(f"代理服务器已启动，等待浏览器连接: {proxy_url}")
             return True
 
         except Exception as e:
@@ -163,7 +163,10 @@ class BrowserAudioAdapter(AudioAdapter):
         # 这里主要是保持任务运行，让控制消息和状态监控正常工作
         try:
             while not stop_event.is_set() and self.is_connected:
-                await asyncio.sleep(1)  # 可以在这里添加状态检查和日志
+                # 检查是否有活跃的客户端连接
+                if self.proxy_server and self.proxy_server.clients:
+                    logger.debug(f"当前有 {len(self.proxy_server.clients)} 个客户端连接")
+                await asyncio.sleep(1)
 
         except Exception as e:
             logger.error(f"Browser发送任务异常: {e}")

@@ -49,7 +49,6 @@ class ProxyServer:
         logger.info(f"新客户端连接: {client_id}")
 
         proxy_client = ProxyClient(client_id, websocket)
-        await proxy_client._send_welcome_to_volcengine()
         # 传递配置给ProxyClient
         if hasattr(self, 'config'):
             proxy_client.config = self.config

@@ -24,6 +24,9 @@ class ProxyClient:
 
     async def handle(self):
         """处理客户端消息"""
+        # 直接初始化 volcengine_client
+        await self._init_volcengine_client()
+        
         try:
             async for message in self.websocket:
                 if not self.running:
@@ -57,6 +60,33 @@ class ProxyClient:
                 )
         else:
             await self._send_error(f"Unknown message type: {message_type}")
+
+    async def _init_volcengine_client(self):
+        """初始化火山引擎客户端"""
+        try:
+            # 建立与火山引擎的连接
+            from src.volcengine.config import ws_connect_config
+            self.volcengine_client = VolcengineClient(ws_connect_config)
+            await self.volcengine_client.start()
+            
+            if self.volcengine_client.is_active:
+                # 启动接收任务
+                self.receive_task = asyncio.create_task(self._receive_from_volcengine())
+                
+                await self._send_message({
+                    "type": "ready",
+                    "session_id": self.volcengine_client.session_id
+                })
+                logger.info(f"客户端 {self.client_id} 已连接火山引擎")
+                
+                # 发送welcome消息
+                await self._send_welcome_to_volcengine()
+            else:
+                await self._send_error("Failed to connect to Volcengine")
+                
+        except Exception as e:
+            logger.error(f"初始化火山引擎失败: {e}")
+            await self._send_error(f"Volcengine initialization failed: {str(e)}")
 
     async def _handle_audio(self, data: Dict[str, Any]):
         """处理音频数据"""
@@ -138,7 +168,7 @@ class ProxyClient:
     async def _send_welcome_to_volcengine(self):
         """向火山引擎发送欢迎消息"""
         if not self.volcengine_client:
-            logger.debug("not yet initied")
+            logger.debug("volcengine_client not initialized")
             return
         try:
             await self.volcengine_client.push_text(WELCOME_MESSAGE)
