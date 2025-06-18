@@ -1,15 +1,15 @@
 import asyncio
 import json
 import logging
-import threading
 import queue
+import threading
 from typing import AsyncGenerator, Optional
 
 import websockets
 
 from src.adapters.base import AudioAdapter, BrowserConnectionConfig
-from src.adapters.type import AdapterType
 from src.adapters.proxy_server import ProxyServer
+from src.adapters.type import AdapterType
 
 logger = logging.getLogger(__name__)
 
@@ -45,30 +45,7 @@ class BrowserAudioAdapter(AudioAdapter):
 
             # 连接到代理服务器
             self.ws = await websockets.connect(proxy_url)
-
-            # 发送认证信息
-            auth_message = {
-                "type": "auth",
-                "app_id": self.config.get("app_id"),
-                "access_token": self.config.get("access_token")
-                }
-            await self.ws.send(json.dumps(auth_message))
-
-            # 等待认证响应
-            response = await self.ws.recv()
-            auth_response = json.loads(response)
-
-            if auth_response.get("type") == "auth_success":
-                self.is_connected = True
-                self.session_id = auth_response.get("session_id")
-                # 启动接收任务
-                self._receiver_task = asyncio.create_task(self._receive_messages())
-                logger.info(f"浏览器适配器连接成功，会话ID: {self.session_id[:8]}...")
-                logger.info(f"代理服务器运行在 {proxy_url}")
-                return True
-            else:
-                logger.error(f"认证失败: {auth_response}")
-                return False
+            return True
 
         except Exception as e:
             logger.error(f"浏览器适配器连接失败: {e}")
@@ -89,7 +66,7 @@ class BrowserAudioAdapter(AudioAdapter):
 
         if self.proxy_server:
             await self.proxy_server.stop()
-            
+
         if self.server_task:
             self.server_task.cancel()
             try:
@@ -172,7 +149,8 @@ class BrowserAudioAdapter(AudioAdapter):
                 logger.error(f"接收消息失败: {e}")
                 break
 
-    async def setup_audio_devices(self, p, stop_event: threading.Event) -> tuple[Optional[threading.Thread], Optional[threading.Thread]]:
+    async def setup_audio_devices(self, p, stop_event: threading.Event) -> tuple[
+        Optional[threading.Thread], Optional[threading.Thread]]:
         """Browser模式：音频通过WebSocket传输，跳过系统音频设备选择"""
         logger.info("Browser模式：音频通过WebSocket传输，跳过系统音频设备选择")
         return None, None
@@ -210,16 +188,20 @@ class BrowserAudioAdapter(AudioAdapter):
                 # 不需要放入播放队列，因为没有本地播放设备
                 if play_queue is not None:
                     try:
-                        play_queue.put_nowait({
-                            "payload_msg": audio_data
-                        })
+                        play_queue.put_nowait(
+                            {
+                                "payload_msg": audio_data
+                                }
+                            )
                     except queue.Full:
                         # 播放队列满时，移除最老的数据再放入新数据
                         try:
                             play_queue.get_nowait()
-                            play_queue.put_nowait({
-                                "payload_msg": audio_data
-                            })
+                            play_queue.put_nowait(
+                                {
+                                    "payload_msg": audio_data
+                                    }
+                                )
                         except queue.Empty:
                             pass
 

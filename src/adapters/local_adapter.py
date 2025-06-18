@@ -8,7 +8,7 @@ from typing import Dict, Any, AsyncGenerator, Optional
 
 from src.adapters.base import AudioAdapter, LocalConnectionConfig
 from src.adapters.type import AdapterType
-from src.volcengine.client import VoicengineClient
+from src.volcengine.client import VolcengineClient
 from src.volcengine import protocol
 from src.audio.threads import recorder_thread, player_thread
 from src.audio.utils.select_audio_device import select_audio_device
@@ -34,7 +34,7 @@ class LocalAudioAdapter(AudioAdapter):
     async def connect(self) -> bool:
         """建立与火山引擎的直接连接"""
         try:
-            self.client = VoicengineClient(ws_connect_config)
+            self.client = VolcengineClient(ws_connect_config)
             await self.client.start()
             
             if self.client.is_active:
@@ -100,7 +100,7 @@ class LocalAudioAdapter(AudioAdapter):
             return False
         
         try:
-            await self.client.request_say_hello(text)
+            await self.client.push_text(text)
             return True
         except Exception as e:
             logger.error(f"发送文本失败: {e}")

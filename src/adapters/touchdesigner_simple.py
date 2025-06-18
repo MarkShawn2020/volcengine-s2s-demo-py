@@ -11,7 +11,7 @@ from typing import AsyncGenerator
 
 from src.adapters.base import AudioAdapter, ConnectionConfig
 from src.adapters.type import AdapterType
-from src.volcengine.client import VoicengineClient
+from src.volcengine.client import VolcengineClient
 from src.volcengine.config import ws_connect_config
 
 logger = logging.getLogger(__name__)
@@ -52,7 +52,7 @@ class TouchDesignerSimpleAdapter(AudioAdapter):
         """连接豆包和设置UDP"""
         try:
             # 连接豆包
-            self.client = VoicengineClient(ws_connect_config)
+            self.client = VolcengineClient(ws_connect_config)
             await self.client.start()
             
             if not self.client.is_active:
@@ -162,7 +162,7 @@ class TouchDesignerSimpleAdapter(AudioAdapter):
         if not self.is_connected:
             return False
         try:
-            await self.client.request_say_hello(text)
+            await self.client.push_text(text)
             return True
         except:
             return False

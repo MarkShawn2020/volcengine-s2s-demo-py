@@ -9,7 +9,7 @@ from typing import AsyncGenerator, Optional
 from src.adapters.base import AudioAdapter, ConnectionConfig
 from src.adapters.type import AdapterType
 from src.volcengine import protocol
-from src.volcengine.client import VoicengineClient
+from src.volcengine.client import VolcengineClient
 from src.volcengine.config import ws_connect_config
 
 logger = logging.getLogger(__name__)
@@ -61,7 +61,7 @@ class TouchDesignerAudioAdapter(AudioAdapter):
         try:
             # 1. 建立与豆包的WebSocket连接
 
-            self.client = VoicengineClient(ws_connect_config)
+            self.client = VolcengineClient(ws_connect_config)
             await self.client.start()
 
             if not self.client.is_active:
@@ -248,7 +248,7 @@ class TouchDesignerAudioAdapter(AudioAdapter):
             return False
 
         try:
-            await self.client.request_say_hello(text)
+            await self.client.push_text(text)
 
             # 同时发送状态到TouchDesigner
             await self._send_status_to_td(f"发送文本: {text}")

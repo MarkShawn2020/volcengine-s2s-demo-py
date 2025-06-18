@@ -1,11 +1,15 @@
 import asyncio
 import json
+import logging
 from typing import Dict, Any
 
 import websockets
 
-from src.adapters.proxy_server import logger
+from src.config import WELCOME_MESSAGE
 from src.volcengine import protocol
+from src.volcengine.client import VolcengineClient
+
+logger = logging.getLogger(__name__)
 
 
 class ProxyClient:
@@ -14,8 +18,7 @@ class ProxyClient:
     def __init__(self, client_id: str, websocket):
         self.client_id = client_id
         self.websocket = websocket
-        self.volcengine_client = None
-        self.is_authenticated = False
+        self.volcengine_client: VolcengineClient | None = None
         self.receive_task = None
         self.running = True
 
@@ -47,44 +50,32 @@ class ProxyClient:
         elif message_type == "text":
             await self._handle_text(data)
         elif message_type == "ping":
-            await self._send_message({"type": "pong"})
+            await self._send_message(
+                {
+                    "type": "pong"
+                    }
+                )
         else:
             await self._send_error(f"Unknown message type: {message_type}")
 
     async def _handle_audio(self, data: Dict[str, Any]):
         """处理音频数据"""
-        if not self.is_authenticated or not self.volcengine_client:
-            await self._send_error("Not authenticated")
-            return
 
-        try:
-            # 从十六进制字符串转换回字节
-            audio_hex = data.get("data", "")
-            audio_data = bytes.fromhex(audio_hex)
+        # 从十六进制字符串转换回字节
+        audio_hex = data.get("data", "")
+        audio_data = bytes.fromhex(audio_hex)
 
-            await self.volcengine_client.push_audio(audio_data)
-
-        except Exception as e:
-            logger.error(f"处理音频失败: {e}")
-            await self._send_error(f"Audio processing failed: {str(e)}")
+        await self.volcengine_client.push_audio(audio_data)
 
     async def _handle_text(self, data: Dict[str, Any]):
         """处理文本消息"""
-        if not self.is_authenticated or not self.volcengine_client:
-            await self._send_error("Not authenticated")
-            return
-
-        try:
-            content = data.get("content", "")
-            await self.volcengine_client.request_say_hello(content)
-
-        except Exception as e:
-            logger.error(f"处理文本失败: {e}")
-            await self._send_error(f"Text processing failed: {str(e)}")
+        if not self.volcengine_client: return
+        content = data.get("content", "")
+        await self.volcengine_client.push_text(content)
 
     async def _receive_from_volcengine(self):
         """从火山引擎接收响应"""
-        while self.running and self.is_authenticated and self.volcengine_client:
+        while self.running and self.volcengine_client:
             try:
                 response = await self.volcengine_client.on_response()
                 if response:
@@ -110,59 +101,47 @@ class ProxyClient:
         elif event == protocol.ServerEvent.ASR_INFO:
             # ASR_INFO事件：用户开始说话，通知浏览器打断AI语音
             logger.info("🛑 检测到用户语音活动，转发ASR_INFO事件")
-            await self._send_message({
-                "type": "event",
-                "event": event,
-                "data": response.get('payload_msg', {})
-            })
+            await self._send_message(
+                {
+                    "type": "event",
+                    "event": event,
+                    "data": response.get('payload_msg', {})
+                    }
+                )
         else:
             # 其他事件
-            await self._send_message({
-                "type": "event",
-                "event": event,
-                "data": response.get('payload_msg', {})
-            })
+            await self._send_message(
+                {
+                    "type": "event",
+                    "event": event,
+                    "data": response.get('payload_msg', {})
+                    }
+                )
 
     async def _send_message(self, message: Dict[str, Any]):
         """发送消息到浏览器"""
-        if not self.running:
-            return
-
-        try:
-            await self.websocket.send(json.dumps(message, ensure_ascii=False))
-        except websockets.exceptions.ConnectionClosed:
-            logger.info(f"客户端 {self.client_id} 连接已关闭，无法发送消息")
-            self.running = False
-        except Exception as e:
-            logger.error(f"发送消息失败: {e}")
+        await self.websocket.send(json.dumps(message, ensure_ascii=False))
 
     async def _send_audio_binary(self, audio_data: bytes):
         """直接发送二进制音频数据"""
-        if not self.running:
-            return
-
-        try:
-            # 发送二进制数据，浏览器将收到ArrayBuffer
-            await self.websocket.send(audio_data)
-            logger.debug(f"发送二进制音频数据: {len(audio_data)}字节")
-        except websockets.exceptions.ConnectionClosed:
-            logger.info(f"客户端 {self.client_id} 连接已关闭，无法发送音频")
-            self.running = False
-        except Exception as e:
-            logger.error(f"发送音频失败: {e}")
+        await self.websocket.send(audio_data)
 
     async def _send_error(self, error_message: str):
         """发送错误消息"""
-        await self._send_message({
-            "type": "error",
-            "message": error_message
-        })
+        await self._send_message(
+            {
+                "type": "error",
+                "message": error_message
+                }
+            )
 
     async def _send_welcome_to_volcengine(self):
         """向火山引擎发送欢迎消息"""
+        if not self.volcengine_client:
+            logger.debug("not yet initied")
+            return
         try:
-            from src.config import WELCOME_MESSAGE
-            await self.volcengine_client.request_say_hello(WELCOME_MESSAGE)
+            await self.volcengine_client.push_text(WELCOME_MESSAGE)
             logger.info(f"已向火山引擎发送welcome消息: {WELCOME_MESSAGE}")
         except Exception as e:
             logger.error(f"发送welcome消息失败: {e}")

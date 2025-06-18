@@ -19,9 +19,11 @@ async def connect_ws(config):
         config['base_url'], additional_headers=config['headers'], ping_interval=5
         )
 
+
 seq = 0
 
-class VoicengineClient:
+
+class VolcengineClient:
     def __init__(self, config: Dict[str, Any]):
         self.config = config
 
@@ -133,7 +135,7 @@ class VoicengineClient:
         except Exception as e:
             logger.warning(f"failed to stop session, reason: {e}")
 
-    async def request_say_hello(self, content: str = "你好") -> None:
+    async def push_text(self, content: str = "你好") -> None:
         """发送SayHello事件"""
         say_hello_request = bytearray(protocol.generate_header())
         say_hello_request.extend(int(300).to_bytes(4, 'big'))  # SayHello事件ID: 300
