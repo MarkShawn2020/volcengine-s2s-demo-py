@@ -211,6 +211,8 @@ class LocalAudioAdapter(AudioAdapter):
                 event = response.get('event')
                 if event == protocol.ServerEvent.TTS_RESPONSE:
                     # 音频响应 - 优化队列处理
+                    audio_data = response.get('payload_msg')
+                    logger.info(f"收到TTS音频数据: {type(audio_data)}, 大小: {len(audio_data) if isinstance(audio_data, bytes) else 'N/A'}")
                     # 避免满
                     if play_queue.full():
                         play_queue.get_nowait()

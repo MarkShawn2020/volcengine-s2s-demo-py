@@ -126,7 +126,8 @@ class UnifiedAudioApp:
 
             # 启动发送和接收任务
             self.sender_task = asyncio.create_task(self.adapter.run_sender_task(self.send_queue, self.stop_event))
-            self.receiver_task = asyncio.create_task(self.adapter.run_receiver_task(self.play_queue, self.stop_event))
+            # 使用适配器内部的播放队列
+            self.receiver_task = asyncio.create_task(self.adapter.run_receiver_task(self.adapter._play_queue, self.stop_event))
 
             # 等待任务完成
             await asyncio.gather(self.sender_task, self.receiver_task)
