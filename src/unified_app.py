@@ -12,7 +12,7 @@ from src.adapters.local_adapter import LocalAudioAdapter
 from src.adapters.touchdesigner_adapter import TouchDesignerAudioAdapter
 from src.audio.threads import recorder_thread, player_thread
 from src.audio.utils.select_audio_device import select_audio_device
-from src.audio_utils import VoiceActivityDetector
+from src.audio.utils.voice_activity_detector import VoiceActivityDetector
 from src.volcengine import protocol
 
 logger = logging.getLogger(__name__)

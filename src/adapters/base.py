@@ -85,18 +85,4 @@ class BrowserConnectionConfig(ConnectionConfig):
         )
 
 
-class TouchDesignerConnectionConfig(ConnectionConfig):
-    """TouchDesigner连接配置"""
-    
-    def __init__(self, td_ip: str, app_id: str, access_token: str, **kwargs):
-        super().__init__(
-            td_ip=td_ip,
-            app_id=app_id,
-            access_token=access_token,
-            control_port=kwargs.get('control_port', 7003),
-            audio_input_port=kwargs.get('audio_input_port', 7001),
-            audio_output_port=kwargs.get('audio_output_port', 7002),
-            **kwargs
-        )
-
 
