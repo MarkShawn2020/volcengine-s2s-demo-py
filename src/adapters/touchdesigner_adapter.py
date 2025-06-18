@@ -37,7 +37,7 @@ class TouchDesignerAudioAdapter(AudioAdapter):
 
         # UDP相关
         self.td_ip = self.config.get("td_ip", "localhost")
-        self.td_port = self.config.get("td_port", 7002)
+        self.td_port = self.config.get("td_port", 7000)
         self.listen_port = self.config.get("listen_port", 7001)  # 监听TD发送的音频
 
         self.udp_socket = None

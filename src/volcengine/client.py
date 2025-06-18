@@ -19,6 +19,7 @@ async def connect_ws(config):
         config['base_url'], additional_headers=config['headers'], ping_interval=5
         )
 
+seq = 0
 
 class VoicengineClient:
     def __init__(self, config: Dict[str, Any]):
@@ -151,9 +152,12 @@ class VoicengineClient:
         logger.info(f"requested say-hello")
 
     async def push_audio(self, audio: bytes) -> None:
+        global seq
+
         if not self.is_active: return
 
         try:
+            seq += 1
             task_request = bytearray(
                 protocol.generate_header(
                     message_type=protocol.CLIENT_AUDIO_ONLY_REQUEST, serial_method=protocol.NO_SERIALIZATION
@@ -166,7 +170,9 @@ class VoicengineClient:
             task_request.extend((len(payload_bytes)).to_bytes(4, 'big'))  # payload size(4 bytes)
             task_request.extend(payload_bytes)
             push_result = await self.ws.send(task_request)
-            logger.debug(f"🏠 --> 📡 {len(payload_bytes)} bytes, result: {push_result}")
+            if seq % 100 == 0:
+                logger.debug(f"({seq}) 🏠 --> 📡 {len(payload_bytes)} bytes, result: {push_result}")
+
         except Exception as e:
             logger.warning(f"failed to upload audio, reason: {e}")
 

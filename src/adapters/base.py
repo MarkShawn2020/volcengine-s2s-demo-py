@@ -48,6 +48,8 @@ class AudioAdapter(ABC):
         return AdapterType.LOCAL
 
 
+
+
 class ConnectionConfig:
     """连接配置基类"""
     
