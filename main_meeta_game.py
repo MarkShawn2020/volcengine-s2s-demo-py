@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 import asyncio
-import sys
-import threading
+import json
+import signal
+from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import Set, Dict, Any
 import pygame
 import logging
+import websockets
+from pydantic import BaseModel
 
-logger = logging.getLogger(__name__)
 
 class GameState(Enum):
     IDLE = "idle"
@@ -15,11 +17,42 @@ class GameState(Enum):
     INTERACT = "interact"
     END = "end"
 
+
+class StateAction(Enum):
+    ENTER = "enter"
+    EXIT = "exit"
+    CURRENT = "current"
+
+
+class GameStateMessage(BaseModel):
+    type: str = "game_state_sync"
+    timestamp: int
+    state: str
+    action: str
+    data: Dict[str, Any] = {}
+
+    @classmethod
+    def create(cls, state: GameState, action: StateAction, data: Dict[str, Any] = None):
+        return cls(
+            timestamp=int(datetime.now().timestamp() * 1000),
+            state=state.value,
+            action=action.value,
+            data=data or {}
+        )
+
+
+logger = logging.getLogger(__name__)
+
+
 class MeetaGame:
-    def __init__(self):
+    def __init__(self, host: str = "localhost", port: int = 6666):
         self.current_state = GameState.IDLE
         self.running = True
         self.pygame_mixer = None
+        self.websocket_server = None
+        self.websocket_clients: Set = set()
+        self.server_host = host
+        self.server_port = port
         self._init_audio()
     
     def _init_audio(self):
@@ -27,13 +60,103 @@ class MeetaGame:
         try:
             pygame.mixer.init()
             self.pygame_mixer = pygame.mixer
-            logger.info("Audio system initialized successfully")
+            logger.info("Audio system initialized")
         except Exception as e:
-            logger.error(f"Audio system initialization failed: {e}")
+            logger.error(f"Audio init failed: {e}")
+    
+    async def _start_websocket_server(self):
+        """Start WebSocket server"""
+        try:
+            self.websocket_server = await websockets.serve(
+                self._handle_client,
+                self.server_host,
+                self.server_port
+            )
+            logger.info(f"WebSocket server started on {self.server_host}:{self.server_port}")
+        except Exception as e:
+            logger.error(f"WebSocket server start failed: {e}")
+    
+    async def _stop_websocket_server(self):
+        """Stop WebSocket server"""
+        if self.websocket_server:
+            try:
+                self.websocket_server.close()
+                await self.websocket_server.wait_closed()
+                logger.info("WebSocket server stopped")
+            except Exception as e:
+                logger.error(f"WebSocket server stop failed: {e}")
+        
+        # Close all client connections
+        if self.websocket_clients:
+            await asyncio.gather(
+                *[client.close() for client in self.websocket_clients],
+                return_exceptions=True
+            )
+            self.websocket_clients.clear()
+    
+    async def _handle_client(self, websocket):
+        """Handle new client connection"""
+        client_addr = f"{websocket.remote_address[0]}:{websocket.remote_address[1]}"
+        logger.info(f"New client connected: {client_addr}")
+        
+        self.websocket_clients.add(websocket)
+        
+        try:
+            # Send current game state to new client
+            message = GameStateMessage.create(self.current_state, StateAction.CURRENT,
+                                              {"message": "Current game state"})
+            await self._send_to_client(websocket, message)
+            
+            # Keep connection alive and handle incoming messages
+            async for message in websocket:
+                try:
+                    data = json.loads(message)
+                    logger.debug(f"Received message from {client_addr}: {data}")
+                    # Handle client messages if needed
+                except json.JSONDecodeError:
+                    logger.warning(f"Invalid JSON from {client_addr}: {message}")
+                    
+        except websockets.exceptions.ConnectionClosed:
+            logger.info(f"Client disconnected: {client_addr}")
+        except Exception as e:
+            logger.error(f"Error handling client {client_addr}: {e}")
+        finally:
+            self.websocket_clients.discard(websocket)
+    
+    async def _send_to_client(self, websocket, message: GameStateMessage):
+        """Send message to a specific client"""
+        try:
+            await websocket.send(message.model_dump_json())
+            logger.debug(f"Message sent to client: {message.state}:{message.action}")
+        except Exception as e:
+            logger.error(f"Failed to send message to client: {e}")
+    
+    async def _broadcast(self, state: GameState, action: StateAction, data: Dict[str, Any] = None):
+        """Broadcast state message to all connected clients"""
+        if not self.websocket_clients:
+            return
+        
+        message = GameStateMessage.create(state, action, data)
+        disconnected_clients = set()
+        
+        for client in self.websocket_clients:
+            try:
+                await client.send(message.model_dump_json())
+            except websockets.exceptions.ConnectionClosed:
+                disconnected_clients.add(client)
+            except Exception as e:
+                logger.error(f"Broadcast failed to client: {e}")
+                disconnected_clients.add(client)
+        
+        self.websocket_clients -= disconnected_clients
+        logger.info(f"Broadcasted {state.value}:{action.value} to {len(self.websocket_clients)} clients")
     
     async def run(self):
         """Main game loop"""
         logger.info("Game started")
+        
+        # Start WebSocket server
+        await self._start_websocket_server()
         
         while self.running:
             if self.current_state == GameState.IDLE:
@@ -48,10 +171,15 @@ class MeetaGame:
             await asyncio.sleep(0.1)
         
         logger.info("Game ended")
+        await self._stop_websocket_server()
     
     async def _handle_idle_state(self):
         """Handle idle state - loop background music, wait for keyboard input 1"""
         logger.info("Entering IDLE state, playing background music")
+        
+        # Send state sync
+        await self._broadcast(
+            GameState.IDLE, StateAction.ENTER, {"message": "Waiting for user input"})
         
         # Play background music (loop)
         self._play_background_music()
@@ -62,6 +190,8 @@ class MeetaGame:
         
         if user_input == "1":
             self._stop_background_music()
+            await self._broadcast(
+                GameState.IDLE, StateAction.EXIT, {"user_input": "1", "next_state": "welcome"})
             self.current_state = GameState.WELCOME
             logger.info("User pressed 1, switching to WELCOME state")
     
@@ -69,10 +199,16 @@ class MeetaGame:
         """Handle welcome state - play welcome audio"""
         logger.info("Entering WELCOME state, playing welcome audio")
         
+        # Send state sync
+        await self._broadcast(
+            GameState.WELCOME, StateAction.ENTER, {"message": "Playing welcome audio", "duration": 2})
+        
         # Play welcome audio
         await self._play_welcome_audio()
         
         # Auto switch to next state after audio finishes
+        await self._broadcast(
+            GameState.WELCOME, StateAction.EXIT, {"message": "Welcome audio finished", "next_state": "interact"})
         self.current_state = GameState.INTERACT
         logger.info("Welcome audio finished, switching to INTERACT state")
     
@@ -80,11 +216,17 @@ class MeetaGame:
         """Handle interact state - subprocess placeholder"""
         logger.info("Entering INTERACT state, executing interaction subprocess")
         
+        # Send state sync
+        await self._broadcast(
+            GameState.INTERACT, StateAction.ENTER, {"message": "Starting interaction subprocess", "duration": 3})
+        
         # Placeholder: simulate subprocess execution
         print("Executing interaction subprocess...")
         await asyncio.sleep(3)  # Simulate subprocess execution time
         
         # Subprocess finished, switch to end state
+        await self._broadcast(
+            GameState.INTERACT, StateAction.EXIT, {"message": "Interaction subprocess finished", "next_state": "end"})
         self.current_state = GameState.END
         logger.info("Interaction subprocess finished, switching to END state")
     
@@ -92,10 +234,16 @@ class MeetaGame:
         """Handle end state - play end audio"""
         logger.info("Entering END state, playing end audio")
         
+        # Send state sync
+        await self._broadcast(
+            GameState.END, StateAction.ENTER, {"message": "Playing end audio", "duration": 2})
+        
         # Play end audio
         await self._play_end_audio()
         
         # Return to idle state, start new cycle
+        await self._broadcast(
+            GameState.END, StateAction.EXIT, {"message": "End audio finished, returning to idle", "next_state": "idle"})
         self.current_state = GameState.IDLE
         logger.info("End audio finished, returning to IDLE state")
     
@@ -148,6 +296,7 @@ class MeetaGame:
         """Stop game"""
         self.running = False
         self._stop_background_music()
+        # WebSocket will be disconnected in the main run loop
 
 async def main():
     """Main function"""
