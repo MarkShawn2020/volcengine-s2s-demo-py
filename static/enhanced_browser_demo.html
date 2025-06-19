@@ -328,7 +328,7 @@
 
         .device-two-column {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: minmax(200px, 1fr) minmax(200px, 1fr);
             gap: 15px;
         }
 
@@ -339,6 +339,9 @@
             overflow: hidden;
             background: white;
             transition: border-color 0.3s;
+            height: 44px;
+            align-items: center;
+            width: 100%;
         }
 
         .device-combo:focus-within {
@@ -347,12 +350,16 @@
 
         .device-select-combo {
             flex: 1;
+            min-width: 0;
             padding: 8px 12px;
             border: none;
             font-size: 14px;
             background: transparent;
             cursor: pointer;
             outline: none;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         .device-select-combo:disabled {
@@ -362,17 +369,21 @@
         }
 
         .btn-combo {
-            padding: 8px 12px;
+            padding: 0;
             border: none;
-            font-size: 14px;
+            font-size: 16px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s;
-            min-width: 40px;
+            min-width: 44px;
+            width: 44px;
+            height: 100%;
             border-left: 1px solid #e9ecef;
             display: flex;
             align-items: center;
             justify-content: center;
+            font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+            flex-shrink: 0;
         }
 
         .btn-combo:hover:not(:disabled) {
