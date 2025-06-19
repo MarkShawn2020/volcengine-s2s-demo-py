@@ -43,6 +43,8 @@ class LocalAudioAdapter(AudioAdapter):
                 # 启动响应接收任务
                 self._receiver_task = asyncio.create_task(self._receive_responses())
                 logger.info(f"本地适配器连接成功，会话ID: {self.session_id[:8]}...")
+
+                await self.send_welcome()
                 return True
             
             return False

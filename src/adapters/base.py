@@ -40,8 +40,8 @@ class AudioAdapter(ABC):
         """发送文本消息"""
         pass
 
-    async def welcome(self):
-        return self.send_text(WELCOME_MESSAGE)
+    async def send_welcome(self):
+        return await self.send_text(WELCOME_MESSAGE)
 
     @property
     @abstractmethod

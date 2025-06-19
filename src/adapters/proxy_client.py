@@ -80,7 +80,7 @@ class ProxyClient:
                 logger.info(f"客户端 {self.client_id} 已连接火山引擎")
                 
                 # 发送welcome消息
-                await self._send_welcome_to_volcengine()
+                await self.send_welcome()
             else:
                 await self._send_error("Failed to connect to Volcengine")
                 
@@ -165,7 +165,7 @@ class ProxyClient:
                 }
             )
 
-    async def _send_welcome_to_volcengine(self):
+    async def send_welcome(self):
         """向火山引擎发送欢迎消息"""
         if not self.volcengine_client:
             logger.debug("volcengine_client not initialized")
