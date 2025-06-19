@@ -943,7 +943,7 @@
             }, 30000);
         }
 
-        log(message, type = 'info') {
+        log(message, type = 'info', showToast = false) {
             const logElement = document.getElementById('logDisplay');
             const timestamp = new Date().toLocaleTimeString();
             const logMessage = `[${timestamp}] ${message}\n`;
@@ -956,8 +956,10 @@
 
             console.log(`[${type.toUpperCase()}] ${message}`);
 
-            // 显示浮动指示器
-            this.showFloatingIndicator(message, type);
+            // 只在指定时显示浮动指示器
+            if (showToast) {
+                this.showFloatingIndicator(message, type);
+            }
         }
 
         showFloatingIndicator(message, type) {
@@ -1122,13 +1124,14 @@
 
             try {
                 this.updateConnectionStatus('connecting', '🟡 连接中...');
-                this.log('🔄 开始连接代理服务器...', 'info');
+                this.log('🔄 开始连接代理服务器...', 'info', true);
 
                 this.websocket = new WebSocket(proxyUrl);
 
                 this.websocket.onopen = () => {
                     this.isConnected = true;
                     this.updateConnectionStatus('connected', '🟢 已连接');
+                    this.log('🟢 连接成功', 'success', true);
                     this.updateUI();
                     this.initAudioStream(); // 初始化音频流
                 };
@@ -1158,18 +1161,18 @@
                 this.websocket.onclose = () => {
                     this.isConnected = false;
                     this.updateConnectionStatus('disconnected', '🔴 连接断开');
-                    this.log('🔌 WebSocket连接已断开', 'warning');
+                    this.log('🔌 WebSocket连接已断开', 'warning', true);
                     this.updateUI();
                 };
 
                 this.websocket.onerror = (error) => {
-                    this.log(`❌ WebSocket错误: ${error}`, 'error');
+                    this.log(`❌ WebSocket错误: ${error}`, 'error', true);
                     this.updateConnectionStatus('disconnected', '🔴 连接错误');
                     this.updateUI();
                 };
 
             } catch (error) {
-                this.log(`❌ 连接失败: ${error.message}`, 'error');
+                this.log(`❌ 连接失败: ${error.message}`, 'error', true);
                 this.updateConnectionStatus('disconnected', '🔴 连接失败');
                 this.updateUI();
             }
@@ -1249,7 +1252,7 @@
             this.isConnected = false;
             this.updateConnectionStatus('disconnected', '🔴 未连接');
             this.updateUI();
-            this.log('🔌 已断开连接，音频队列已清理', 'info');
+            this.log('🔌 已断开连接，音频队列已清理', 'info', true);
         }
 
         async toggleRecording() {
