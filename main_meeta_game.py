@@ -158,20 +158,30 @@ class MeetaGame:
         # Start WebSocket server
         await self._start_websocket_server()
         
-        while self.running:
-            if self.current_state == GameState.IDLE:
-                await self._handle_idle_state()
-            elif self.current_state == GameState.WELCOME:
-                await self._handle_welcome_state()
-            elif self.current_state == GameState.INTERACT:
-                await self._handle_interact_state()
-            elif self.current_state == GameState.END:
-                await self._handle_end_state()
-            
-            await asyncio.sleep(0.1)
-        
-        logger.info("Game ended")
-        await self._stop_websocket_server()
+        try:
+            while self.running:
+                if self.current_state == GameState.IDLE:
+                    await self._handle_idle_state()
+                elif self.current_state == GameState.WELCOME:
+                    await self._handle_welcome_state()
+                elif self.current_state == GameState.INTERACT:
+                    await self._handle_interact_state()
+                elif self.current_state == GameState.END:
+                    await self._handle_end_state()
+                
+                if not self.running:
+                    break
+                    
+                await asyncio.sleep(0.1)
+        except asyncio.CancelledError:
+            logger.info("Game loop cancelled")
+            raise
+        except KeyboardInterrupt:
+            logger.info("Game interrupted")
+            self.stop()
+        finally:
+            logger.info("Game ended")
+            await self._stop_websocket_server()
     
     async def _handle_idle_state(self):
         """Handle idle state - loop background music, wait for keyboard input 1"""
@@ -186,14 +196,18 @@ class MeetaGame:
         
         # Wait for keyboard input
         print("Press 1 to start game...")
-        user_input = await self._get_keyboard_input()
-        
-        if user_input == "1":
+        try:
+            user_input = await self._get_keyboard_input()
+            
+            if user_input == "1":
+                self._stop_background_music()
+                await self._broadcast(
+                    GameState.IDLE, StateAction.EXIT, {"user_input": "1", "next_state": "welcome"})
+                self.current_state = GameState.WELCOME
+                logger.info("User pressed 1, switching to WELCOME state")
+        except asyncio.CancelledError:
             self._stop_background_music()
-            await self._broadcast(
-                GameState.IDLE, StateAction.EXIT, {"user_input": "1", "next_state": "welcome"})
-            self.current_state = GameState.WELCOME
-            logger.info("User pressed 1, switching to WELCOME state")
+            return
     
     async def _handle_welcome_state(self):
         """Handle welcome state - play welcome audio"""
@@ -222,7 +236,11 @@ class MeetaGame:
         
         # Placeholder: simulate subprocess execution
         print("Executing interaction subprocess...")
-        await asyncio.sleep(3)  # Simulate subprocess execution time
+        try:
+            await asyncio.sleep(3)  # Simulate subprocess execution time
+        except asyncio.CancelledError:
+            logger.info("Interaction subprocess cancelled")
+            raise
         
         # Subprocess finished, switch to end state
         await self._broadcast(
@@ -274,6 +292,9 @@ class MeetaGame:
             # Simulate audio playback time
             await asyncio.sleep(2)
             print("🎤 Welcome audio finished")
+        except asyncio.CancelledError:
+            logger.info("Welcome audio cancelled")
+            raise
         except Exception as e:
             logger.error(f"Playing welcome audio failed: {e}")
     
@@ -284,19 +305,53 @@ class MeetaGame:
             # Simulate audio playback time
             await asyncio.sleep(2)
             print("🎤 End audio finished")
+        except asyncio.CancelledError:
+            logger.info("End audio cancelled")
+            raise
         except Exception as e:
             logger.error(f"Playing end audio failed: {e}")
     
     async def _get_keyboard_input(self) -> str:
-        """Async keyboard input"""
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, input)
+        """Async keyboard input with cancellation support"""
+        import sys
+        import select
+        
+        while self.running:
+            try:
+                # 检查是否被中断
+                if not self.running:
+                    break
+                    
+                if sys.stdin in select.select([sys.stdin], [], [], 0.1)[0]:
+                    line = sys.stdin.readline().strip()
+                    return line
+                await asyncio.sleep(0.1)
+            except asyncio.CancelledError:
+                return ""
+            except Exception:
+                return ""
+        return ""
     
     def stop(self):
         """Stop game"""
         self.running = False
         self._stop_background_music()
-        # WebSocket will be disconnected in the main run loop
+        logger.info("Game stopping...")
+        
+    def _setup_signal_handlers(self):
+        """Setup signal handlers for graceful shutdown"""
+        loop = asyncio.get_event_loop()
+        
+        def signal_handler():
+            logger.info("Received interrupt signal, stopping game...")
+            self.stop()
+            # 取消所有正在运行的任务
+            for task in asyncio.all_tasks(loop):
+                if not task.done():
+                    task.cancel()
+        
+        loop.add_signal_handler(signal.SIGINT, signal_handler)
+        loop.add_signal_handler(signal.SIGTERM, signal_handler)
 
 async def main():
     """Main function"""
@@ -304,17 +359,28 @@ async def main():
     
     game = MeetaGame()
     
+    task = None
     try:
-        await game.run()
+        game._setup_signal_handlers()
+        task = asyncio.create_task(game.run())
+        await task
     except KeyboardInterrupt:
-        print("\nGame interrupted by user")
-        game.stop()
+        logger.info("Game interrupted by user")
+        if task and not task.done():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                logger.info("Game task cancelled gracefully")
+    except asyncio.CancelledError:
+        logger.info("Game cancelled gracefully")
     except Exception as e:
         logger.error(f"Game runtime exception: {e}")
-        game.stop()
     finally:
+        game.stop()
         if game.pygame_mixer:
             pygame.mixer.quit()
+        logger.info("Game shutdown complete")
 
 if __name__ == "__main__":
     asyncio.run(main())
