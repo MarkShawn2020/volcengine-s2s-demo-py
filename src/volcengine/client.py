@@ -135,7 +135,7 @@ class VolcengineClient:
         except Exception as e:
             logger.warning(f"failed to stop session, reason: {e}")
 
-    async def push_text(self, content: str = "你好") -> None:
+    async def push_text(self, content: str) -> None:
         """发送SayHello事件"""
         say_hello_request = bytearray(protocol.generate_header())
         say_hello_request.extend(int(300).to_bytes(4, 'big'))  # SayHello事件ID: 300
@@ -152,6 +152,27 @@ class VolcengineClient:
         logger.info(f"requesting say-hello, content: {content}")
         await self.ws.send(say_hello_request)
         logger.info(f"requested say-hello")
+
+    async def push_chat_tts_text(self, content: str, start: bool = True, end: bool = True) -> None:
+        """发送ChatTTSText事件"""
+        chat_tts_request = bytearray(protocol.generate_header())
+        chat_tts_request.extend(int(500).to_bytes(4, 'big'))  # ChatTTSText事件ID: 500
+        chat_tts_request.extend((len(self.session_id)).to_bytes(4, 'big'))
+        chat_tts_request.extend(str.encode(self.session_id))
+
+        payload_data = {
+            "start": start,
+            "end": end,
+            "content": content
+        }
+        payload_bytes = str.encode(json.dumps(payload_data, ensure_ascii=False))
+        payload_bytes = gzip.compress(payload_bytes)
+        chat_tts_request.extend((len(payload_bytes)).to_bytes(4, 'big'))
+        chat_tts_request.extend(payload_bytes)
+        
+        logger.info(f"requesting chat-tts-text, content: {content}, start: {start}, end: {end}")
+        await self.ws.send(chat_tts_request)
+        logger.info(f"requested chat-tts-text")
 
     async def push_audio(self, audio: bytes) -> None:
         global seq

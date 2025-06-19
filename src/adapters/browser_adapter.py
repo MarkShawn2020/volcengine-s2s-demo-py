@@ -165,8 +165,8 @@ class BrowserAudioAdapter(AudioAdapter):
         try:
             while not stop_event.is_set() and self.is_connected:
                 # 检查是否有活跃的客户端连接
-                if self.proxy_server and self.proxy_server.clients:
-                    logger.debug(f"当前有 {len(self.proxy_server.clients)} 个客户端连接")
+                # if self.proxy_server and self.proxy_server.clients:
+                    # logger.debug(f"当前有 {len(self.proxy_server.clients)} 个客户端连接")
                 await asyncio.sleep(1)
 
         except Exception as e:

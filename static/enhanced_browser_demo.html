@@ -612,7 +612,7 @@
             <h3 class="section-title">💬 对话记录</h3>
             
             <div class="message-input-group">
-                <input type="text" id="messageInput" class="message-input" placeholder="输入文本消息..." value="你好">
+                <input type="text" id="messageInput" class="message-input" placeholder="输入文本消息..." value="仰天大笑出门去">
                 <button class="btn btn-primary" onclick="sendMessage()">发送</button>
             </div>
             
@@ -641,12 +641,13 @@
                 this.websocket = null;
                 this.mediaStream = null;
                 this.audioContext = null;
-                this.processor = null;
+                this.processor = null; 
                 this.isRecording = false;
                 this.isConnected = false;
                 this.autoScroll = true;
                 this.volumeAnalyser = null;
                 this.volumeDataArray = null;
+                this.microphonePermission = null; // 麦克风权限状态
                 
                 // 流式音频播放
                 this.audioStream = null;
@@ -824,6 +825,16 @@
             async loadAudioDevices() {
                 // 加载音频设备列表
                 try {
+                    // 先请求麦克风权限以获取设备标签
+                    try {
+                        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                        stream.getTracks().forEach(track => track.stop()); // 立即停止流
+                        this.log('🎤 麦克风权限已获取', 'success');
+                    } catch (permissionError) {
+                        this.log(`⚠️ 麦克风权限请求失败: ${permissionError.message}`, 'warning');
+                        this.log('📝 设备标签可能无法正常显示', 'info');
+                    }
+                    
                     const devices = await navigator.mediaDevices.enumerateDevices();
                     
                     this.audioDevices.microphones = devices.filter(device => 
@@ -1128,10 +1139,19 @@
                 this.saveConfiguration();
             }
 
-            updateUI() {
+            async updateUI() {
                 document.getElementById('connectBtn').disabled = this.isConnected;
                 document.getElementById('disconnectBtn').disabled = !this.isConnected;
-                document.getElementById('voiceButton').disabled = !this.isConnected;
+                
+                // 检查麦克风权限状态
+                await this.checkMicrophonePermission();
+                
+                // 录音按钮启用条件：连接状态 且 麦克风权限不是被拒绝状态
+                const isConnected = this.isConnected
+                const microphonePermission = this.microphonePermission
+                const canRecord = this.isConnected && this.microphonePermission !== 'denied';
+                console.log(`录音状态：`, {isConnected,microphonePermission, canRecord})
+                document.getElementById('voiceButton').disabled = !canRecord;
                 
                 const voiceButton = document.getElementById('voiceButton');
                 if (this.isRecording) {
@@ -1140,6 +1160,37 @@
                 } else {
                     voiceButton.className = 'voice-button idle';
                     voiceButton.textContent = '🎤';
+                }
+                
+                // 显示权限状态提示
+                if (!canRecord && this.isConnected) {
+                    if (this.microphonePermission === 'denied') {
+                        this.log('⚠️ 麦克风权限被拒绝，无法使用录音功能', 'warning');
+                    } else if (this.microphonePermission === 'prompt') {
+                        this.log('📝 点击录音按钮时将请求麦克风权限', 'info');
+                    }
+                }
+            }
+
+            async checkMicrophonePermission() {
+                // 检查麦克风权限状态
+                try {
+                    if (navigator.permissions) {
+                        const permission = await navigator.permissions.query({ name: 'microphone' });
+                        this.microphonePermission = permission.state;
+                        
+                        // 监听权限变化
+                        permission.onchange = () => {
+                            this.microphonePermission = permission.state;
+                            this.updateUI();
+                        };
+                    } else {
+                        // 对于不支持permissions API的浏览器，假设需要用户授权
+                        this.microphonePermission = 'prompt';
+                    }
+                } catch (error) {
+                    this.log(`⚠️ 无法检查麦克风权限: ${error.message}`, 'warning');
+                    this.microphonePermission = 'prompt';
                 }
             }
 
@@ -1166,14 +1217,10 @@
                     this.websocket = new WebSocket(proxyUrl);
 
                     this.websocket.onopen = () => {
-                        this.log('✅ WebSocket连接成功，发送认证信息...', 'success');
-                        
-                        const authMessage = {
-                            type: 'auth',
-                            app_id: appId,
-                            access_token: accessToken
-                        };
-                        this.websocket.send(JSON.stringify(authMessage));
+                        this.isConnected = true;
+                        this.updateConnectionStatus('connected', '🟢 已连接');
+                        this.updateUI();
+                        this.initAudioStream(); // 初始化音频流
                     };
 
                     this.websocket.binaryType = 'arraybuffer'; // 强制使用ArrayBuffer
@@ -1220,13 +1267,6 @@
 
             handleMessage(data) {
                 switch (data.type) {
-                    case 'auth_success':
-                        this.isConnected = true;
-                        this.updateConnectionStatus('connected', '🟢 已连接');
-                        this.log(`🎉 认证成功，会话ID: ${data.session_id.substring(0, 8)}...`, 'success');
-                        this.updateUI();
-                        this.initAudioStream(); // 初始化音频流
-                        break;
                     
                     case 'event':
                         this.handleServerEvent(data.event, data.data);
@@ -1325,11 +1365,15 @@
                     
                     // 如果选择了特定麦克风，添加设备ID约束
                     if (this.selectedMicrophoneId) {
-                        audioConstraints.deviceId = { exact: this.selectedMicrophoneId };
+                        // 使用ideal而不是exact，提供更好的兼容性
+                        audioConstraints.deviceId = { ideal: this.selectedMicrophoneId };
                         
                         const device = this.audioDevices.microphones.find(d => d.deviceId === this.selectedMicrophoneId);
                         const deviceName = device ? (device.label || '未知设备') : '选定设备';
-                        this.log(`🎤 使用麦克风: ${deviceName}`, 'info');
+                        this.log(`🎤 尝试使用麦克风: ${deviceName}`, 'info');
+                    } else {
+                        // 没有选择特定设备时，使用默认设备
+                        this.log(`🎤 使用默认麦克风设备`, 'info');
                     }
                     
                     this.mediaStream = await navigator.mediaDevices.getUserMedia({
@@ -1419,16 +1463,45 @@
 
             startVolumeMonitoring() {
                 const updateVolume = () => {
-                    if (!this.isRecording || !this.volumeAnalyser) return;
-                    
-                    this.volumeAnalyser.getByteFrequencyData(this.volumeDataArray);
-                    const average = this.volumeDataArray.reduce((sum, value) => sum + value, 0) / this.volumeDataArray.length;
-                    const percentage = Math.round((average / 255) * 100);
-                    
-                    document.getElementById('volumeBar').style.width = `${percentage}%`;
-                    document.getElementById('volumeText').textContent = `${percentage}%`;
-                    
-                    requestAnimationFrame(updateVolume);
+                    try {
+                        if (!this.isRecording || !this.volumeAnalyser || !this.volumeDataArray) {
+                            return;
+                        }
+                        
+                        // 检查音频上下文状态
+                        if (this.audioContext && this.audioContext.state === 'suspended') {
+                            this.audioContext.resume();
+                        }
+                        
+                        this.volumeAnalyser.getByteFrequencyData(this.volumeDataArray);
+                        
+                        // 计算音量平均值和峰值
+                        const average = this.volumeDataArray.reduce((sum, value) => sum + value, 0) / this.volumeDataArray.length;
+                        const peak = Math.max(...this.volumeDataArray);
+                        
+                        // 使用峰值和平均值的组合来提高敏感度
+                        const volumeLevel = Math.max(average, peak * 0.3);
+                        const percentage = Math.round((volumeLevel / 255) * 100);
+                        
+                        // 更新UI
+                        const volumeBar = document.getElementById('volumeBar');
+                        const volumeText = document.getElementById('volumeText');
+                        
+                        if (volumeBar && volumeText) {
+                            volumeBar.style.width = `${percentage}%`;
+                            volumeText.textContent = `${percentage}%`;
+                        }
+                        
+                        // 如果录音中，继续监控
+                        if (this.isRecording) {
+                            requestAnimationFrame(updateVolume);
+                        }
+                        
+                    } catch (error) {
+                        this.log(`⚠️ 音量监控异常: ${error.message}`, 'warning');
+                        // 异常时停止监控，避免无限循环错误
+                        return;
+                    }
                 };
                 updateVolume();
             }
@@ -1585,7 +1658,7 @@
                 }
             }
 
-            sendMessage() {
+            async sendMessage() {
                 const messageInput = document.getElementById('messageInput');
                 const message = messageInput.value.trim();
                 
@@ -1599,15 +1672,60 @@
                     return;
                 }
 
-                const textMessage = {
-                    type: 'text',
-                    content: message
-                };
-
-                this.websocket.send(JSON.stringify(textMessage));
+                // 按照官方文档发送三包ChatTTSText消息
+                await this.sendChatTTSTextInThreePackets(message);
                 this.addMessage('User', message);
-                this.log(`📤 发送文本消息: ${message}`, 'info');
+                this.log(`📤 发送ChatTTSText消息(三包格式): ${message}`, 'info');
                 messageInput.value = '';
+            }
+
+            async sendChatTTSTextInThreePackets(fullMessage) {
+                try {
+                    // 将消息分成两部分进行演示，实际使用中可以按需分割
+                    const midPoint = Math.ceil(fullMessage.length / 2);
+                    const firstPart = fullMessage.substring(0, midPoint);
+                    const secondPart = fullMessage.substring(midPoint);
+
+                    // 第一包：开始包
+                    const firstPacket = {
+                        type: 'chat_tts_text',
+                        start: true,
+                        end: false,
+                        content: firstPart
+                    };
+                    this.websocket.send(JSON.stringify(firstPacket));
+                    this.log(`📤 发送第一包: ${firstPacket}`, 'info');
+                    
+                    // 等待一下确保包的顺序
+                    await new Promise(resolve => setTimeout(resolve, 10));
+
+                    // 第二包：中间包（如果有第二部分内容）
+                    if (secondPart) {
+                        const middlePacket = {
+                            type: 'chat_tts_text',
+                            start: false,
+                            end: false,
+                            content: secondPart
+                        };
+                        this.websocket.send(JSON.stringify(middlePacket));
+                        this.log(`📤 发送第二包: ${secondPart}`, 'info');
+                        
+                        await new Promise(resolve => setTimeout(resolve, 10));
+                    }
+
+                    // 第三包：结束包
+                    const endPacket = {
+                        type: 'chat_tts_text',
+                        start: false,
+                        end: true,
+                        content: ""
+                    };
+                    this.websocket.send(JSON.stringify(endPacket));
+                    this.log(`📤 发送第三包: ${endPacket}`, 'info');
+
+                } catch (error) {
+                    this.log(`❌ 发送ChatTTSText失败: ${error.message}`, 'error');
+                }
             }
 
             addMessage(sender, content, isAudio = false) {

@@ -15,7 +15,10 @@ def main():
     """主函数"""
     parser = argparse.ArgumentParser(description="统一音频应用")
     parser.add_argument(
-        "--adapter", choices=["local", "browser", "touchdesigner"], default="local", help="选择适配器类型"
+        "--adapter", 
+        choices=["local", "browser", "touchdesigner", "touchdesigner-webrtc", "touchdesigner-webrtc-proper"], 
+        default="local", 
+        help="选择适配器类型"
         )
     parser.add_argument(
         "--proxy-url", default="ws://localhost:8765", help="代理服务器URL（仅browser模式需要）"
@@ -28,6 +31,12 @@ def main():
         )
     parser.add_argument(
         "--td-port", type=int, default=7000, help="TouchDesigner端口（仅touchdesigner模式需要）"
+        )
+    parser.add_argument(
+        "--signaling-port", type=int, default=8080, help="WebRTC信令服务器端口（仅WebRTC模式需要）"
+        )
+    parser.add_argument(
+        "--webrtc-port", type=int, default=8081, help="WebRTC连接端口（仅WebRTC proper模式需要）"
         )
 
     args = parser.parse_args()
@@ -54,6 +63,21 @@ def main():
         config = {
             "td_ip": args.td_ip,
             "td_port": args.td_port,
+            "app_id": VOLCENGINE_APP_ID,
+            "access_token": VOLCENGINE_ACCESS_TOKEN
+            }
+    elif args.adapter == "touchdesigner-webrtc":
+        adapter_type = AdapterType.TOUCH_DESIGNER_WEBRTC
+        config = {
+            "signaling_port": args.signaling_port,
+            "app_id": VOLCENGINE_APP_ID,
+            "access_token": VOLCENGINE_ACCESS_TOKEN
+            }
+    elif args.adapter == "touchdesigner-webrtc-proper":
+        adapter_type = AdapterType.TOUCH_DESIGNER_WEBRTC_PROPER
+        config = {
+            "signaling_port": args.signaling_port,
+            "webrtc_port": args.webrtc_port,
             "app_id": VOLCENGINE_APP_ID,
             "access_token": VOLCENGINE_ACCESS_TOKEN
             }

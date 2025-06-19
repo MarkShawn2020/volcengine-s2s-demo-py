@@ -10,6 +10,19 @@ from src.adapters.type import AdapterType
 from src.adapters.browser_adapter import BrowserAudioAdapter
 from src.adapters.local_adapter import LocalAudioAdapter
 from src.adapters.touchdesigner_adapter import TouchDesignerAudioAdapter, TouchDesignerConnectionConfig
+from src.adapters.touchdesigner_webrtc_adapter import TouchDesignerWebRTCAudioAdapter, TouchDesignerWebRTCConnectionConfig
+
+# 尝试导入真正的WebRTC适配器（需要aiortc依赖）
+try:
+    from src.adapters.touchdesigner_webrtc_proper_adapter import (
+        TouchDesignerProperWebRTCAudioAdapter,
+        TouchDesignerProperWebRTCConnectionConfig
+    )
+    WEBRTC_PROPER_AVAILABLE = True
+except ImportError:
+    TouchDesignerProperWebRTCAudioAdapter = None
+    TouchDesignerProperWebRTCConnectionConfig = None
+    WEBRTC_PROPER_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -77,15 +90,37 @@ class UnifiedAudioApp:
                 connection_config = TouchDesignerConnectionConfig(
                     td_ip=self.config['td_ip'],
                     td_port=self.config['td_port'],
-                    listen_port=self.config['listen_port'],
+                    listen_port=self.config.get('listen_port', 7001),
                     app_id=self.config['app_id'],
                     access_token=self.config['access_token'],
                     **self.config.get('extra_params', {})
                     )
                 self.adapter = TouchDesignerAudioAdapter(connection_config)
 
+            elif self.adapter_type == AdapterType.TOUCH_DESIGNER_WEBRTC:
+                connection_config = TouchDesignerWebRTCConnectionConfig(
+                    signaling_port=self.config['signaling_port'],
+                    app_id=self.config['app_id'],
+                    access_token=self.config['access_token'],
+                    **self.config.get('extra_params', {})
+                    )
+                self.adapter = TouchDesignerWebRTCAudioAdapter(connection_config)
+
+            elif self.adapter_type == AdapterType.TOUCH_DESIGNER_WEBRTC_PROPER:
+                if not WEBRTC_PROPER_AVAILABLE:
+                    raise Exception("TouchDesigner WebRTC Proper适配器需要aiortc依赖，请先安装：pip install aiortc")
+                
+                connection_config = TouchDesignerProperWebRTCConnectionConfig(
+                    signaling_port=self.config['signaling_port'],
+                    webrtc_port=self.config['webrtc_port'],
+                    app_id=self.config['app_id'],
+                    access_token=self.config['access_token'],
+                    **self.config.get('extra_params', {})
+                    )
+                self.adapter = TouchDesignerProperWebRTCAudioAdapter(connection_config)
+
             else:
-                raise Exception("not defined")
+                raise Exception(f"不支持的适配器类型: {self.adapter_type}")
             logger.info(f"创建 {self.adapter_type.value} 适配器成功")
 
             # 连接

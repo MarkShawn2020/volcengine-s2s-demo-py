@@ -2,9 +2,17 @@ import queue
 import threading
 from abc import ABC, abstractmethod
 from typing import Dict, Any, AsyncGenerator, Optional
+from dataclasses import dataclass
 
 from src.adapters.type import AdapterType
 from src.config import WELCOME_MESSAGE
+
+
+@dataclass
+class ChatTTSTextPayload:
+    start: bool
+    end: bool
+    content: str
 
 
 class AudioAdapter(ABC):
@@ -42,6 +50,15 @@ class AudioAdapter(ABC):
 
     async def send_welcome(self):
         return await self.send_text(WELCOME_MESSAGE)
+
+    async def send_chat_tts_text(self, content: str, start: bool = True, end: bool = True) -> bool:
+        """发送ChatTTS文本请求"""
+        payload = ChatTTSTextPayload(start=start, end=end, content=content)
+        return await self.send_text_with_payload(payload)
+
+    async def send_text_with_payload(self, payload: ChatTTSTextPayload) -> bool:
+        """发送带payload的文本请求（由子类实现具体协议）"""
+        return await self.send_text(payload.content)
 
     @property
     @abstractmethod

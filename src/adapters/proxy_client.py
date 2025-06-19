@@ -52,6 +52,8 @@ class ProxyClient:
             await self._handle_audio(data)
         elif message_type == "text":
             await self._handle_text(data)
+        elif message_type == "chat_tts_text":
+            await self._handle_chat_tts_text(data)
         elif message_type == "ping":
             await self._send_message(
                 {
@@ -100,8 +102,22 @@ class ProxyClient:
     async def _handle_text(self, data: Dict[str, Any]):
         """处理文本消息"""
         if not self.volcengine_client: return
-        content = data.get("content", "")
+        content = data.get("content", "未知消息")
         await self.volcengine_client.push_text(content)
+
+    async def _handle_chat_tts_text(self, data: Dict[str, Any]):
+        """处理ChatTTS文本消息"""
+        if not self.volcengine_client: 
+            return
+        
+        content = data.get("content", "")
+        start = data.get("start", True)
+        end = data.get("end", True)
+        
+        logger.info(f"收到ChatTTSText消息: content={content}, start={start}, end={end}")
+        
+        # 调用专门的ChatTTS协议方法
+        await self.volcengine_client.push_chat_tts_text(content, start, end)
 
     async def _receive_from_volcengine(self):
         """从火山引擎接收响应"""
