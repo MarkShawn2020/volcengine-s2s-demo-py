@@ -24,21 +24,30 @@
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(10px);
             border-radius: 20px;
-            padding: 40px;
+            padding: 25px;
             box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
             width: 90%;
-            max-width: 600px;
+            max-width: 1000px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            grid-template-areas: 
+                "header header"
+                "connection voice"
+                "message message"
+                "log log";
         }
 
         .app-header {
+            grid-area: header;
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
         }
 
         .app-title {
-            font-size: 2.5em;
+            font-size: 2em;
             color: #333;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
         }
 
         .app-subtitle {
@@ -47,23 +56,24 @@
         }
 
         .connection-section {
+            grid-area: connection;
             background: #f8f9fa;
             border-radius: 15px;
-            padding: 25px;
-            margin-bottom: 25px;
+            padding: 20px;
         }
 
         .section-title {
-            font-size: 1.3em;
+            font-size: 1.1em;
             color: #333;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
+            font-weight: 600;
         }
 
         .config-group {
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }
 
         .config-label {
@@ -170,10 +180,10 @@
         }
 
         .voice-section {
+            grid-area: voice;
             background: #f8f9fa;
             border-radius: 15px;
-            padding: 25px;
-            margin-bottom: 25px;
+            padding: 20px;
         }
 
         .voice-controls {
@@ -183,11 +193,11 @@
         }
 
         .voice-button {
-            width: 120px;
-            height: 120px;
+            width: 80px;
+            height: 80px;
             border-radius: 50%;
             border: none;
-            font-size: 3em;
+            font-size: 2em;
             cursor: pointer;
             transition: all 0.3s;
             margin: 0 auto;
@@ -240,10 +250,10 @@
         }
 
         .message-section {
+            grid-area: message;
             background: #f8f9fa;
             border-radius: 15px;
-            padding: 25px;
-            margin-bottom: 25px;
+            padding: 20px;
         }
 
         .message-input-group {
@@ -263,9 +273,9 @@
         .conversation-display {
             background: white;
             border-radius: 10px;
-            padding: 20px;
-            min-height: 200px;
-            max-height: 300px;
+            padding: 15px;
+            min-height: 120px;
+            max-height: 200px;
             overflow-y: auto;
             border: 2px solid #e9ecef;
         }
@@ -295,21 +305,22 @@
         }
 
         .log-section {
+            grid-area: log;
             background: #f8f9fa;
             border-radius: 15px;
-            padding: 25px;
+            padding: 20px;
         }
 
         .log-display {
             background: #2d3748;
             color: #e2e8f0;
             border-radius: 10px;
-            padding: 20px;
-            height: 250px;
+            padding: 15px;
+            height: 180px;
             overflow-y: auto;
             font-family: 'Courier New', monospace;
-            font-size: 14px;
-            line-height: 1.4;
+            font-size: 12px;
+            line-height: 1.3;
         }
 
         .log-controls {
@@ -358,9 +369,9 @@
 
         .audio-device-section {
             background: #f1f3f4;
-            border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 20px;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
             border: 1px solid #e0e0e0;
         }
 
@@ -372,10 +383,90 @@
             margin-bottom: 0;
         }
 
+        .device-two-column {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .device-combo {
+            display: flex;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            overflow: hidden;
+            background: white;
+            transition: border-color 0.3s;
+        }
+
+        .device-combo:focus-within {
+            border-color: #667eea;
+        }
+
+        .device-select-combo {
+            flex: 1;
+            padding: 8px 12px;
+            border: none;
+            font-size: 14px;
+            background: transparent;
+            cursor: pointer;
+            outline: none;
+        }
+
+        .device-select-combo:disabled {
+            background: #f8f9fa;
+            color: #6c757d;
+            cursor: not-allowed;
+        }
+
+        .btn-combo {
+            padding: 8px 12px;
+            border: none;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            min-width: 40px;
+            border-left: 1px solid #e9ecef;
+        }
+
+        .btn-combo:hover:not(:disabled) {
+            opacity: 0.8;
+        }
+
+        .btn-combo:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-combo.btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-combo.btn-success {
+            background: #51cf66;
+            color: white;
+        }
+
+        .device-row-inline {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
         .device-group {
             display: flex;
             align-items: center;
             gap: 10px;
+        }
+
+        .device-group-inline {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex: 1;
+            min-width: 200px;
         }
 
         .device-label {
@@ -383,6 +474,11 @@
             font-weight: 600;
             color: #555;
             font-size: 14px;
+        }
+
+        .device-label-inline {
+            font-size: 16px;
+            min-width: 20px;
         }
 
         .device-select {
@@ -394,6 +490,23 @@
             background: white;
             cursor: pointer;
             transition: border-color 0.3s;
+        }
+
+        .device-select-inline {
+            flex: 1;
+            padding: 8px 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 14px;
+            background: white;
+            cursor: pointer;
+            transition: border-color 0.3s;
+            min-width: 150px;
+        }
+
+        .device-actions {
+            display: flex;
+            gap: 8px;
         }
 
         .device-select:focus {
@@ -430,8 +543,8 @@
         .audio-volume-control {
             background: #f8f9fa;
             border-radius: 8px;
-            padding: 15px;
-            margin-top: 15px;
+            padding: 12px;
+            margin-top: 12px;
             border: 1px solid #e9ecef;
         }
 
@@ -484,7 +597,14 @@
         @media (max-width: 768px) {
             .app-container {
                 width: 95%;
-                padding: 20px;
+                padding: 15px;
+                grid-template-columns: 1fr;
+                grid-template-areas: 
+                    "header"
+                    "connection"
+                    "voice"
+                    "message"
+                    "log";
             }
 
             .button-group {
@@ -496,9 +616,29 @@
             }
 
             .voice-button {
-                width: 100px;
-                height: 100px;
-                font-size: 2.5em;
+                width: 70px;
+                height: 70px;
+                font-size: 1.8em;
+            }
+
+            .device-two-column {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 12px;
+            }
+
+            .device-row-inline {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 12px;
+            }
+
+            .device-group-inline {
+                min-width: auto;
+            }
+
+            .device-actions {
+                justify-content: center;
             }
 
             .device-group {
@@ -513,7 +653,11 @@
             }
 
             .audio-device-section {
-                padding: 15px;
+                padding: 12px;
+            }
+
+            .log-display {
+                height: 150px;
             }
         }
     </style>
@@ -549,13 +693,7 @@
             </div>
 
             <div class="button-group">
-                <button id="connectBtn" class="btn btn-primary" onclick="connect()">连接</button>
-                <button id="disconnectBtn" class="btn btn-danger" onclick="disconnect()" disabled>断开连接</button>
-            </div>
-            
-            <div class="button-group" style="margin-top: 10px;">
-                <button class="btn btn-success" onclick="saveConfiguration()" title="手动保存当前配置">💾 保存配置</button>
-                <button class="btn btn-danger" onclick="clearConfiguration()" title="清除所有保存的配置">🗑️ 清除配置</button>
+                <button id="connectionToggleBtn" class="btn btn-primary" onclick="toggleConnection()">连接</button>
             </div>
         </div>
 
@@ -565,23 +703,18 @@
             
             <!-- 音频设备选择 -->
             <div class="audio-device-section">
-                <div class="device-row">
-                    <div class="device-group">
-                        <label class="device-label">🎤 麦克风设备</label>
-                        <select id="microphoneSelect" class="device-select">
-                            <option value="">选择麦克风...</option>
+                <div class="device-two-column">
+                    <div class="device-combo">
+                        <select id="microphoneSelect" class="device-select-combo">
+                            <option value="">🎤 选择麦克风...</option>
                         </select>
-                        <button class="btn-small btn-primary" onclick="refreshAudioDevices()" title="刷新设备列表">🔄</button>
+                        <button class="btn-combo btn-primary" onclick="refreshAudioDevices()" title="刷新设备列表">🔄</button>
                     </div>
-                </div>
-                
-                <div class="device-row">
-                    <div class="device-group">
-                        <label class="device-label">🔊 扬声器设备</label>
-                        <select id="speakerSelect" class="device-select">
-                            <option value="">选择扬声器...</option>
+                    <div class="device-combo">
+                        <select id="speakerSelect" class="device-select-combo">
+                            <option value="">🔊 选择扬声器...</option>
                         </select>
-                        <button class="btn-small btn-success" onclick="testSpeaker()" title="测试扬声器">🔔</button>
+                        <button class="btn-combo btn-success" onclick="testSpeaker()" title="测试扬声器">🔔</button>
                     </div>
                 </div>
             </div>
@@ -1140,18 +1273,27 @@
             }
 
             async updateUI() {
-                document.getElementById('connectBtn').disabled = this.isConnected;
-                document.getElementById('disconnectBtn').disabled = !this.isConnected;
+                const connectionBtn = document.getElementById('connectionToggleBtn');
+                if (this.isConnected) {
+                    connectionBtn.textContent = '断开连接';
+                    connectionBtn.className = 'btn btn-danger';
+                } else {
+                    connectionBtn.textContent = '连接';
+                    connectionBtn.className = 'btn btn-primary';
+                }
                 
                 // 检查麦克风权限状态
                 await this.checkMicrophonePermission();
                 
-                // 录音按钮启用条件：连接状态 且 麦克风权限不是被拒绝状态
-                const isConnected = this.isConnected
-                const microphonePermission = this.microphonePermission
-                const canRecord = this.isConnected && this.microphonePermission !== 'denied';
-                console.log(`录音状态：`, {isConnected,microphonePermission, canRecord})
+                // 录音按钮启用条件：仅需要麦克风权限，不依赖连接状态
+                const canRecord = this.microphonePermission !== 'denied';
+                console.log(`录音状态：`, {isConnected: this.isConnected, microphonePermission: this.microphonePermission, canRecord})
                 document.getElementById('voiceButton').disabled = !canRecord;
+                
+                // 音频设备功能完全独立于连接状态
+                // - 录音：可以离线测试麦克风
+                // - 刷新设备：始终可用
+                // - 扬声器测试：仅需要选择了设备
                 
                 const voiceButton = document.getElementById('voiceButton');
                 if (this.isRecording) {
@@ -1162,13 +1304,13 @@
                     voiceButton.textContent = '🎤';
                 }
                 
-                // 显示权限状态提示
-                if (!canRecord && this.isConnected) {
+                // 显示权限状态提示（不依赖连接状态）
+                if (!canRecord) {
                     if (this.microphonePermission === 'denied') {
                         this.log('⚠️ 麦克风权限被拒绝，无法使用录音功能', 'warning');
-                    } else if (this.microphonePermission === 'prompt') {
-                        this.log('📝 点击录音按钮时将请求麦克风权限', 'info');
                     }
+                } else if (this.microphonePermission === 'prompt') {
+                    this.log('📝 点击录音按钮时将请求麦克风权限', 'info');
                 }
             }
 
@@ -1400,34 +1542,42 @@
 
                     // 音频数据处理
                     this.processor.onaudioprocess = (event) => {
-                        if (!this.isRecording || !this.websocket || this.websocket.readyState !== WebSocket.OPEN) {
+                        if (!this.isRecording) {
                             return;
                         }
 
                         const inputBuffer = event.inputBuffer;
                         const inputData = inputBuffer.getChannelData(0);
                         
-                        // 转换为16位PCM
-                        const pcmData = new Int16Array(inputData.length);
-                        for (let i = 0; i < inputData.length; i++) {
-                            pcmData[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32768));
-                        }
+                        // 如果已连接服务器，发送音频数据
+                        if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
+                            // 转换为16位PCM
+                            const pcmData = new Int16Array(inputData.length);
+                            for (let i = 0; i < inputData.length; i++) {
+                                pcmData[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32768));
+                            }
 
-                        // 发送音频数据
-                        const message = {
-                            type: 'audio',
-                            data: Array.from(new Uint8Array(pcmData.buffer))
-                                .map(byte => byte.toString(16).padStart(2, '0'))
-                                .join('')
-                        };
-                        this.websocket.send(JSON.stringify(message));
+                            // 发送音频数据
+                            const message = {
+                                type: 'audio',
+                                data: Array.from(new Uint8Array(pcmData.buffer))
+                                    .map(byte => byte.toString(16).padStart(2, '0'))
+                                    .join('')
+                            };
+                            this.websocket.send(JSON.stringify(message));
+                        }
+                        // 如果未连接，录音仍然工作（用于测试麦克风）
                     };
 
                     this.isRecording = true;
                     this.updateUI();
                     this.startVolumeMonitoring();
-                    this.log('🎙️ 开始录音', 'success');
-                    this.addMessage('User', '🎤 [开始语音输入]');
+                    if (this.isConnected) {
+                        this.log('🎙️ 开始录音并发送到服务器', 'success');
+                        this.addMessage('User', '🎤 [开始语音输入]');
+                    } else {
+                        this.log('🎙️ 开始录音测试（离线模式）', 'success');
+                    }
 
                 } catch (error) {
                     this.log(`❌ 启动录音失败: ${error.message}`, 'error');
@@ -1454,11 +1604,22 @@
                 this.updateUI();
                 
                 // 重置音量显示
-                document.getElementById('volumeBar').style.width = '0%';
-                document.getElementById('volumeText').textContent = '0%';
+                const volumeRing = document.getElementById('volumeRing');
+                const volumeText = document.getElementById('volumeText');
+                if (volumeRing) {
+                    volumeRing.style.strokeDashoffset = '283';
+                    volumeRing.style.stroke = '#51cf66';
+                }
+                if (volumeText) {
+                    volumeText.textContent = '0%';
+                }
                 
-                this.log('🛑 停止录音', 'info');
-                this.addMessage('User', '🎤 [语音输入结束]');
+                if (this.isConnected) {
+                    this.log('🛑 停止录音', 'info');
+                    this.addMessage('User', '🎤 [语音输入结束]');
+                } else {
+                    this.log('🛑 停止录音测试', 'info');
+                }
             }
 
             startVolumeMonitoring() {
@@ -1483,12 +1644,25 @@
                         const volumeLevel = Math.max(average, peak * 0.3);
                         const percentage = Math.round((volumeLevel / 255) * 100);
                         
-                        // 更新UI
-                        const volumeBar = document.getElementById('volumeBar');
+                        // 更新音量环和文字
+                        const volumeRing = document.getElementById('volumeRing');
                         const volumeText = document.getElementById('volumeText');
                         
-                        if (volumeBar && volumeText) {
-                            volumeBar.style.width = `${percentage}%`;
+                        if (volumeRing && volumeText) {
+                            // 计算环形进度（周长 283 = 2 * PI * 45）
+                            const circumference = 283;
+                            const offset = circumference - (circumference * percentage / 100);
+                            volumeRing.style.strokeDashoffset = offset;
+                            
+                            // 根据音量水平调整颜色
+                            if (percentage < 30) {
+                                volumeRing.style.stroke = '#51cf66'; // 绿色
+                            } else if (percentage < 70) {
+                                volumeRing.style.stroke = '#ffd43b'; // 黄色
+                            } else {
+                                volumeRing.style.stroke = '#ff6b6b'; // 红色
+                            }
+                            
                             volumeText.textContent = `${percentage}%`;
                         }
                         
@@ -1767,17 +1941,18 @@
         // 向后兼容的全局函数
         function connect() { voiceChat.connect(); }
         function disconnect() { voiceChat.disconnect(); }
+        function toggleConnection() { 
+            if (voiceChat.isConnected) {
+                voiceChat.disconnect();
+            } else {
+                voiceChat.connect();
+            }
+        }
         function toggleRecording() { voiceChat.toggleRecording(); }
         function sendMessage() { voiceChat.sendMessage(); }
         function clearLog() { voiceChat.clearLog(); }
         function copyLog() { voiceChat.copyLog(); }
         function toggleAutoScroll() { voiceChat.toggleAutoScroll(); }
-        function saveConfiguration() { voiceChat.saveConfiguration(); }
-        function clearConfiguration() { 
-            if (confirm('确定要清除所有保存的配置吗？')) {
-                voiceChat.clearConfiguration(); 
-            }
-        }
         function refreshAudioDevices() { voiceChat.refreshAudioDevices(); }
         function testSpeaker() { voiceChat.testSpeaker(); }
     </script>
