@@ -126,6 +126,7 @@ class BrowserAudioAdapter(AudioAdapter):
         while self.is_connected and self.ws:
             try:
                 message = await self.ws.recv()
+                logger.debug(f"收到数据: {len(message)}字节, type: {type(message)}")
 
                 # 检查消息类型：二进制数据（音频）或文本数据（JSON）
                 if isinstance(message, bytes):

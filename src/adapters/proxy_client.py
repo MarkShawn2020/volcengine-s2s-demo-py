@@ -154,6 +154,7 @@ class ProxyClient:
 
     async def _send_audio_binary(self, audio_data: bytes):
         """直接发送二进制音频数据"""
+        logger.debug(f"sending audio binary (size={len(audio_data)})")
         await self.websocket.send(audio_data)
 
     async def _send_error(self, error_message: str):
