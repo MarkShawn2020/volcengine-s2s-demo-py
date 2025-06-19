@@ -97,33 +97,6 @@
             border-color: #667eea;
         }
 
-        .status-indicator {
-            padding: 12px 20px;
-            border-radius: 10px;
-            font-weight: 600;
-            text-align: center;
-            margin: 15px 0;
-            transition: all 0.3s;
-        }
-
-        .status-disconnected {
-            background: #fee;
-            color: #c33;
-            border: 2px solid #fcc;
-        }
-
-        .status-connecting {
-            background: #fff3cd;
-            color: #856404;
-            border: 2px solid #ffeaa7;
-        }
-
-        .status-connected {
-            background: #d4edda;
-            color: #155724;
-            border: 2px solid #c3e6cb;
-        }
-
         .button-group {
             display: flex;
             gap: 10px;
@@ -157,16 +130,6 @@
         .btn-primary:hover:not(:disabled) {
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
-
-        .btn-danger {
-            background: linear-gradient(45deg, #ff6b6b, #ee5a52);
-            color: white;
-        }
-
-        .btn-danger:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(255, 107, 107, 0.4);
         }
 
         .btn-success {
@@ -230,11 +193,6 @@
             z-index: 2;
         }
 
-        .volume-text {
-            font-size: 14px;
-            color: #666;
-            font-weight: 600;
-        }
 
         .voice-button.recording {
             background: linear-gradient(45deg, #ff6b6b, #ee5a52);
@@ -289,24 +247,6 @@
             max-height: 200px;
             overflow-y: auto;
             border: 2px solid #e9ecef;
-        }
-
-        .message {
-            margin-bottom: 15px;
-            padding: 10px 15px;
-            border-radius: 10px;
-            max-width: 80%;
-        }
-
-        .message.user {
-            background: #667eea;
-            color: white;
-            margin-left: auto;
-        }
-
-        .message.ai {
-            background: #e9ecef;
-            color: #333;
         }
 
         .message-time {
@@ -386,14 +326,6 @@
             border: 1px solid #e0e0e0;
         }
 
-        .device-row {
-            margin-bottom: 15px;
-        }
-
-        .device-row:last-child {
-            margin-bottom: 0;
-        }
-
         .device-two-column {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -438,6 +370,9 @@
             transition: all 0.3s;
             min-width: 40px;
             border-left: 1px solid #e9ecef;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .btn-combo:hover:not(:disabled) {
@@ -459,151 +394,6 @@
             color: white;
         }
 
-        .device-row-inline {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            flex-wrap: wrap;
-        }
-
-        .device-group {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .device-group-inline {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            flex: 1;
-            min-width: 200px;
-        }
-
-        .device-label {
-            min-width: 100px;
-            font-weight: 600;
-            color: #555;
-            font-size: 14px;
-        }
-
-        .device-label-inline {
-            font-size: 16px;
-            min-width: 20px;
-        }
-
-        .device-select {
-            flex: 1;
-            padding: 8px 12px;
-            border: 2px solid #e9ecef;
-            border-radius: 8px;
-            font-size: 14px;
-            background: white;
-            cursor: pointer;
-            transition: border-color 0.3s;
-        }
-
-        .device-select-inline {
-            flex: 1;
-            padding: 8px 12px;
-            border: 2px solid #e9ecef;
-            border-radius: 8px;
-            font-size: 14px;
-            background: white;
-            cursor: pointer;
-            transition: border-color 0.3s;
-            min-width: 150px;
-        }
-
-        .device-actions {
-            display: flex;
-            gap: 8px;
-        }
-
-        .device-select:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-
-        .device-select:disabled {
-            background: #f8f9fa;
-            color: #6c757d;
-            cursor: not-allowed;
-        }
-
-        .btn-small {
-            padding: 6px 12px;
-            border: none;
-            border-radius: 6px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-            min-width: 40px;
-        }
-
-        .btn-small:hover:not(:disabled) {
-            transform: translateY(-1px);
-        }
-
-        .btn-small:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .audio-volume-control {
-            background: #f8f9fa;
-            border-radius: 8px;
-            padding: 12px;
-            margin-top: 12px;
-            border: 1px solid #e9ecef;
-        }
-
-        .volume-label {
-            display: block;
-            font-weight: 600;
-            color: #555;
-            margin-bottom: 10px;
-            font-size: 14px;
-        }
-
-        .volume-slider {
-            width: 100%;
-            height: 6px;
-            border-radius: 3px;
-            background: #e9ecef;
-            outline: none;
-            cursor: pointer;
-            -webkit-appearance: none;
-            appearance: none;
-        }
-
-        .volume-slider::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            background: #667eea;
-            cursor: pointer;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-            transition: all 0.3s;
-        }
-
-        .volume-slider::-webkit-slider-thumb:hover {
-            background: #5a6fd8;
-            transform: scale(1.1);
-        }
-
-        .volume-slider::-moz-range-thumb {
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            background: #667eea;
-            cursor: pointer;
-            border: none;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-        }
 
         @media (max-width: 768px) {
             .app-container {
@@ -632,39 +422,10 @@
                 font-size: 1.8em;
             }
 
-            .volume-text {
-                font-size: 11px;
-            }
-
             .device-two-column {
                 display: grid;
                 grid-template-columns: 1fr 1fr;
                 gap: 12px;
-            }
-
-            .device-row-inline {
-                flex-direction: column;
-                align-items: stretch;
-                gap: 12px;
-            }
-
-            .device-group-inline {
-                min-width: auto;
-            }
-
-            .device-actions {
-                justify-content: center;
-            }
-
-            .device-group {
-                flex-direction: column;
-                align-items: stretch;
-                gap: 8px;
-            }
-
-            .device-label {
-                min-width: auto;
-                font-size: 13px;
             }
 
             .audio-device-section {
@@ -743,14 +504,6 @@
                             🎤
                         </button>
                     </div>
-                    <span id="volumeText" class="volume-text">0%</span>
-                </div>
-                
-                <div class="audio-volume-control">
-                    <label class="volume-label">🔊 AI语音音量: <span id="aiVolumeText">30%</span></label>
-                    <input type="range" id="aiVolumeSlider" class="volume-slider" 
-                           min="0" max="100" value="30" 
-                           title="调节AI语音播放音量">
                 </div>
             </div>
         </div>
@@ -814,8 +567,7 @@
                     accessToken: 'voiceChat_accessToken',
                     autoScroll: 'voiceChat_autoScroll',
                     selectedMicrophone: 'voiceChat_selectedMicrophone',
-                    selectedSpeaker: 'voiceChat_selectedSpeaker',
-                    aiVolume: 'voiceChat_aiVolume'
+                    selectedSpeaker: 'voiceChat_selectedSpeaker'
                 };
                 
                 // 音频设备相关
@@ -825,7 +577,6 @@
                 };
                 this.selectedMicrophoneId = null;
                 this.selectedSpeakerId = null;
-                this.aiVolume = 0.3; // 默认30%音量
                 
                 this.initializeUI();
                 this.loadConfiguration();
@@ -880,14 +631,6 @@
                         hasConfig = true;
                     }
                     
-                    // 加载AI音量设置
-                    const aiVolume = localStorage.getItem(this.storageKeys.aiVolume);
-                    if (aiVolume !== null) {
-                        this.aiVolume = parseFloat(aiVolume);
-                        document.getElementById('aiVolumeSlider').value = this.aiVolume * 100;
-                        document.getElementById('aiVolumeText').textContent = `${Math.round(this.aiVolume * 100)}%`;
-                        hasConfig = true;
-                    }
                     
                     this.updateConfigStatus(hasConfig);
                     
@@ -926,8 +669,6 @@
                         localStorage.setItem(this.storageKeys.selectedSpeaker, this.selectedSpeakerId);
                     }
                     
-                    // 保存AI音量设置
-                    localStorage.setItem(this.storageKeys.aiVolume, this.aiVolume.toString());
                     
                     this.updateConfigStatus(true);
                     this.log('💾 配置已保存', 'success');
@@ -1126,19 +867,6 @@
                 }
             }
 
-            onAIVolumeChange(value) {
-                // AI音量变化处理
-                this.aiVolume = parseFloat(value) / 100;
-                document.getElementById('aiVolumeText').textContent = `${value}%`;
-                
-                this.log(`🔊 AI语音音量调节为: ${value}%`, 'info');
-                
-                // 延迟保存，避免频繁操作
-                clearTimeout(this.volumeTimeout);
-                this.volumeTimeout = setTimeout(() => {
-                    this.saveConfiguration();
-                }, 500);
-            }
 
             bindEvents() {
                 // 回车发送消息
@@ -1173,10 +901,6 @@
                     this.onSpeakerChange();
                 });
 
-                // AI音量滑块事件
-                document.getElementById('aiVolumeSlider').addEventListener('input', (e) => {
-                    this.onAIVolumeChange(e.target.value);
-                });
 
                 // 页面卸载前保存配置
                 window.addEventListener('beforeunload', () => {
@@ -1752,9 +1476,9 @@
                     const buffer = this.audioContext.createBuffer(1, samples.length, sampleRate);
                     const channelData = buffer.getChannelData(0);
                     
-                    // 应用音量并复制数据
+                    // 复制音频数据
                     for (let i = 0; i < samples.length; i++) {
-                        channelData[i] = samples[i] * this.aiVolume;
+                        channelData[i] = samples[i];
                     }
 
                     // 立即播放，无需队列管理
