@@ -1582,10 +1582,13 @@
                     const source = this.audioContext.createBufferSource();
                     source.buffer = buffer;
                     
-                    // 简化的设备切换
+                    // 根据设备选择确定目标
                     let destination = this.audioContext.destination;
+                    
+                    // 如果选择了特定扬声器设备，使用Audio元素播放
                     if (this.selectedSpeakerId && this.selectedSpeakerId !== 'default') {
-                        if (!this.mediaStreamDestination) {
+                        // 确保mediaStreamDestination与当前audioContext匹配
+                        if (!this.mediaStreamDestination || this.mediaStreamDestination.context !== this.audioContext) {
                             this.mediaStreamDestination = this.audioContext.createMediaStreamDestination();
                             
                             if (!this.audioElement) {
@@ -1595,12 +1598,21 @@
                             }
                             
                             this.audioElement.srcObject = this.mediaStreamDestination.stream;
-                            if (this.audioElement.setSinkId) {
-                                await this.audioElement.setSinkId(this.selectedSpeakerId);
+                            try {
+                                if (this.audioElement.setSinkId) {
+                                    await this.audioElement.setSinkId(this.selectedSpeakerId);
+                                    this.log(`🔊 已切换到指定扬声器设备`, 'info');
+                                }
+                                this.audioElement.play();
+                            } catch (deviceError) {
+                                this.log(`⚠️ 扬声器设备切换失败: ${deviceError.message}，使用默认设备`, 'warning');
+                                destination = this.audioContext.destination;
                             }
-                            this.audioElement.play();
                         }
-                        destination = this.mediaStreamDestination;
+                        
+                        if (this.mediaStreamDestination && this.mediaStreamDestination.context === this.audioContext) {
+                            destination = this.mediaStreamDestination;
+                        }
                     }
                     
                     source.connect(destination);
