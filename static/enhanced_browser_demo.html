@@ -192,6 +192,32 @@
             gap: 20px;
         }
 
+        .voice-button-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            margin: 0 auto;
+        }
+
+        .voice-button-wrapper {
+            position: relative;
+            width: 100px;
+            height: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .volume-ring {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100px;
+            height: 100px;
+            z-index: 1;
+        }
+
         .voice-button {
             width: 80px;
             height: 80px;
@@ -200,9 +226,14 @@
             font-size: 2em;
             cursor: pointer;
             transition: all 0.3s;
-            margin: 0 auto;
             position: relative;
-            overflow: hidden;
+            z-index: 2;
+        }
+
+        .volume-text {
+            font-size: 14px;
+            color: #666;
+            font-weight: 600;
         }
 
         .voice-button.recording {
@@ -228,26 +259,6 @@
             100% { transform: scale(1); }
         }
 
-        .volume-display {
-            text-align: center;
-            margin: 20px 0;
-        }
-
-        .volume-bar-container {
-            width: 100%;
-            height: 8px;
-            background: #e9ecef;
-            border-radius: 4px;
-            overflow: hidden;
-            margin: 10px 0;
-        }
-
-        .volume-bar {
-            height: 100%;
-            background: linear-gradient(90deg, #51cf66, #ffd43b, #ff6b6b);
-            width: 0%;
-            transition: width 0.1s;
-        }
 
         .message-section {
             grid-area: message;
@@ -621,6 +632,10 @@
                 font-size: 1.8em;
             }
 
+            .volume-text {
+                font-size: 11px;
+            }
+
             .device-two-column {
                 display: grid;
                 grid-template-columns: 1fr 1fr;
@@ -688,10 +703,6 @@
                 <input type="password" id="accessToken" class="config-input" placeholder="请输入火山引擎Access Token">
             </div>
 
-            <div id="connectionStatus" class="status-indicator status-disconnected">
-                🔴 未连接
-            </div>
-
             <div class="button-group">
                 <button id="connectionToggleBtn" class="btn btn-primary" onclick="toggleConnection()">连接</button>
             </div>
@@ -720,15 +731,19 @@
             </div>
             
             <div class="voice-controls">
-                <button id="voiceButton" class="voice-button idle" onclick="toggleRecording()" disabled>
-                    🎤
-                </button>
-                
-                <div class="volume-display">
-                    <div>麦克风音量: <span id="volumeText">0%</span></div>
-                    <div class="volume-bar-container">
-                        <div id="volumeBar" class="volume-bar"></div>
+                <div class="voice-button-container">
+                    <div class="voice-button-wrapper">
+                        <svg class="volume-ring" width="100" height="100">
+                            <circle cx="50" cy="50" r="45" fill="none" stroke="#e9ecef" stroke-width="4"></circle>
+                            <circle id="volumeRing" cx="50" cy="50" r="45" fill="none" stroke="#51cf66" stroke-width="4" 
+                                    stroke-linecap="round" stroke-dasharray="283" stroke-dashoffset="283" 
+                                    transform="rotate(-90 50 50)" style="transition: stroke-dashoffset 0.1s ease;"></circle>
+                        </svg>
+                        <button id="voiceButton" class="voice-button idle" onclick="toggleRecording()" disabled>
+                            🎤
+                        </button>
                     </div>
+                    <span id="volumeText" class="volume-text">0%</span>
                 </div>
                 
                 <div class="audio-volume-control">
