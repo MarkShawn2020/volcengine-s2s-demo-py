@@ -9,6 +9,7 @@ from src.adapters.base import LocalConnectionConfig, BrowserConnectionConfig
 from src.adapters.type import AdapterType
 from src.adapters.browser_adapter import BrowserAudioAdapter
 from src.adapters.local_adapter import LocalAudioAdapter
+from src.adapters.text_input_adapter import TextInputAdapter
 from src.adapters.touchdesigner_adapter import TouchDesignerAudioAdapter, TouchDesignerConnectionConfig
 from src.adapters.touchdesigner_webrtc_adapter import TouchDesignerWebRTCAudioAdapter, TouchDesignerWebRTCConnectionConfig
 
@@ -119,6 +120,14 @@ class UnifiedAudioApp:
                     )
                 self.adapter = TouchDesignerProperWebRTCAudioAdapter(connection_config)
 
+            elif self.adapter_type == AdapterType.TEXT_INPUT:
+                connection_config = LocalConnectionConfig(
+                    app_id=self.config['app_id'],
+                    access_token=self.config['access_token'],
+                    **self.config.get('extra_params', {})
+                    )
+                self.adapter = TextInputAdapter(connection_config)
+
             else:
                 raise Exception(f"不支持的适配器类型: {self.adapter_type}")
             logger.info(f"创建 {self.adapter_type.value} 适配器成功")
@@ -147,12 +156,19 @@ class UnifiedAudioApp:
 
             # 提示用户如何使用
             print("\n" + "=" * 60)
-            print("🎤 语音对话已就绪！")
-            print("💡 使用提示：")
-            print("   - 正常音量说话即可，系统会自动检测语音活动")
-            print("   - 说话时会看到 🎤 发送语音 的提示")
-            print("   - 静音时会显示 🔇 静音检测中 的状态")
-            print("   - 按 Ctrl+C 退出程序")
+            if self.adapter_type == AdapterType.TEXT_INPUT:
+                print("💬 文字输入对话已就绪！")
+                print("💡 使用提示：")
+                print("   - 在提示符处输入文字，AI会朗读回复")
+                print("   - 输入 'quit' 或 'exit' 退出程序")
+                print("   - 按 Ctrl+C 也可以退出程序")
+            else:
+                print("🎤 语音对话已就绪！")
+                print("💡 使用提示：")
+                print("   - 正常音量说话即可，系统会自动检测语音活动")
+                print("   - 说话时会看到 🎤 发送语音 的提示")
+                print("   - 静音时会显示 🔇 静音检测中 的状态")
+                print("   - 按 Ctrl+C 退出程序")
             print("=" * 60 + "\n")
 
             # 启动发送和接收任务

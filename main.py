@@ -16,7 +16,7 @@ def main():
     parser = argparse.ArgumentParser(description="统一音频应用")
     parser.add_argument(
         "--adapter", 
-        choices=["local", "browser", "touchdesigner", "touchdesigner-webrtc", "touchdesigner-webrtc-proper"], 
+        choices=["local", "browser", "touchdesigner", "touchdesigner-webrtc", "touchdesigner-webrtc-proper", "text-input"], 
         default="local", 
         help="选择适配器类型"
         )
@@ -78,6 +78,12 @@ def main():
         config = {
             "signaling_port": args.signaling_port,
             "webrtc_port": args.webrtc_port,
+            "app_id": VOLCENGINE_APP_ID,
+            "access_token": VOLCENGINE_ACCESS_TOKEN
+            }
+    elif args.adapter == "text-input":
+        adapter_type = AdapterType.TEXT_INPUT
+        config = {
             "app_id": VOLCENGINE_APP_ID,
             "access_token": VOLCENGINE_ACCESS_TOKEN
             }
