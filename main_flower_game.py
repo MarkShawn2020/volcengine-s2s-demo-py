@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import json
 import re
 import logging
 
@@ -175,6 +176,7 @@ class FlowerGameApp(UnifiedAudioApp):
     def __init__(self, adapter_type: AdapterType, config: dict, use_tts_pcm: bool = True):
         super().__init__(adapter_type, config, use_tts_pcm)
         self.game_adapter = None
+        self.user_text = ''
     
     async def run(self):
         """运行游戏应用"""
@@ -245,7 +247,13 @@ class FlowerGameApp(UnifiedAudioApp):
                 response = await asyncio.wait_for(self.game_adapter.response_queue.get(), timeout=1.0)
                 if not response or "error" in response:
                     continue
-                
+                    
+                try:
+                    pass
+                    # logger.info(f"[Response]: {response}")
+                except Exception as e:
+                    pass
+            
                 event = response.get('event')
                 if event == protocol.ServerEvent.TTS_RESPONSE:
                     # 音频响应 - 放入播放队列
@@ -259,6 +267,9 @@ class FlowerGameApp(UnifiedAudioApp):
                     except:
                         # 处理队列操作异常
                         pass
+                    
+                elif event == protocol.ServerEvent.ASR_RESPONSE:
+                    self.user_text = response.get("payload_msg", {}).get("extra", {}).get('origin_text', "")
                 
                 elif event == protocol.ServerEvent.ASR_INFO:
                     # ASR识别结果 - 处理用户语音
@@ -267,16 +278,9 @@ class FlowerGameApp(UnifiedAudioApp):
                             play_queue.get_nowait()  # 清空播放队列，打断AI语音
                     except:
                         pass
-                    
-                    payload = response.get('payload_msg', {})
-                    if isinstance(payload, dict):
-                        # 提取识别的文本
-                        text = payload.get('text', '') or payload.get('result', '')
-                        if text:
-                            logger.info(f"用户语音识别: {text}")
-                            # 处理用户语音输入
-                            await self.game_adapter.process_user_speech(text)
-                
+                    # 处理用户语音输入
+                    logger.info(f"[User Text]: {self.user_text}")
+                    await self.game_adapter.process_user_speech(self.user_text)
                 elif event:
                     # 其他事件
                     try:
