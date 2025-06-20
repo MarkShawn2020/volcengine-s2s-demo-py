@@ -4,6 +4,7 @@ import logging
 import threading
 import queue
 import json
+import sys
 from typing import Dict, Any, AsyncGenerator, Optional
 
 from src.adapters.base import AudioAdapter, LocalConnectionConfig
@@ -18,6 +19,36 @@ from src.volcengine.config import ws_connect_config
 logger = logging.getLogger(__name__)
 
 
+def text_input_thread(adapter, stop_event: threading.Event, loop):
+    """文字输入线程"""
+    print("\n=== 文字输入模式已启动 ===")
+    print("输入文本消息，按Enter发送（输入'quit'退出）：")
+    
+    while not stop_event.is_set():
+        try:
+            text = input("> ")
+            if text.lower() == 'quit':
+                break
+            if text.strip():
+                # 按照官网文档要求发送三包
+                future = asyncio.run_coroutine_threadsafe(
+                    adapter._send_chat_tts_text_packets(text), 
+                    loop
+                )
+                try:
+                    future.result(timeout=5.0)
+                    logger.info(f"已发送文本: {text}")
+                except Exception as e:
+                    logger.error(f"发送文本失败: {e}")
+        except EOFError:
+            break
+        except Exception as e:
+            logger.error(f"文字输入异常: {e}")
+            break
+    
+    logger.info("文字输入线程结束")
+
+
 class LocalAudioAdapter(AudioAdapter):
     """本地音频适配器 - 直接连接火山引擎"""
     
@@ -26,6 +57,7 @@ class LocalAudioAdapter(AudioAdapter):
         self.client = None
         self.response_queue = asyncio.Queue()
         self._receiver_task = None
+        self._text_input_thread = None
     
     @property
     def adapter_type(self) -> AdapterType:
@@ -108,6 +140,53 @@ class LocalAudioAdapter(AudioAdapter):
             logger.error(f"发送文本失败: {e}")
             return False
     
+    async def send_chat_tts_text(self, text: str, start: bool = True, end: bool = True) -> bool:
+        """发送ChatTTS文本消息"""
+        if not self.is_connected or not self.client:
+            return False
+        
+        try:
+            await self.client.push_chat_tts_text(text, start, end)
+            return True
+        except Exception as e:
+            logger.error(f"发送ChatTTS文本失败: {e}")
+            return False
+    
+    async def _send_chat_tts_text_packets(self, text: str) -> bool:
+        """按照官网文档要求发送ChatTTS文本的三包"""
+        if not self.is_connected or not self.client:
+            return False
+        
+        try:
+            # 将文本分为两部分：第一包和中间包
+            text_len = len(text)
+            if text_len <= 2:
+                # 文本太短，第一包包含所有内容，中间包为空
+                first_part = text
+                middle_part = ""
+            else:
+                # 将文本分为两部分
+                split_pos = text_len // 2
+                first_part = text[:split_pos]
+                middle_part = text[split_pos:]
+            
+            # 第一包 (start=true, end=false)
+            await self.client.push_chat_tts_text(first_part, start=True, end=False)
+            logger.debug(f"发送第一包: {first_part}")
+            
+            # 中间包 (start=false, end=false)
+            await self.client.push_chat_tts_text(middle_part, start=False, end=False)
+            logger.debug(f"发送中间包: {middle_part}")
+            
+            # 最后一包 (start=false, end=true, content="")
+            await self.client.push_chat_tts_text("", start=False, end=True)
+            logger.debug("发送最后一包")
+            
+            return True
+        except Exception as e:
+            logger.error(f"发送ChatTTS文本包失败: {e}")
+            return False
+    
     async def setup_audio_devices(self, p, stop_event: threading.Event) -> tuple[Optional[threading.Thread], Optional[threading.Thread]]:
         """设置音频设备"""
         try:
@@ -133,14 +212,22 @@ class LocalAudioAdapter(AudioAdapter):
                 target=recorder_thread, args=(p, input_device_index, send_queue, chunk_size, stop_event)
             )
 
+            # 启动文字输入线程
+            current_loop = asyncio.get_event_loop()
+            text_input = threading.Thread(
+                target=text_input_thread, args=(self, stop_event, current_loop)
+            )
+
             recorder.start()
             player.start()
+            text_input.start()
             
-            # 存储队列供后续使用
+            # 存储队列和线程供后续使用
             self._send_queue = send_queue
             self._play_queue = play_queue
+            self._text_input_thread = text_input
 
-            logger.info("音频设备设置完成")
+            logger.info("音频设备和文字输入设置完成")
             return recorder, player
 
         except Exception as e:
