@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 def text_input_thread(adapter, stop_event: threading.Event, loop):
     """文字输入线程"""
     print("\n=== 文字输入模式已启动 ===")
-    print("输入文本消息，按Enter发送（输入'quit'退出）：")
+    print("输入文本消息，按Enter发送（输入'quit'退出，输入'hello'调用welcome）：")
     
     while not stop_event.is_set():
         try:
@@ -30,16 +30,28 @@ def text_input_thread(adapter, stop_event: threading.Event, loop):
             if text.lower() == 'quit':
                 break
             if text.strip():
-                # 按照官网文档要求发送三包
-                future = asyncio.run_coroutine_threadsafe(
-                    adapter._send_chat_tts_text_packets(text), 
-                    loop
-                )
-                try:
-                    future.result(timeout=5.0)
-                    logger.info(f"已发送文本: {text}")
-                except Exception as e:
-                    logger.error(f"发送文本失败: {e}")
+                if text.lower() == 'hello':
+                    # 调用welcome函数
+                    future = asyncio.run_coroutine_threadsafe(
+                        adapter.send_welcome(), 
+                        loop
+                    )
+                    try:
+                        future.result(timeout=5.0)
+                        logger.info("已调用welcome函数")
+                    except Exception as e:
+                        logger.error(f"调用welcome函数失败: {e}")
+                else:
+                    # 按照官网文档要求发送三包
+                    future = asyncio.run_coroutine_threadsafe(
+                        adapter._send_chat_tts_text_packets(text), 
+                        loop
+                    )
+                    try:
+                        future.result(timeout=5.0)
+                        logger.info(f"已发送文本: {text}")
+                    except Exception as e:
+                        logger.error(f"发送文本失败: {e}")
         except EOFError:
             break
         except Exception as e:
@@ -76,7 +88,7 @@ class LocalAudioAdapter(AudioAdapter):
                 self._receiver_task = asyncio.create_task(self._receive_responses())
                 logger.info(f"本地适配器连接成功，会话ID: {self.session_id[:8]}...")
 
-                await self.send_welcome()
+                # await self.send_welcome()
                 return True
             
             return False
