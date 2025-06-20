@@ -3,6 +3,7 @@ import json
 import logging
 import queue
 import threading
+import numpy as np
 from typing import AsyncGenerator, Optional
 
 from src.adapters.base import AudioAdapter, LocalConnectionConfig
@@ -28,6 +29,7 @@ class TextInputAdapter(AudioAdapter):
         self._input_task = None
         self._send_queue = None
         self._play_queue = None
+        self._server_activated = False
     
     @property
     def adapter_type(self) -> AdapterType:
@@ -44,8 +46,6 @@ class TextInputAdapter(AudioAdapter):
                 self.session_id = self.client.session_id
                 self._receiver_task = asyncio.create_task(self._receive_responses())
                 logger.info(f"文字输入适配器连接成功，会话ID: {self.session_id[:8]}...")
-                
-                await self.send_welcome()
                 return True
             
             return False
@@ -55,7 +55,32 @@ class TextInputAdapter(AudioAdapter):
             return False
     
     async def send_welcome(self):
+        """发送欢迎消息 - 这个不能走 tts 接口"""
         await self.client.push_text(WELCOME_MESSAGE)
+    
+    async def _send_silence_to_activate(self):
+        """发送静音音频激活服务器"""
+        try:
+            # 生成1秒的静音音频 (16kHz, 16位PCM)
+            sample_rate = 16000
+            duration = 1.0  # 1秒
+            samples = int(sample_rate * duration)
+            
+            # 生成静音数据 (16位PCM，小端字节序)
+            silence = np.zeros(samples, dtype=np.int16)
+            silence_bytes = silence.tobytes()
+            
+            logger.info("发送静音音频以激活服务器...")
+            await self.client.push_audio(silence_bytes)
+            logger.info("静音音频发送完成")
+            
+            # 稍微等待服务器响应
+            await asyncio.sleep(0.5)
+            self._server_activated = True
+            logger.info("服务器已激活，可以使用ChatTTS接口")
+            
+        except Exception as e:
+            logger.error(f"发送静音音频失败: {e}")
     
     async def disconnect(self) -> None:
         """断开连接"""
@@ -104,6 +129,18 @@ class TextInputAdapter(AudioAdapter):
         if not self.is_connected or not self.client:
             return False
         
+        # 等待服务器激活
+        if not self._server_activated:
+            logger.warning("服务器尚未激活，等待激活...")
+            for _ in range(10):  # 最多等待5秒
+                if self._server_activated:
+                    break
+                await asyncio.sleep(0.5)
+            
+            if not self._server_activated:
+                logger.error("服务器激活超时，无法发送ChatTTS文本")
+                return False
+        
         try:
             # 第一包：开始包
             await self.client.push_chat_tts_text("", start=True, end=False)
@@ -141,6 +178,11 @@ class TextInputAdapter(AudioAdapter):
             self._play_queue = play_queue
             
             logger.info("音频输出设备设置完成")
+            
+            # 音频设备设置完成后，发送激活音频和欢迎消息
+            await self.send_welcome()
+            await self._send_silence_to_activate()
+            
             return None, player
         
         except Exception as e:
