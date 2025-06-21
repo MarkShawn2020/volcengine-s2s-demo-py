@@ -1,4 +1,6 @@
 import asyncio
+import threading
+import keyboard
 
 from game.flower_game_adapter import FlowerGameAdapter
 from logger import logger
@@ -17,6 +19,7 @@ class FlowerGameApp(UnifiedAudioApp):
         self.is_waiting_custom_reply = False
         # 首条默认放行
         self.cur_tts_type = "chat_tts_texxt"
+        self._keyboard_thread = None
     
     async def run(self):
         """运行游戏应用"""
@@ -49,6 +52,12 @@ class FlowerGameApp(UnifiedAudioApp):
             logger.error("音频设备设置失败")
             return
         
+        # 启动键盘监听线程
+        self._start_keyboard_monitor()
+        
+        # 设置键盘回调函数，按0键重新开始游戏
+        # self.game_adapter.keyboard_callback = self._restart_game
+        
         try:
             await self.game_adapter.send_welcome()
             
@@ -59,6 +68,7 @@ class FlowerGameApp(UnifiedAudioApp):
             print("   - 听到欢迎消息后，请说出你的姓名")
             print("   - 依次回答三个问题，选择A、B、C、D或E")
             print("   - 游戏结束后会给出你的总分和评价")
+            print("   - 按 0 键可以重新开始游戏")
             print("   - 按 Ctrl+C 可以随时退出")
             print("=" * 60 + "\n")
             
@@ -76,6 +86,8 @@ class FlowerGameApp(UnifiedAudioApp):
         except KeyboardInterrupt:
             logger.info("用户中断游戏")
             self.stop_event.set()
+        finally:
+            self._stop_keyboard_monitor()
     
     async def _run_game_receiver_task(self, play_queue, stop_event):
         """运行游戏接收任务，处理ASR结果"""
@@ -146,3 +158,54 @@ class FlowerGameApp(UnifiedAudioApp):
                 break
         
         logger.info("游戏接收任务结束")
+    
+    def _restart_game(self):
+        """重新开始游戏"""
+        logger.info("🔄 检测到0键按下，重新开始游戏")
+        print("\n🔄 重新开始游戏...\n")
+        
+        # 重置游戏状态
+        self.game_adapter.game_state = "waiting_name"
+        self.game_adapter.user_name = ""
+        self.game_adapter.scores = []
+        self.game_adapter.current_question = 0
+        self.game_adapter.waiting_custom_reply = False
+        
+        try:
+            # 清空播放队列
+            while not self.game_adapter._play_queue.empty():
+                self.game_adapter._play_queue.get_nowait()
+        except:
+            pass
+        
+        # 异步发送欢迎消息
+        asyncio.create_task(self.game_adapter.send_welcome())
+    
+    def _start_keyboard_monitor(self):
+        """启动键盘监听线程"""
+        def keyboard_monitor():
+            logger.info("🎹 键盘监听线程启动")
+            
+            def on_key_event(event):
+                logger.debug(f"检测到按键事件: {event.name} ({event.event_type})")
+                if event.event_type == keyboard.KEY_DOWN and (event.name == '0' or event.name == 'kp 0'):
+                    logger.info("🎯 检测到0键按下!")
+                    self._restart_game()
+            
+            keyboard.hook(on_key_event)
+            
+            try:
+                while not self.stop_event.is_set():
+                    self.stop_event.wait(timeout=0.1)
+            finally:
+                keyboard.unhook_all()
+                logger.info("🎹 键盘监听线程结束")
+        
+        self._keyboard_thread = threading.Thread(target=keyboard_monitor, daemon=True)
+        self._keyboard_thread.start()
+    
+    def _stop_keyboard_monitor(self):
+        """停止键盘监听线程"""
+        if self._keyboard_thread:
+            self._keyboard_thread.join(timeout=1.0)
+            self._keyboard_thread = None

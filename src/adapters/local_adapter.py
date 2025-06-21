@@ -61,6 +61,7 @@ def text_input_thread(adapter, stop_event: threading.Event, loop):
     logger.info("文字输入线程结束")
 
 
+
 class LocalAudioAdapter(AudioAdapter):
     """本地音频适配器 - 直接连接火山引擎"""
     
@@ -105,6 +106,7 @@ class LocalAudioAdapter(AudioAdapter):
                 await self._receiver_task
             except asyncio.CancelledError:
                 pass
+        
         
         if self.client:
             await self.client.stop()
