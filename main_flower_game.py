@@ -176,6 +176,7 @@ class FlowerGameApp(UnifiedAudioApp):
         super().__init__(adapter_type, config, use_tts_pcm)
         self.game_adapter = None
         self.user_text = ''
+        self.is_waiting_custom_reply = False
     
     async def run(self):
         """运行游戏应用"""
