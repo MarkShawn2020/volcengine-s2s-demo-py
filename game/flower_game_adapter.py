@@ -67,38 +67,9 @@ class FlowerGameAdapter:
         logger.info(f"提问第{question_index + 1}个问题")
     
     async def _handle_question_answer(self, text: str):
-        """处理问题回答"""
-        # 提取选项 1, 2, 3, 4, 5
-        # option_match = re.search(r'[12345]', text)
-        # if not option_match:
-        #     # 如果没有明确选项，尝试从语音中推断
-        #     option = self._infer_option_from_text(text)
-        # else:
-        #     option = option_match.group(0)
-        #
-        # if option not in game["option_scores"]:
-        #     # 无法识别选项，要求重新回答
-        #     retry_msg = "抱歉，我没有听清楚你的选择，请重新选择 1、2、3、4 或 5。"
-        #     await self._send_chat_tts_text_packets(retry_msg)
-        #     return
-        #
-        # # 记录得分
-        # score = game["option_scores"][option]
-        # self.scores.append(score)
-        # logger.info(f"用户选择: {option}, 得分: {score}")
-        #
-        # 确认选择
-        # confirm_msg = f"好的"
-        # await self._send_chat_tts_text_packets(confirm_msg)
-        #
-        # 继续下一个问题或结束游戏
-        await asyncio.sleep(1)
         self.waiting_custom_reply = False
         next_question = self.current_question + 1
-        if next_question < len(game['questions']):
-            await self._ask_question(next_question)
-        else:
-            await self._finish_game()
+        await self._ask_question(next_question)
     
     def _infer_option_from_text(self, text: str) -> str:
         """从文本中推断选项"""
@@ -127,17 +98,20 @@ class FlowerGameAdapter:
         self.game_state = "finished"
         
         # 生成总结消息
-        result_msg = f"{self.user_name}，感谢你的参与！你的总分是 {total_score} 分。"
+        result_msg = f"{self.user_name}，感谢你的参与！"
         
+        
+        evaluation = ""
+        # todo: 由于分数系统现在有问题，计划改成完全随机
         # 根据分数给出评价
-        if total_score <= 60:
-            evaluation = "你倾向于平和与稳定，喜欢和谐的环境。"
-        elif total_score <= 120:
-            evaluation = "你对科技和改善持开放态度，相信美好的未来。"
-        elif total_score <= 180:
-            evaluation = "你对未来既有期待又有担忧，保持着理性的思考。"
-        else:
-            evaluation = "你是一个充满好奇心的探索者，敢于面对未知的挑战。"
+        # if total_score <= 60:
+        #     evaluation = "你倾向于平和与稳定，喜欢和谐的环境。"
+        # elif total_score <= 120:
+        #     evaluation = "你对科技和改善持开放态度，相信美好的未来。"
+        # elif total_score <= 180:
+        #     evaluation = "你对未来既有期待又有担忧，保持着理性的思考。"
+        # else:
+        #     evaluation = "你是一个充满好奇心的探索者，敢于面对未知的挑战。"
         
         final_msg = f"{result_msg}{evaluation}希望你在未来植物计划展区度过愉快的时光！"
         await self._send_chat_tts_text_packets(final_msg)
