@@ -45,7 +45,8 @@ def player_thread(p, device_index, play_q, chunk_size, stop_event):
             if item is None: continue
             payload = item.get('payload_msg')
             if isinstance(payload, bytes):
-                logger.debug(f"播放音频数据: 大小={len(payload)} bytes")
+                # 减少播放日志输出频率，避免干扰键盘输入
+                # logger.debug(f"播放音频数据: 大小={len(payload)} bytes")
                 # 'format'现在可以省略，因为播放器只处理它认识的格式
                 stream.write(payload)
             else:

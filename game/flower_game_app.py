@@ -1,6 +1,7 @@
 import asyncio
 import threading
-import keyboard
+import time
+from pynput import keyboard
 
 from game.flower_game_adapter import FlowerGameAdapter
 from logger import logger
@@ -20,6 +21,8 @@ class FlowerGameApp(UnifiedAudioApp):
         # 首条默认放行
         self.cur_tts_type = "chat_tts_texxt"
         self._keyboard_thread = None
+        self._keyboard_stop_event = threading.Event()
+        self._event_loop = None
     
     async def run(self):
         """运行游戏应用"""
@@ -33,6 +36,9 @@ class FlowerGameApp(UnifiedAudioApp):
         
         # 包装为游戏适配器
         self.game_adapter = FlowerGameAdapter(self.adapter)
+        
+        # 保存事件循环引用
+        self._event_loop = asyncio.get_event_loop()
         
         # 启动游戏
         try:
@@ -134,9 +140,7 @@ class FlowerGameApp(UnifiedAudioApp):
                     # TTS播放结束，可以接受键盘输入
                     if hasattr(self.game_adapter, 'is_playing_audio'):
                         self.game_adapter.is_playing_audio = False
-                    if hasattr(self.game_adapter, 'pending_keyboard_input') and self.game_adapter.pending_keyboard_input:
-                        print("\n请输入你的选择 (1-5): ", end="", flush=True)
-                
+                        
                 elif event == protocol.ServerEvent.ASR_INFO:
                     # ASR识别结果 - 处理用户语音
                     try:
@@ -178,34 +182,102 @@ class FlowerGameApp(UnifiedAudioApp):
         except:
             pass
         
-        # 异步发送欢迎消息
-        asyncio.create_task(self.game_adapter.send_welcome())
+        # 使用正确的方式在线程中调用异步方法
+        if self._event_loop and not self._event_loop.is_closed():
+            future = asyncio.run_coroutine_threadsafe(
+                self.game_adapter.send_welcome(), 
+                self._event_loop
+            )
+            try:
+                future.result(timeout=5.0)
+                logger.info("✅ 游戏重置完成，已发送欢迎消息")
+            except Exception as e:
+                logger.error(f"❌ 发送欢迎消息失败: {e}")
+        else:
+            logger.error("❌ 事件循环不可用，无法重置游戏")
     
     def _start_keyboard_monitor(self):
         """启动键盘监听线程"""
         def keyboard_monitor():
             logger.info("🎹 键盘监听线程启动")
             
-            def on_key_event(event):
-                logger.debug(f"检测到按键事件: {event.name} ({event.event_type})")
-                if event.event_type == keyboard.KEY_DOWN and (event.name == '0' or event.name == 'kp 0'):
-                    logger.info("🎯 检测到0键按下!")
-                    self._restart_game()
+            def on_press(key):
+                try:
+                    logger.warn(f"pressed key")
+                    logger.warn(key)
+                    # 详细记录所有按键事件，帮助调试
+                    if hasattr(key, 'char') and key.char:
+                        logger.info(f"🔍 按键事件: char='{key.char}'")
+                        # 检查数字0键
+                        if key.char == '0':
+                            logger.info("🎯 检测到0键按下!")
+                            print("\n" + "="*50)
+                            print("🔄 检测到0键，正在重置游戏...")
+                            print("="*50)
+                            self._restart_game()
+                        else:
+                            logger.info(f"按下字符键: {key.char}")
+                    else:
+                        # 特殊键（如ctrl, shift等）
+                        logger.info(f"🔍 按键事件: special_key={key}")
+                        # 检查数字键盘的0
+                        if str(key) == 'Key.kp_0':
+                            logger.info("🎯 检测到数字键盘0键按下!")
+                            print("\n" + "="*50)
+                            print("🔄 检测到数字键盘0键，正在重置游戏...")
+                            print("="*50)
+                            self._restart_game()
+                        else:
+                            logger.info(f"按下特殊键: {key}")
+                except Exception as e:
+                    logger.error(f"按键处理异常: {e}")
             
-            keyboard.hook(on_key_event)
+            def on_release(key):
+                # 可以在这里处理按键释放事件，现在暂时不需要
+                pass
+            
+            # 使用pynput的监听器
+            listener = keyboard.Listener(
+                on_press=on_press,
+                on_release=on_release
+            )
+            listener.start()
             
             try:
-                while not self.stop_event.is_set():
-                    self.stop_event.wait(timeout=0.1)
+                # 修复：使用独立的停止事件和时间睡眠，避免与主线程的stop_event冲突
+                while not self._keyboard_stop_event.is_set():
+                    time.sleep(0.1)  # 使用time.sleep而不是event.wait
             finally:
-                keyboard.unhook_all()
+                listener.stop()
                 logger.info("🎹 键盘监听线程结束")
         
+        # 重置键盘停止事件
+        self._keyboard_stop_event.clear()
         self._keyboard_thread = threading.Thread(target=keyboard_monitor, daemon=True)
         self._keyboard_thread.start()
+        logger.info("✅ 键盘监听线程已启动")
+        
+        # 添加权限检查提示
+        print("\n" + "🔔" * 50)
+        print("🔔 pynput键盘监听已启动！")
+        print("🔔 如果按0键无反应，请检查macOS系统偏好设置：")
+        print("🔔 系统偏好设置 > 安全性与隐私 > 隐私 > 辅助功能")
+        print("🔔 确保您的终端应用有权限访问")
+        print("🔔 现在请按任意键测试键盘监听是否工作...")
+        print("🔔" * 50 + "\n")
     
     def _stop_keyboard_monitor(self):
         """停止键盘监听线程"""
-        if self._keyboard_thread:
-            self._keyboard_thread.join(timeout=1.0)
-            self._keyboard_thread = None
+        logger.info("🛑 正在停止键盘监听线程...")
+        
+        # 设置停止标志
+        self._keyboard_stop_event.set()
+        
+        if self._keyboard_thread and self._keyboard_thread.is_alive():
+            self._keyboard_thread.join(timeout=2.0)
+            if self._keyboard_thread.is_alive():
+                logger.warning("⚠️ 键盘监听线程未能在2秒内正常结束")
+            else:
+                logger.info("✅ 键盘监听线程已正常结束")
+        
+        self._keyboard_thread = None

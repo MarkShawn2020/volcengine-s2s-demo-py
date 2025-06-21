@@ -228,9 +228,9 @@ class LocalAudioAdapter(AudioAdapter):
 
             # 启动文字输入线程
             current_loop = asyncio.get_event_loop()
-            text_input = threading.Thread(
-                target=text_input_thread, args=(self, stop_event, current_loop)
-            )
+            # text_input = threading.Thread(
+            #     target=text_input_thread, args=(self, stop_event, current_loop)
+            # )
 
             recorder.start()
             player.start()
@@ -240,7 +240,7 @@ class LocalAudioAdapter(AudioAdapter):
             # 存储队列和线程供后续使用
             self._send_queue = send_queue
             self._play_queue = play_queue
-            self._text_input_thread = text_input
+            # self._text_input_thread = text_input
 
             logger.info("音频设备和文字输入设置完成")
             return recorder, player
@@ -276,10 +276,10 @@ class LocalAudioAdapter(AudioAdapter):
                         sent_count += 1
                         failed_count = 0  # 重置失败计数
 
-                        # 显示音量指示
+                        # 显示音量指示 - 减少输出频率
                         volume = vad.get_volume(audio_chunk)
-                        if sent_count % 20 == 0:  # 每20个包显示一次
-                            logger.debug(f"🎤 发送语音 #{sent_count}, 音量: {volume:.3f}")
+                        if sent_count % 100 == 0:  # 每100个包显示一次，减少日志输出
+                            logger.info(f"🎤 发送语音 #{sent_count}, 音量: {volume:.3f}")
                     else:
                         failed_count += 1
                         logger.warning(f"发送音频失败 ({failed_count}/{max_failures})")
@@ -287,8 +287,8 @@ class LocalAudioAdapter(AudioAdapter):
                             logger.error("连续发送失败过多，可能连接有问题")
                             break
                 else:
-                    # 静音期间，偶尔打印状态
-                    if audio_count % 100 == 0:
+                    # 静音期间，减少日志输出
+                    if audio_count % 500 == 0:  # 进一步减少静音日志
                         volume = vad.get_volume(audio_chunk)
                         logger.debug(f"🔇 静音检测中... 音量: {volume:.3f}")
 
@@ -315,9 +315,9 @@ class LocalAudioAdapter(AudioAdapter):
 
                 event = response.get('event')
                 if event == protocol.ServerEvent.TTS_RESPONSE:
-                    # 音频响应 - 优化队列处理
+                    # 音频响应 - 优化队列处理，减少日志输出
                     audio_data = response.get('payload_msg')
-                    logger.info(f"收到TTS音频数据: {type(audio_data)}, 大小: {len(audio_data) if isinstance(audio_data, bytes) else 'N/A'}")
+                    logger.debug(f"收到TTS音频数据: {type(audio_data)}, 大小: {len(audio_data) if isinstance(audio_data, bytes) else 'N/A'}")
                     # 避免满
                     if play_queue.full():
                         play_queue.get_nowait()
