@@ -15,6 +15,18 @@ from src.volcengine import protocol
 from logger import logger
 
 
+game = {
+    "welcome_msg": "你好，欢迎来到未来植物计划展区，站在指定区域，说出你的姓名，然后开始你的互动之旅。",
+    "questions":[
+            "你认为AI将如何影响我们的未来？请选择你的看法：A 成为好朋友，B 改善生活，C 威胁控制，D 与人类分离，E 无所谓",
+            "你心中的未来世界是什么样？请选择你想要的未来：A 和谐秩序，B 科技奇观，C 混沌未知，D 自然复苏，E 冷静克制",
+            "你此刻的情绪是？请选择你的感受：A 平静，B 热烈，C 忐忑，D 好奇，E 超然"
+        ],
+    "option_scores":{
+            'A': 0, 'B': 20, 'C': 40, 'D': 60, 'E': 80
+        }
+}
+
 class FlowerGameAdapter:
     """植物计划游戏适配器"""
     
@@ -24,18 +36,6 @@ class FlowerGameAdapter:
         self.user_name = ""
         self.scores = []  # 存储三个问题的得分
         self.current_question = 0
-        
-        # 游戏问题和选项分值
-        self.questions = [
-            "你认为AI将如何影响我们的未来？请选择你的看法：A 成为好朋友，B 改善生活，C 威胁控制，D 与人类分离，E 无所谓",
-            "你心中的未来世界是什么样？请选择你想要的未来：A 和谐秩序，B 科技奇观，C 混沌未知，D 自然复苏，E 冷静克制",
-            "你此刻的情绪是？请选择你的感受：A 平静，B 热烈，C 忐忑，D 好奇，E 超然"
-        ]
-        
-        # 选项分值映射
-        self.option_scores = {
-            'A': 0, 'B': 20, 'C': 40, 'D': 60, 'E': 80
-        }
     
     def __getattr__(self, name):
         """代理其他方法到原始适配器"""
@@ -43,8 +43,7 @@ class FlowerGameAdapter:
     
     async def send_welcome(self):
         """发送游戏欢迎消息"""
-        welcome_msg = "你好，欢迎来到未来植物计划展区，站在指定区域，说出你的姓名，然后开始你的互动之旅。"
-        await self.original_adapter.client.push_text(welcome_msg)
+        await self.original_adapter.client.push_text(game['welcome_msg'])
         self.game_state = "waiting_name"
         logger.info("游戏开始，等待用户说出姓名")
     
@@ -77,14 +76,14 @@ class FlowerGameAdapter:
     
     async def _ask_question(self, question_index: int):
         """提问"""
-        if question_index >= len(self.questions):
+        if question_index >= len(game['questions']):
             await self._finish_game()
             return
             
         self.current_question = question_index
         self.game_state = f"question_{question_index + 1}"
         
-        question_text = self.questions[question_index]
+        question_text = game['questions'][question_index]
         await self._send_chat_tts_text_packets(question_text)
         logger.info(f"提问第{question_index + 1}个问题")
     
@@ -98,14 +97,14 @@ class FlowerGameAdapter:
         else:
             option = option_match.group(0)
         
-        if option not in self.option_scores:
+        if option not in game["option_scores"]:
             # 无法识别选项，要求重新回答
             retry_msg = "抱歉，我没有听清楚你的选择，请重新选择 A、B、C、D 或 E。"
             await self._send_chat_tts_text_packets(retry_msg)
             return
         
         # 记录得分
-        score = self.option_scores[option]
+        score = game["option_scores"][option]
         self.scores.append(score)
         logger.info(f"用户选择: {option}, 得分: {score}")
         
@@ -116,7 +115,7 @@ class FlowerGameAdapter:
         # 继续下一个问题或结束游戏
         await asyncio.sleep(1)
         next_question = self.current_question + 1
-        if next_question < len(self.questions):
+        if next_question < len(game['questions']):
             await self._ask_question(next_question)
         else:
             await self._finish_game()
@@ -248,13 +247,18 @@ class FlowerGameApp(UnifiedAudioApp):
                 if not response or "error" in response:
                     continue
                     
-                try:
-                    pass
-                    # logger.info(f"[Response]: {response}")
-                except Exception as e:
-                    pass
-            
                 event = response.get('event')
+                # 其他事件
+                try:
+                    event_name = protocol.ServerEvent(event).name
+                    payload = response.get('payload_msg', {})
+                    if isinstance(payload, dict):
+                        logger.debug(f"收到事件: {event_name} - {payload}")
+                    else:
+                        logger.debug(f"收到事件: {event_name}")
+                except ValueError:
+                    logger.debug(f"收到未知事件: {event}")
+
                 if event == protocol.ServerEvent.TTS_RESPONSE:
                     # 音频响应 - 放入播放队列
                     audio_data = response.get('payload_msg')
@@ -268,9 +272,6 @@ class FlowerGameApp(UnifiedAudioApp):
                         # 处理队列操作异常
                         pass
                     
-                elif event == protocol.ServerEvent.ASR_RESPONSE:
-                    self.user_text = response.get("payload_msg", {}).get("extra", {}).get('origin_text', "")
-                
                 elif event == protocol.ServerEvent.ASR_INFO:
                     # ASR识别结果 - 处理用户语音
                     try:
@@ -278,20 +279,12 @@ class FlowerGameApp(UnifiedAudioApp):
                             play_queue.get_nowait()  # 清空播放队列，打断AI语音
                     except:
                         pass
+                elif event == protocol.ServerEvent.ASR_RESPONSE:
+                    self.user_text = response.get("payload_msg", {}).get("extra", {}).get('origin_text', "")
+                elif event == protocol.ServerEvent.ASR_ENDED:
                     # 处理用户语音输入
                     logger.info(f"[User Text]: {self.user_text}")
                     await self.game_adapter.process_user_speech(self.user_text)
-                elif event:
-                    # 其他事件
-                    try:
-                        event_name = protocol.ServerEvent(event).name
-                        payload = response.get('payload_msg', {})
-                        if isinstance(payload, dict):
-                            logger.debug(f"收到事件: {event_name} - {payload}")
-                        else:
-                            logger.debug(f"收到事件: {event_name}")
-                    except ValueError:
-                        logger.debug(f"收到未知事件: {event}")
             
             except asyncio.TimeoutError:
                 continue
