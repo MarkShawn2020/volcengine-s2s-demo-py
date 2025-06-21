@@ -7,7 +7,6 @@ from src.unified_app import UnifiedAudioApp
 from src.volcengine import protocol
 
 
-
 class FlowerGameApp(UnifiedAudioApp):
     """植物计划游戏应用"""
     
@@ -52,7 +51,7 @@ class FlowerGameApp(UnifiedAudioApp):
         
         try:
             await self.game_adapter.send_welcome()
-    
+            
             logger.info("🎤 植物计划游戏对话已就绪！")
             print("\n" + "=" * 60)
             print("🌱 欢迎来到未来植物计划展区！")
@@ -73,17 +72,10 @@ class FlowerGameApp(UnifiedAudioApp):
             
             # 等待游戏结束或用户中断
             await asyncio.gather(sender_task, receiver_task)
-            
+        
         except KeyboardInterrupt:
             logger.info("用户中断游戏")
             self.stop_event.set()
-        finally:
-            if self.keyboard_input_task:
-                self.keyboard_input_task.cancel()
-                try:
-                    await self.keyboard_input_task
-                except asyncio.CancelledError:
-                    pass
     
     async def _run_game_receiver_task(self, play_queue, stop_event):
         """运行游戏接收任务，处理ASR结果"""
@@ -95,7 +87,7 @@ class FlowerGameApp(UnifiedAudioApp):
                 response = await asyncio.wait_for(self.game_adapter.response_queue.get(), timeout=1.0)
                 if not response or "error" in response:
                     continue
-                    
+                
                 event = response.get('event')
                 event_name = protocol.ServerEvent(event).name
                 payload = response.get('payload_msg', {})
@@ -103,7 +95,7 @@ class FlowerGameApp(UnifiedAudioApp):
                     logger.info(f"收到事件: {event_name}({event}) - {payload}")
                 else:
                     logger.info(f"收到事件: {event_name}({event})")
-
+                
                 if event == protocol.ServerEvent.TTS_RESPONSE:
                     # 音频响应 - 放入播放队列
                     logger.debug(f"收到TTS音频数据: {type(payload)}, 大小: {len(payload) if isinstance(payload, bytes) else 'N/A'}")
@@ -113,7 +105,7 @@ class FlowerGameApp(UnifiedAudioApp):
                         if self.cur_tts_type == "default":
                             logger.warn("skip since default")
                             continue
-                            
+                        
                         if play_queue.full():
                             play_queue.get_nowait()
                         play_queue.put_nowait(response)
@@ -132,7 +124,7 @@ class FlowerGameApp(UnifiedAudioApp):
                         self.game_adapter.is_playing_audio = False
                     if hasattr(self.game_adapter, 'pending_keyboard_input') and self.game_adapter.pending_keyboard_input:
                         print("\n请输入你的选择 (1-5): ", end="", flush=True)
-                    
+                
                 elif event == protocol.ServerEvent.ASR_INFO:
                     # ASR识别结果 - 处理用户语音
                     try:
@@ -154,40 +146,3 @@ class FlowerGameApp(UnifiedAudioApp):
                 break
         
         logger.info("游戏接收任务结束")
-    
-    async def _keyboard_input_task(self):
-        """键盘输入任务"""
-        import sys
-        import select
-        import termios
-        import tty
-        
-        # 设置非阻塞输入
-        old_settings = termios.tcgetattr(sys.stdin)
-        tty.setraw(sys.stdin.fileno())
-        
-        try:
-            while not self.stop_event.is_set():
-                if (self.game_adapter and
-                    hasattr(self.game_adapter, 'pending_keyboard_input') and
-                    self.game_adapter.pending_keyboard_input and
-                    hasattr(self.game_adapter, 'is_playing_audio') and
-                    not self.game_adapter.is_playing_audio):
-                    # 等待键盘输入
-                    if select.select([sys.stdin], [], [], 0.1)[0]:
-                        char = sys.stdin.read(1)
-                        if char in ['1', '2', '3', '4', '5']:
-                            print(char)  # 显示用户输入
-                            if hasattr(self.game_adapter, 'handle_keyboard_input'):
-                                self.game_adapter.handle_keyboard_input(char)
-                        elif char == '\x03':  # Ctrl+C
-                            self.stop_event.set()
-                            break
-                else:
-                    await asyncio.sleep(0.1)
-        except Exception as e:
-            logger.error(f"键盘输入任务异常: {e}")
-        finally:
-            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
-
-
