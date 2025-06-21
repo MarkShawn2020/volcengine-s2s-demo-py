@@ -232,7 +232,8 @@ class LocalAudioAdapter(AudioAdapter):
 
             recorder.start()
             player.start()
-            text_input.start()
+            # 暂时关闭文本输入线程
+            # text_input.start()
             
             # 存储队列和线程供后续使用
             self._send_queue = send_queue
