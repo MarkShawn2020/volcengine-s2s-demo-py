@@ -185,16 +185,55 @@ class FlowerGameApp(UnifiedAudioApp):
         # 使用正确的方式在线程中调用异步方法
         if self._event_loop and not self._event_loop.is_closed():
             future = asyncio.run_coroutine_threadsafe(
-                self.game_adapter.send_welcome(), 
+                self._restart_session_and_game(), 
                 self._event_loop
             )
             try:
-                future.result(timeout=5.0)
-                logger.info("✅ 游戏重置完成，已发送欢迎消息")
+                future.result(timeout=10.0)
+                logger.info("✅ 游戏重置完成，已重新启动会话并发送欢迎消息")
             except Exception as e:
-                logger.error(f"❌ 发送欢迎消息失败: {e}")
+                logger.error(f"❌ 重置游戏失败: {e}")
         else:
             logger.error("❌ 事件循环不可用，无法重置游戏")
+    
+    async def _restart_session_and_game(self):
+        """重启会话并开始游戏"""
+        try:
+            # 获取底层客户端
+            client = self.adapter.client
+            
+            logger.info("🔄 正在关闭当前会话...")
+            # 先关闭当前会话
+            await client.request_stop_session()
+            logger.info("✅ 会话关闭请求已发送")
+            
+            logger.info("🔄 正在启动新会话...")
+            # 生成新的会话ID
+            import uuid
+            client.session_id = str(uuid.uuid4())
+            logger.info(f"🆔 新会话ID: {client.session_id[:8]}...")
+            
+            # 重新启动会话
+            await client.request_start_session()
+            logger.info("✅ 新会话启动请求已发送")
+            
+            # 短暂等待
+            logger.info("⏳ 短暂等待...")
+            await asyncio.sleep(0.5)
+            
+            logger.info("🔄 正在发送欢迎消息...")
+            # 发送欢迎消息，添加超时保护
+            await self.game_adapter.send_welcome()
+            logger.info("✅ 欢迎消息已发送")
+            
+            logger.info("✅ 会话重启和游戏重置完成")
+            
+        except asyncio.TimeoutError as e:
+            logger.error(f"❌ 重启会话超时: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"❌ 重启会话失败: {e}", exc_info=True)
+            raise
     
     def _start_keyboard_monitor(self):
         """启动键盘监听线程"""
@@ -203,32 +242,19 @@ class FlowerGameApp(UnifiedAudioApp):
             
             def on_press(key):
                 try:
-                    logger.warn(f"pressed key")
-                    logger.warn(key)
-                    # 详细记录所有按键事件，帮助调试
-                    if hasattr(key, 'char') and key.char:
-                        logger.info(f"🔍 按键事件: char='{key.char}'")
-                        # 检查数字0键
-                        if key.char == '0':
-                            logger.info("🎯 检测到0键按下!")
-                            print("\n" + "="*50)
-                            print("🔄 检测到0键，正在重置游戏...")
-                            print("="*50)
-                            self._restart_game()
-                        else:
-                            logger.info(f"按下字符键: {key.char}")
-                    else:
-                        # 特殊键（如ctrl, shift等）
-                        logger.info(f"🔍 按键事件: special_key={key}")
-                        # 检查数字键盘的0
-                        if str(key) == 'Key.kp_0':
-                            logger.info("🎯 检测到数字键盘0键按下!")
-                            print("\n" + "="*50)
-                            print("🔄 检测到数字键盘0键，正在重置游戏...")
-                            print("="*50)
-                            self._restart_game()
-                        else:
-                            logger.info(f"按下特殊键: {key}")
+                    # 只监控0键
+                    if hasattr(key, 'char') and key.char == '0':
+                        logger.info("🎯 检测到0键按下!")
+                        print("\n" + "="*50)
+                        print("🔄 检测到0键，正在重置游戏...")
+                        print("="*50)
+                        self._restart_game()
+                    elif str(key) == 'Key.kp_0':
+                        logger.info("🎯 检测到数字键盘0键按下!")
+                        print("\n" + "="*50)
+                        print("🔄 检测到数字键盘0键，正在重置游戏...")
+                        print("="*50)
+                        self._restart_game()
                 except Exception as e:
                     logger.error(f"按键处理异常: {e}")
             
