@@ -6,6 +6,7 @@ from random import random
 from pynput import keyboard
 
 from game.flower_game_adapter import FlowerGameAdapter
+from game.websocket_server import GameScoreWebSocketServer
 from logger import logger
 from src.adapters import AdapterType
 from src.unified_app import UnifiedAudioApp
@@ -26,19 +27,27 @@ class FlowerGameApp(UnifiedAudioApp):
         self._keyboard_stop_event = threading.Event()
         self._event_loop = None
         self.score = random() * 100
+        self.websocket_server = GameScoreWebSocketServer()
     
     async def run(self):
         """运行游戏应用"""
         logger.info("=== 未来植物计划展区游戏启动 ===")
         
+        # 启动WebSocket服务器
+        ws_success = await self.websocket_server.start()
+        if not ws_success:
+            logger.error("WebSocket服务器启动失败")
+            return
+        
         # 初始化应用（使用父类方法）
         success = await self.initialize()
         if not success:
             logger.error("应用初始化失败")
+            await self.websocket_server.stop()
             return
         
-        # 包装为游戏适配器
-        self.game_adapter = FlowerGameAdapter(self.adapter)
+        # 包装为游戏适配器，传入WebSocket服务器
+        self.game_adapter = FlowerGameAdapter(self.adapter, self.websocket_server)
         
         # 保存事件循环引用
         self._event_loop = asyncio.get_event_loop()
@@ -97,6 +106,7 @@ class FlowerGameApp(UnifiedAudioApp):
             self.stop_event.set()
         finally:
             self._stop_keyboard_monitor()
+            await self.websocket_server.stop()
     
     async def _run_game_receiver_task(self, play_queue, stop_event):
         """运行游戏接收任务，处理ASR结果"""
@@ -179,6 +189,8 @@ class FlowerGameApp(UnifiedAudioApp):
         self.game_adapter.waiting_custom_reply = False
         self.score = random() * 100
         
+        # 在异步方法中处理广播游戏重启事件（稍后在_restart_session_and_game中调用）
+        
         try:
             # 清空播放队列
             while not self.game_adapter._play_queue.empty():
@@ -229,6 +241,13 @@ class FlowerGameApp(UnifiedAudioApp):
             # 发送欢迎消息，添加超时保护
             await self.game_adapter.send_welcome()
             logger.info("✅ 欢迎消息已发送")
+            
+            # 广播游戏重启事件
+            try:
+                await self.websocket_server.broadcast_game_restart()
+                logger.info("✅ 游戏重启事件已广播")
+            except Exception as e:
+                logger.error(f"广播游戏重启失败: {e}")
             
             logger.info("✅ 会话重启和游戏重置完成")
             
