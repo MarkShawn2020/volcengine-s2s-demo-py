@@ -1,6 +1,8 @@
 import asyncio
 import threading
 import time
+from random import random
+
 from pynput import keyboard
 
 from game.flower_game_adapter import FlowerGameAdapter
@@ -23,6 +25,7 @@ class FlowerGameApp(UnifiedAudioApp):
         self._keyboard_thread = None
         self._keyboard_stop_event = threading.Event()
         self._event_loop = None
+        self.score = random() * 100
     
     async def run(self):
         """运行游戏应用"""
@@ -174,6 +177,7 @@ class FlowerGameApp(UnifiedAudioApp):
         self.game_adapter.scores = []
         self.game_adapter.current_question = 0
         self.game_adapter.waiting_custom_reply = False
+        self.score = random() * 100
         
         try:
             # 清空播放队列
@@ -247,12 +251,6 @@ class FlowerGameApp(UnifiedAudioApp):
                         logger.info("🎯 检测到0键按下!")
                         print("\n" + "="*50)
                         print("🔄 检测到0键，正在重置游戏...")
-                        print("="*50)
-                        self._restart_game()
-                    elif str(key) == 'Key.kp_0':
-                        logger.info("🎯 检测到数字键盘0键按下!")
-                        print("\n" + "="*50)
-                        print("🔄 检测到数字键盘0键，正在重置游戏...")
                         print("="*50)
                         self._restart_game()
                 except Exception as e:

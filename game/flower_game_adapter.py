@@ -1,4 +1,5 @@
 import asyncio
+from random import random
 
 from logger import logger
 from game.config import game
@@ -14,6 +15,7 @@ class FlowerGameAdapter:
         self.scores = []  # 存储三个问题的得分
         self.current_question = 0
         self.waiting_custom_reply = False
+        self.constant = random() * 100
     
     def __getattr__(self, name):
         """代理其他方法到原始适配器"""
@@ -21,6 +23,7 @@ class FlowerGameAdapter:
     
     async def send_welcome(self):
         """发送游戏欢迎消息"""
+        self.constant = random() * 100
         await self.original_adapter.client.push_text(game['welcome_msg'])
         self.game_state = "waiting_name"
         logger.info("游戏开始，等待用户说出姓名")
@@ -117,6 +120,7 @@ class FlowerGameAdapter:
         await self._send_chat_tts_text_packets(final_msg)
         
         logger.info(f"游戏结束，{self.user_name} 总分: {total_score}, 各题得分: {self.scores}")
+        self.constant += 100
     
     async def _send_chat_tts_text_packets(self, text: str) -> bool:
         """发送ChatTTS文本包（复制自原始适配器）"""
