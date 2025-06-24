@@ -204,15 +204,24 @@ class LocalAudioAdapter(AudioAdapter):
     async def setup_audio_devices(self, p, stop_event: threading.Event) -> tuple[Optional[threading.Thread], Optional[threading.Thread]]:
         """设置音频设备"""
         try:
-            # 选择输入设备
-            input_device_index = select_audio_device(p, "选择输入设备 (麦克风):", 'input')
-            if input_device_index is None:
-                return None, None
+            # 在单独线程中选择设备，避免阻塞事件循环
+            import concurrent.futures
+            
+            loop = asyncio.get_event_loop()
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                # 选择输入设备
+                input_device_index = await loop.run_in_executor(
+                    executor, select_audio_device, p, "选择输入设备 (麦克风):", 'input'
+                )
+                if input_device_index is None:
+                    return None, None
 
-            # 选择输出设备
-            output_device_index = select_audio_device(p, "选择输出设备 (扬声器):", 'output')
-            if output_device_index is None:
-                return None, None
+                # 选择输出设备
+                output_device_index = await loop.run_in_executor(
+                    executor, select_audio_device, p, "选择输出设备 (扬声器):", 'output'
+                )
+                if output_device_index is None:
+                    return None, None
 
             # 启动录音和播放线程，使用更大的chunk_size
             chunk_size = 1600  # 使用1600帧，约100ms的音频

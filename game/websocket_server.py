@@ -29,7 +29,8 @@ class GameScoreWebSocketServer:
                 self.host,
                 self.port
             )
-            logger.info(f"WebSocket服务器已启动: ws://{self.host}:{self.port}")
+            logger.info(f"✅ WebSocket服务器已启动并立即可连接: ws://{self.host}:{self.port}")
+            logger.info(f"🔗 客户端现在可以连接到 ws://{self.host}:{self.port}")
             return True
         except Exception as e:
             logger.error(f"WebSocket服务器启动失败: {e}")

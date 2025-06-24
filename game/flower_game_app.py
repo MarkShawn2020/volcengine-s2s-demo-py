@@ -29,20 +29,35 @@ class FlowerGameApp(UnifiedAudioApp):
         self.score = random() * 100
         self.websocket_server = GameScoreWebSocketServer()
     
+    async def _keep_websocket_alive(self):
+        """保持WebSocket服务器运行的任务"""
+        logger.info("🔗 WebSocket保持任务启动")
+        try:
+            while True:
+                await asyncio.sleep(1)
+                # 这个任务确保WebSocket服务器的事件循环不被阻塞
+        except asyncio.CancelledError:
+            logger.info("🔗 WebSocket保持任务结束")
+            raise
+    
     async def run(self):
         """运行游戏应用"""
         logger.info("=== 未来植物计划展区游戏启动 ===")
         
-        # 启动WebSocket服务器
+        # 启动WebSocket服务器，并创建独立任务保持运行
         ws_success = await self.websocket_server.start()
         if not ws_success:
             logger.error("WebSocket服务器启动失败")
             return
+            
+        # 创建WebSocket服务器保持任务，防止被其他操作阻塞
+        websocket_keep_alive_task = asyncio.create_task(self._keep_websocket_alive())
         
         # 初始化应用（使用父类方法）
         success = await self.initialize()
         if not success:
             logger.error("应用初始化失败")
+            websocket_keep_alive_task.cancel()
             await self.websocket_server.stop()
             return
         
@@ -58,6 +73,7 @@ class FlowerGameApp(UnifiedAudioApp):
         except Exception as e:
             logger.error(f"游戏运行异常: {e}")
         finally:
+            websocket_keep_alive_task.cancel()
             await self.cleanup()
     
     async def _run_game(self):
