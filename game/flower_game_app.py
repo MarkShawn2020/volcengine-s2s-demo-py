@@ -6,7 +6,7 @@ from random import random
 from pynput import keyboard
 
 from game.flower_game_adapter import FlowerGameAdapter
-from game.websocket_server import GameScoreWebSocketServer
+from game.websocket_server import GameScoreWebSocketClient
 from logger import logger
 from src.adapters import AdapterType
 from src.unified_app import UnifiedAudioApp
@@ -27,7 +27,7 @@ class FlowerGameApp(UnifiedAudioApp):
         self._keyboard_stop_event = threading.Event()
         self._event_loop = None
         self.score = random() * 100
-        self.websocket_server = GameScoreWebSocketServer()
+        self.websocket_client = GameScoreWebSocketClient()
     
     async def _keep_websocket_alive(self):
         """保持WebSocket服务器运行的任务"""
@@ -44,13 +44,13 @@ class FlowerGameApp(UnifiedAudioApp):
         """运行游戏应用"""
         logger.info("=== 未来植物计划展区游戏启动 ===")
         
-        # 启动WebSocket服务器，并创建独立任务保持运行
-        ws_success = await self.websocket_server.start()
+        # 连接WebSocket服务器，并创建独立任务保持运行
+        ws_success = await self.websocket_client.start()
         if not ws_success:
-            logger.error("WebSocket服务器启动失败")
+            logger.error("WebSocket客户端连接失败")
             return
             
-        # 创建WebSocket服务器保持任务，防止被其他操作阻塞
+        # 创建WebSocket客户端保持任务，防止被其他操作阻塞
         websocket_keep_alive_task = asyncio.create_task(self._keep_websocket_alive())
         
         # 初始化应用（使用父类方法）
@@ -58,11 +58,11 @@ class FlowerGameApp(UnifiedAudioApp):
         if not success:
             logger.error("应用初始化失败")
             websocket_keep_alive_task.cancel()
-            await self.websocket_server.stop()
+            await self.websocket_client.stop()
             return
         
-        # 包装为游戏适配器，传入WebSocket服务器
-        self.game_adapter = FlowerGameAdapter(self.adapter, self.websocket_server)
+        # 包装为游戏适配器，传入WebSocket客户端
+        self.game_adapter = FlowerGameAdapter(self.adapter, self.websocket_client)
         
         # 保存事件循环引用
         self._event_loop = asyncio.get_event_loop()
@@ -122,7 +122,7 @@ class FlowerGameApp(UnifiedAudioApp):
             self.stop_event.set()
         finally:
             self._stop_keyboard_monitor()
-            await self.websocket_server.stop()
+            await self.websocket_client.stop()
     
     async def _run_game_receiver_task(self, play_queue, stop_event):
         """运行游戏接收任务，处理ASR结果"""
@@ -258,12 +258,12 @@ class FlowerGameApp(UnifiedAudioApp):
             await self.game_adapter.send_welcome()
             logger.info("✅ 欢迎消息已发送")
             
-            # 广播游戏重启事件
+            # 发送游戏重启事件
             try:
-                await self.websocket_server.broadcast_game_restart()
-                logger.info("✅ 游戏重启事件已广播")
+                await self.websocket_client.broadcast_game_restart()
+                logger.info("✅ 游戏重启事件已发送")
             except Exception as e:
-                logger.error(f"广播游戏重启失败: {e}")
+                logger.error(f"发送游戏重启失败: {e}")
             
             logger.info("✅ 会话重启和游戏重置完成")
             
