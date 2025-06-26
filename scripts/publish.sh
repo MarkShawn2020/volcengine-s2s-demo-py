@@ -23,6 +23,12 @@ fi
 echo "📦 构建包..."
 poetry build
 
+# 安装 twine（如果未安装）
+if ! poetry run python -c "import twine" 2>/dev/null; then
+    echo "📦 安装 twine..."
+    poetry add --group dev twine
+fi
+
 # 检查包内容
 echo "🔍 检查包内容..."
 poetry run twine check dist/*
