@@ -3,3 +3,4 @@ websockets
 typing-extensions
 pydub
 numpy
+python-dotenv

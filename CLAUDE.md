@@ -8,9 +8,3 @@
 
 - python
   - 优先使用 poetry
-- nodejs
-  - 优先使用 pnpm、typescript
-
-## 代码修改记录
-
-- @src/adapters/browser_adapter.py 去除_find_available_port函数，并考虑使用从环境变量读取 websocket_adapter_server_uri 的方式，并默认 ws://localhost:8765，而非拆成host、port

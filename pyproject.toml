@@ -1,7 +1,7 @@
 [project]
-name = "volcengine-s2s-demo-py"
+name = "volcengine-s2s-framework"
 version = "0.1.0"
-description = ""
+description = "通用语音对话框架"
 authors = [
     {name = "markshawn2020",email = "shawninjuly@gmail.com"}
 ]
@@ -22,8 +22,7 @@ dependencies = [
     "pygame (>=2.6.1,<3.0.0)",
     "python-dotenv (>=1.1.0,<2.0.0)",
     "keyboard (>=0.13.5,<0.14.0)",
-    "python-socks (>=2.7.1,<3.0.0)",
-    "pynput (>=1.8.1,<2.0.0)"
+    "python-socks (>=2.7.1,<3.0.0)"
 ]
 
 [tool.poetry]
