@@ -1,12 +1,24 @@
 [project]
 name = "volcengine-s2s-framework"
 version = "0.1.0"
-description = "通用语音对话框架"
+description = "通用语音对话框架，支持多种适配器和火山引擎语音服务"
 authors = [
-    {name = "markshawn2020",email = "shawninjuly@gmail.com"}
+    {name = "markshawn2020", email = "shawninjuly@gmail.com"}
 ]
 readme = "README.md"
 requires-python = ">=3.11"
+license = {text = "MIT"}
+keywords = ["speech", "audio", "volcengine", "websocket", "voice"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers", 
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 dependencies = [
     "pyaudio (>=0.2.14,<0.3.0)",
     "websockets (>=15.0.1,<16.0.0)",
