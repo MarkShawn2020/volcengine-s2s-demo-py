@@ -67,6 +67,7 @@ class LocalAudioAdapter(AudioAdapter):
     
     def __init__(self, config: LocalConnectionConfig):
         super().__init__(config.params)
+        self.config = config
         self.client = None
         self.response_queue = asyncio.Queue()
         self._receiver_task = None
@@ -79,7 +80,12 @@ class LocalAudioAdapter(AudioAdapter):
     async def connect(self) -> bool:
         """建立与火山引擎的直接连接"""
         try:
-            self.client = VolcengineClient(ws_connect_config)
+            # 合并全局配置和额外参数
+            client_config = {**ws_connect_config}
+            if hasattr(self.config, 'params') and self.config.params:
+                client_config.update(self.config.params)
+            
+            self.client = VolcengineClient(client_config)
             await self.client.start()
             
             if self.client.is_active:

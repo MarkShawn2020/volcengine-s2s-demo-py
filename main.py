@@ -38,6 +38,9 @@ def main():
     parser.add_argument(
         "--webrtc-port", type=int, default=8081, help="WebRTC连接端口（仅WebRTC proper模式需要）"
         )
+    parser.add_argument(
+        "--reconnect-timeout", type=float, default=300.0, help="重连超时时间（秒），默认300秒"
+        )
 
     args = parser.parse_args()
 
@@ -49,14 +52,16 @@ def main():
         adapter_type = AdapterType.LOCAL
         config = {
             "app_id": VOLCENGINE_APP_ID,
-            "access_token": VOLCENGINE_ACCESS_TOKEN
+            "access_token": VOLCENGINE_ACCESS_TOKEN,
+            "reconnect_timeout": args.reconnect_timeout
             }
     elif args.adapter == "browser":
         adapter_type = AdapterType.BROWSER
         config = {
             "proxy_url": args.proxy_url,
             "app_id": VOLCENGINE_APP_ID,
-            "access_token": VOLCENGINE_ACCESS_TOKEN
+            "access_token": VOLCENGINE_ACCESS_TOKEN,
+            "reconnect_timeout": args.reconnect_timeout
             }
     elif args.adapter == "touchdesigner":
         adapter_type = AdapterType.TOUCH_DESIGNER
@@ -64,14 +69,16 @@ def main():
             "td_ip": args.td_ip,
             "td_port": args.td_port,
             "app_id": VOLCENGINE_APP_ID,
-            "access_token": VOLCENGINE_ACCESS_TOKEN
+            "access_token": VOLCENGINE_ACCESS_TOKEN,
+            "reconnect_timeout": args.reconnect_timeout
             }
     elif args.adapter == "touchdesigner-webrtc":
         adapter_type = AdapterType.TOUCH_DESIGNER_WEBRTC
         config = {
             "signaling_port": args.signaling_port,
             "app_id": VOLCENGINE_APP_ID,
-            "access_token": VOLCENGINE_ACCESS_TOKEN
+            "access_token": VOLCENGINE_ACCESS_TOKEN,
+            "reconnect_timeout": args.reconnect_timeout
             }
     elif args.adapter == "touchdesigner-webrtc-proper":
         adapter_type = AdapterType.TOUCH_DESIGNER_WEBRTC_PROPER
@@ -79,13 +86,15 @@ def main():
             "signaling_port": args.signaling_port,
             "webrtc_port": args.webrtc_port,
             "app_id": VOLCENGINE_APP_ID,
-            "access_token": VOLCENGINE_ACCESS_TOKEN
+            "access_token": VOLCENGINE_ACCESS_TOKEN,
+            "reconnect_timeout": args.reconnect_timeout
             }
     elif args.adapter == "text-input":
         adapter_type = AdapterType.TEXT_INPUT
         config = {
             "app_id": VOLCENGINE_APP_ID,
-            "access_token": VOLCENGINE_ACCESS_TOKEN
+            "access_token": VOLCENGINE_ACCESS_TOKEN,
+            "reconnect_timeout": args.reconnect_timeout
             }
     else:
         logger.error(f"不支持的适配器类型: {args.adapter}")

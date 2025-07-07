@@ -2,6 +2,7 @@ import asyncio
 import gzip
 import json
 import logging
+import time
 import uuid
 from typing import Dict, Any
 
@@ -34,6 +35,17 @@ class VolcengineClient:
         self.is_connected = False  # connection
         self.is_alive = False  # session
         self.session_id = str(uuid.uuid4())
+        
+        # 保活机制相关
+        self.keep_alive_enabled = True
+        self.keep_alive_interval = 5.0  # 5秒发送一次静音音频
+        self.connection_timeout = config.get('reconnect_timeout', 300.0)  # 默认5分钟，测试用
+        self.keep_alive_task: asyncio.Task | None = None
+        self.connection_start_time = 0.0
+        self.last_audio_time = 0.0
+        self.is_reconnecting = False  # 防止重连重入
+        self.keep_alive_count = 0  # 累计保活次数
+        
         logger.info(f"🚀 启动对话会话 (ID: {self.session_id[:8]}...)")
 
     @property
@@ -52,6 +64,16 @@ class VolcengineClient:
             await self.request_start_connection()
 
             await self.request_start_session()
+            
+            # 记录连接开始时间
+            self.connection_start_time = time.time()
+            self.last_audio_time = time.time()
+            self.keep_alive_count = 0
+            
+            # 启动保活任务
+            if self.keep_alive_enabled and (self.keep_alive_task is None or self.keep_alive_task.done()):
+                self.keep_alive_task = asyncio.create_task(self.keep_alive_worker())
+                logger.info(f"保活任务已启动，间隔:{self.keep_alive_interval}秒，重连超时:{self.connection_timeout}秒")
 
         except Exception as e:
             logger.warning(f"failed to connect, reason: {e}")
@@ -174,6 +196,13 @@ class VolcengineClient:
         await self.ws.send(chat_tts_request)
         logger.info(f"requested chat-tts-text")
 
+    def generate_silence_audio(self, duration_ms: int = 100) -> bytes:
+        """生成静音音频数据 (PCM格式: 16kHz, int16, 小端序)"""
+        sample_rate = 16000
+        samples_count = int(sample_rate * duration_ms / 1000)
+        silence_data = bytearray(samples_count * 2)  # int16 = 2 bytes per sample
+        return bytes(silence_data)
+
     async def push_audio(self, audio: bytes) -> None:
         global seq
 
@@ -193,6 +222,10 @@ class VolcengineClient:
             task_request.extend((len(payload_bytes)).to_bytes(4, 'big'))  # payload size(4 bytes)
             task_request.extend(payload_bytes)
             push_result = await self.ws.send(task_request)
+            
+            # 更新最后音频发送时间
+            self.last_audio_time = time.time()
+            
             if seq % 100 == 0:
                 logger.debug(f"({seq}) 🏠 --> 📡 {len(payload_bytes)} bytes, result: {push_result}")
 
@@ -215,6 +248,72 @@ class VolcengineClient:
         except Exception as e:
             logger.warning(f"failed to receive server response, reason: {e}")
 
+    async def keep_alive_worker(self) -> None:
+        """保活任务：定期发送静音音频"""
+        while self.is_running and self.keep_alive_enabled:
+            try:
+                await asyncio.sleep(self.keep_alive_interval)
+                
+                if not self.is_active:
+                    continue
+                
+                # 检查是否需要发送静音音频
+                current_time = time.time()
+                if current_time - self.last_audio_time >= self.keep_alive_interval:
+                    silence_audio = self.generate_silence_audio(100)  # 100ms静音
+                    await self.push_audio(silence_audio)
+                    self.keep_alive_count += 1
+                    logger.debug(f"发送保活静音音频 #{self.keep_alive_count}")
+                
+                # 检查连接是否需要重连
+                connection_duration = current_time - self.connection_start_time
+                if connection_duration >= self.connection_timeout:
+                    logger.info(f"连接时间过长({connection_duration:.1f}秒 >= {self.connection_timeout}秒)，准备重连")
+                    await self.reconnect()
+                    # 重连后跳出当前循环，让新的保活任务接管
+                    break
+                    
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.warning(f"保活任务异常: {e}")
+
+    async def reconnect(self) -> None:
+        """轻量级重连：只重启session，保持WebSocket连接"""
+        if self.is_reconnecting:
+            logger.debug("已在重连中，跳过")
+            return
+            
+        self.is_reconnecting = True
+        try:
+            logger.info("开始会话重连...")
+            
+            # 停止当前会话
+            if self.is_alive:
+                try:
+                    await self.request_stop_session()
+                except Exception as e:
+                    logger.warning(f"停止会话失败: {e}")
+            
+            # 重新生成会话ID并启动新会话
+            self.session_id = str(uuid.uuid4())
+            self.connection_start_time = time.time()
+            self.last_audio_time = time.time() 
+            self.keep_alive_count = 0
+            
+            try:
+                await self.request_start_session()
+                logger.info(f"会话重连成功，新会话ID: {self.session_id[:8]}...")
+            except Exception as e:
+                logger.warning(f"启动新会话失败: {e}")
+                self.is_running = False
+            
+        except Exception as e:
+            logger.warning(f"会话重连失败: {e}")
+            self.is_running = False
+        finally:
+            self.is_reconnecting = False
+
     async def stop(self) -> None:
         """优雅关闭WebSocket连接，包括发送结束请求"""
         if not self.is_running: return
@@ -223,6 +322,16 @@ class VolcengineClient:
         self.is_running = False
 
         try:
+            # 停止保活任务
+            if self.keep_alive_task and not self.keep_alive_task.done():
+                self.keep_alive_task.cancel()
+                try:
+                    await self.keep_alive_task
+                except asyncio.CancelledError:
+                    pass
+                self.keep_alive_task = None
+                logger.info("保活任务已停止")
+            
             # 尝试发送结束会话请求
             await self.request_stop_session()
 

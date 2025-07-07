@@ -71,10 +71,15 @@ class UnifiedAudioApp:
 
             # 创建适配器
             if self.adapter_type == AdapterType.LOCAL:
+                # 提取额外参数，包含reconnect_timeout
+                extra_params = self.config.get('extra_params', {})
+                if 'reconnect_timeout' in self.config:
+                    extra_params['reconnect_timeout'] = self.config['reconnect_timeout']
+                
                 connection_config = LocalConnectionConfig(
                     app_id=self.config['app_id'],
                     access_token=self.config['access_token'],
-                    **self.config.get('extra_params', {})
+                    **extra_params
                     )
                 self.adapter = LocalAudioAdapter(connection_config)
 
