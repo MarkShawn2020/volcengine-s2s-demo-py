@@ -7,3 +7,4 @@ output.wav
 logs
 out
 dist/
+*.zip
