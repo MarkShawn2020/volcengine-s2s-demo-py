@@ -32,13 +32,34 @@ poetry run python gui_main.py
 
 ### Windows 打包
 
-在 Windows 系统上运行：
+#### 方法1：使用Python脚本（推荐）
+
+```bash
+python build_windows.py
+```
+
+#### 方法2：使用批处理脚本
+
+```cmd
+scripts\build_windows_simple.bat
+```
+
+#### 方法3：使用PyInstaller命令行
+
+```bash
+poetry run pyinstaller build_windows.spec
+```
+
+#### 方法4：使用PowerShell脚本
 
 ```powershell
 .\scripts\build_windows.ps1
 ```
 
-生成的应用位于 `dist\VolcengineVoiceChat\`
+**Windows打包结果：**
+- 目录版本：`dist\VolcengineVoiceChat\` 
+- 单文件版本：`dist\VolcengineVoiceChat-Portable.exe`
+- ZIP包：`dist\VolcengineVoiceChat-Windows.zip`
 
 ## 文件结构
 
@@ -67,6 +88,24 @@ scripts/
 2. 首次运行可能需要授予麦克风权限
 3. 打包后的应用包含所有必需的依赖，可以独立运行
 4. Windows 版本可能需要安装 Visual C++ 运行时库
+
+## Windows 打包优化
+
+### 减少文件大小
+- 使用 `--exclude-module` 排除不必要的模块
+- 使用 `--upx` 压缩可执行文件（需要安装UPX）
+- 选择单文件模式可以减少文件数量但会增加启动时间
+
+### 解决常见问题
+1. **音频设备权限**：Windows可能需要手动授予麦克风权限
+2. **防火墙警告**：首次运行可能触发Windows防火墙警告
+3. **杀毒软件**：某些杀毒软件可能误报，需要添加白名单
+4. **缺少运行时库**：安装 Microsoft Visual C++ Redistributable
+
+### 分发建议
+- 目录版本：适合本地使用，启动快
+- 单文件版本：适合分发，便携但启动慢
+- ZIP包：适合下载分发
 
 ## 故障排除
 
