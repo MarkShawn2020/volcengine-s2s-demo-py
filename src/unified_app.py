@@ -7,23 +7,6 @@ import pyaudio
 
 from src.adapters.base import LocalConnectionConfig, BrowserConnectionConfig
 from src.adapters.type import AdapterType
-from src.adapters.browser_adapter import BrowserAudioAdapter
-from src.adapters.local_adapter import LocalAudioAdapter
-from src.adapters.text_input_adapter import TextInputAdapter
-from src.adapters.touchdesigner_adapter import TouchDesignerAudioAdapter, TouchDesignerConnectionConfig
-from src.adapters.touchdesigner_webrtc_adapter import TouchDesignerWebRTCAudioAdapter, TouchDesignerWebRTCConnectionConfig
-
-# 尝试导入真正的WebRTC适配器（需要aiortc依赖）
-try:
-    from src.adapters.touchdesigner_webrtc_proper_adapter import (
-        TouchDesignerProperWebRTCAudioAdapter,
-        TouchDesignerProperWebRTCConnectionConfig
-    )
-    WEBRTC_PROPER_AVAILABLE = True
-except ImportError:
-    TouchDesignerProperWebRTCAudioAdapter = None
-    TouchDesignerProperWebRTCConnectionConfig = None
-    WEBRTC_PROPER_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -66,33 +49,39 @@ class UnifiedAudioApp:
                     "audio_config": {
                         "format": "pcm",
                         "sample_rate": 24000
-                        }
                     }
+                }
 
             # 创建适配器
             if self.adapter_type == AdapterType.LOCAL:
+                from src.adapters.local_adapter import LocalAudioAdapter
+
                 # 提取额外参数，包含reconnect_timeout
                 extra_params = self.config.get('extra_params', {})
                 if 'reconnect_timeout' in self.config:
                     extra_params['reconnect_timeout'] = self.config['reconnect_timeout']
-                
+
                 connection_config = LocalConnectionConfig(
                     app_id=self.config['app_id'],
                     access_token=self.config['access_token'],
                     **extra_params
-                    )
+                )
                 self.adapter = LocalAudioAdapter(connection_config)
 
             elif self.adapter_type == AdapterType.BROWSER:
+                from src.adapters.browser_adapter import BrowserAudioAdapter
+
                 connection_config = BrowserConnectionConfig(
                     proxy_url=self.config['proxy_url'],
                     app_id=self.config['app_id'],
                     access_token=self.config['access_token'],
                     **self.config.get('extra_params', {})
-                    )
+                )
                 self.adapter = BrowserAudioAdapter(connection_config)
 
             elif self.adapter_type == AdapterType.TOUCH_DESIGNER:
+                from src.adapters.touchdesigner_adapter import TouchDesignerAudioAdapter, TouchDesignerConnectionConfig
+
                 connection_config = TouchDesignerConnectionConfig(
                     td_ip=self.config['td_ip'],
                     td_port=self.config['td_port'],
@@ -100,37 +89,43 @@ class UnifiedAudioApp:
                     app_id=self.config['app_id'],
                     access_token=self.config['access_token'],
                     **self.config.get('extra_params', {})
-                    )
+                )
                 self.adapter = TouchDesignerAudioAdapter(connection_config)
 
             elif self.adapter_type == AdapterType.TOUCH_DESIGNER_WEBRTC:
+                from src.adapters.touchdesigner_webrtc_adapter import TouchDesignerWebRTCAudioAdapter, \
+                    TouchDesignerWebRTCConnectionConfig
+
                 connection_config = TouchDesignerWebRTCConnectionConfig(
                     signaling_port=self.config['signaling_port'],
                     app_id=self.config['app_id'],
                     access_token=self.config['access_token'],
                     **self.config.get('extra_params', {})
-                    )
+                )
                 self.adapter = TouchDesignerWebRTCAudioAdapter(connection_config)
 
             elif self.adapter_type == AdapterType.TOUCH_DESIGNER_WEBRTC_PROPER:
-                if not WEBRTC_PROPER_AVAILABLE:
-                    raise Exception("TouchDesigner WebRTC Proper适配器需要aiortc依赖，请先安装：pip install aiortc")
-                
+                from src.adapters.touchdesigner_webrtc_proper_adapter import (
+                    TouchDesignerProperWebRTCAudioAdapter,
+                    TouchDesignerProperWebRTCConnectionConfig
+                )
                 connection_config = TouchDesignerProperWebRTCConnectionConfig(
                     signaling_port=self.config['signaling_port'],
                     webrtc_port=self.config['webrtc_port'],
                     app_id=self.config['app_id'],
                     access_token=self.config['access_token'],
                     **self.config.get('extra_params', {})
-                    )
+                )
                 self.adapter = TouchDesignerProperWebRTCAudioAdapter(connection_config)
 
             elif self.adapter_type == AdapterType.TEXT_INPUT:
+                from src.adapters.text_input_adapter import TextInputAdapter
+
                 connection_config = LocalConnectionConfig(
                     app_id=self.config['app_id'],
                     access_token=self.config['access_token'],
                     **self.config.get('extra_params', {})
-                    )
+                )
                 self.adapter = TextInputAdapter(connection_config)
 
             else:
@@ -148,7 +143,7 @@ class UnifiedAudioApp:
         except Exception as e:
             logger.error(f"初始化失败: {e}")
             return False
-        
+
     async def run(self):
         """运行主循环"""
         if not await self.initialize():
@@ -178,8 +173,10 @@ class UnifiedAudioApp:
 
             # 启动发送和接收任务
             # 使用适配器内部的发送队列和播放队列
-            self.sender_task = asyncio.create_task(self.adapter.run_sender_task(self.adapter._send_queue, self.stop_event))
-            self.receiver_task = asyncio.create_task(self.adapter.run_receiver_task(self.adapter._play_queue, self.stop_event))
+            self.sender_task = asyncio.create_task(
+                self.adapter.run_sender_task(self.adapter._send_queue, self.stop_event))
+            self.receiver_task = asyncio.create_task(
+                self.adapter.run_receiver_task(self.adapter._play_queue, self.stop_event))
 
             # 等待任务完成
             await asyncio.gather(self.sender_task, self.receiver_task)
