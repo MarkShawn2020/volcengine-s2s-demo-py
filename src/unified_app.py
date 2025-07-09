@@ -14,10 +14,13 @@ logger = logging.getLogger(__name__)
 class UnifiedAudioApp:
     """统一音频应用 - 支持多种适配器"""
 
-    def __init__(self, adapter_type: AdapterType, config: dict, use_tts_pcm: bool = True):
+    def __init__(self, adapter_type: AdapterType, config: dict, use_tts_pcm: bool = True, 
+                 input_device_index: int = None, output_device_index: int = None):
         self.adapter_type = adapter_type
         self.config = config
         self.use_tts_pcm = use_tts_pcm
+        self.input_device_index = input_device_index
+        self.output_device_index = output_device_index
 
         # 音频相关
         self.p = pyaudio.PyAudio()
@@ -66,7 +69,7 @@ class UnifiedAudioApp:
                     access_token=self.config['access_token'],
                     **extra_params
                 )
-                self.adapter = LocalAudioAdapter(connection_config)
+                self.adapter = LocalAudioAdapter(connection_config, self.input_device_index, self.output_device_index)
 
             elif self.adapter_type == AdapterType.BROWSER:
                 from src.adapters.browser_adapter import BrowserAudioAdapter

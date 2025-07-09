@@ -65,13 +65,16 @@ def text_input_thread(adapter, stop_event: threading.Event, loop):
 class LocalAudioAdapter(AudioAdapter):
     """本地音频适配器 - 直接连接火山引擎"""
     
-    def __init__(self, config: LocalConnectionConfig):
+    def __init__(self, config: LocalConnectionConfig, input_device_index: int = None, output_device_index: int = None):
         super().__init__(config.params)
         self.config = config
         self.client = None
         self.response_queue = asyncio.Queue()
         self._receiver_task = None
         self._text_input_thread = None
+        # 支持预选择的设备索引（GUI模式）
+        self.input_device_index = input_device_index
+        self.output_device_index = output_device_index
     
     @property
     def adapter_type(self) -> AdapterType:
@@ -210,24 +213,30 @@ class LocalAudioAdapter(AudioAdapter):
     async def setup_audio_devices(self, p, stop_event: threading.Event) -> tuple[Optional[threading.Thread], Optional[threading.Thread]]:
         """设置音频设备"""
         try:
-            # 在单独线程中选择设备，避免阻塞事件循环
-            import concurrent.futures
-            
-            loop = asyncio.get_event_loop()
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                # 选择输入设备
-                input_device_index = await loop.run_in_executor(
-                    executor, select_audio_device, p, "选择输入设备 (麦克风):", 'input'
-                )
-                if input_device_index is None:
-                    return None, None
+            # 检查是否已经预选择了设备（GUI模式）
+            if self.input_device_index is not None and self.output_device_index is not None:
+                input_device_index = self.input_device_index
+                output_device_index = self.output_device_index
+                logger.info(f"使用预选择的设备 - 输入: {input_device_index}, 输出: {output_device_index}")
+            else:
+                # CLI模式：在单独线程中选择设备，避免阻塞事件循环
+                import concurrent.futures
+                
+                loop = asyncio.get_event_loop()
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    # 选择输入设备
+                    input_device_index = await loop.run_in_executor(
+                        executor, select_audio_device, p, "选择输入设备 (麦克风):", 'input'
+                    )
+                    if input_device_index is None:
+                        return None, None
 
-                # 选择输出设备
-                output_device_index = await loop.run_in_executor(
-                    executor, select_audio_device, p, "选择输出设备 (扬声器):", 'output'
-                )
-                if output_device_index is None:
-                    return None, None
+                    # 选择输出设备
+                    output_device_index = await loop.run_in_executor(
+                        executor, select_audio_device, p, "选择输出设备 (扬声器):", 'output'
+                    )
+                    if output_device_index is None:
+                        return None, None
 
             # 启动录音和播放线程，使用更大的chunk_size
             chunk_size = 1600  # 使用1600帧，约100ms的音频
@@ -241,11 +250,12 @@ class LocalAudioAdapter(AudioAdapter):
                 target=recorder_thread, args=(p, input_device_index, send_queue, chunk_size, stop_event)
             )
 
-            # 启动文字输入线程
-            current_loop = asyncio.get_event_loop()
-            # text_input = threading.Thread(
-            #     target=text_input_thread, args=(self, stop_event, current_loop)
-            # )
+            # 启动文字输入线程（仅CLI模式）
+            if self.input_device_index is None:  # CLI模式
+                current_loop = asyncio.get_event_loop()
+                # text_input = threading.Thread(
+                #     target=text_input_thread, args=(self, stop_event, current_loop)
+                # )
 
             recorder.start()
             player.start()
@@ -257,7 +267,7 @@ class LocalAudioAdapter(AudioAdapter):
             self._play_queue = play_queue
             # self._text_input_thread = text_input
 
-            logger.info("音频设备和文字输入设置完成")
+            logger.info("音频设备设置完成")
             return recorder, player
 
         except Exception as e:
