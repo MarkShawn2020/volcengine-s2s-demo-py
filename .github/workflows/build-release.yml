@@ -11,6 +11,11 @@ on:
         required: false
         default: ''
 
+permissions:
+  contents: write
+  packages: write
+  actions: read
+
 jobs:
   build-windows:
     runs-on: windows-latest
