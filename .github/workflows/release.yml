@@ -4,6 +4,11 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.github/workflows/*.yml'
+      - '!.github/workflows/release.yml'
   workflow_dispatch:
 
 permissions:
@@ -58,8 +63,23 @@ jobs:
         git config --global user.name "semantic-release-bot"
         git config --global user.email "semantic-release-bot@users.noreply.github.com"
         
+    - name: Check if release is needed
+      id: check
+      run: |
+        # 检查最近的 commits 是否包含需要发布的类型
+        COMMITS=$(git log --format=%s $(git describe --tags --abbrev=0 2>/dev/null || echo HEAD~10)..HEAD 2>/dev/null || git log --format=%s -10)
+        
+        if echo "$COMMITS" | grep -E '^(feat|fix|perf)(\(.*\))?!?:' > /dev/null; then
+          echo "Release needed"
+          echo "needs_release=true" >> $GITHUB_OUTPUT
+        else
+          echo "No release needed (no feat/fix/perf commits)"
+          echo "needs_release=false" >> $GITHUB_OUTPUT
+        fi
+        
     - name: Python Semantic Release
       id: release
+      if: steps.check.outputs.needs_release == 'true'
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
