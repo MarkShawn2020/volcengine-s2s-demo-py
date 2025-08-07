@@ -122,7 +122,7 @@ jobs:
         $env:Path += ";C:\Program Files (x86)\NSIS"
         
         # Create NSIS script
-        @"
+        $nsisScript = @'
 !define PRODUCT_NAME "Volcengine Voice Chat"
 !define PRODUCT_VERSION "${{ github.ref_name }}"
 !define PRODUCT_PUBLISHER "Volcengine"
@@ -191,7 +191,8 @@ Section Uninstall
   DeleteRegKey HKLM "${PRODUCT_DIR_REGKEY}"
   SetAutoClose true
 SectionEnd
-"@ | Out-File -FilePath installer.nsi -Encoding utf8
+'@
+        $nsisScript | Out-File -FilePath installer.nsi -Encoding utf8
         
         # Build installer
         & "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi
