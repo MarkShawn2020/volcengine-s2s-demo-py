@@ -1,0 +1,98 @@
+name: Semantic Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    concurrency: release
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: Install Poetry
+      run: |
+        curl -sSL https://install.python-poetry.org | python3 -
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
+        
+    - name: Configure Poetry
+      run: |
+        poetry config virtualenvs.create true
+        poetry config virtualenvs.in-project true
+        
+    - name: Cache Poetry dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/pypoetry
+          .venv
+        key: ${{ runner.os }}-poetry-release-${{ hashFiles('**/poetry.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-poetry-release-
+          ${{ runner.os }}-poetry-
+          
+    - name: Install dependencies
+      run: |
+        poetry install --no-interaction --no-ansi
+        
+    - name: Configure Git
+      run: |
+        git config --global user.name "semantic-release-bot"
+        git config --global user.email "semantic-release-bot@users.noreply.github.com"
+        
+    - name: Python Semantic Release
+      id: release
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        poetry run semantic-release version
+        poetry run semantic-release publish
+        
+    - name: Generate release notes
+      if: steps.release.outputs.released == 'true'
+      run: |
+        echo "## What's Changed" > release_notes.md
+        echo "" >> release_notes.md
+        git log --pretty=format:"* %s by @%an" $(git describe --tags --abbrev=0)..HEAD >> release_notes.md
+        
+    - name: Trigger build workflows
+      if: steps.release.outputs.released == 'true'
+      uses: peter-evans/repository-dispatch@v3
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        event-type: release-created
+        client-payload: '{"version": "${{ steps.release.outputs.version }}", "tag": "${{ steps.release.outputs.tag }}"}'
+
+  check-commits:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        
+    - name: Check commit messages
+      uses: wagoid/commitlint-github-action@v6
+      with:
+        configFile: '.commitlintrc.json'
+        helpURL: 'https://www.conventionalcommits.org/'
