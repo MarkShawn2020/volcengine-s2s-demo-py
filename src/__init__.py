@@ -1,5 +1,5 @@
 """Volcengine S2S Framework - Voice Chat Application"""
 
-__version__ = "0.3.4"
+__version__ = "0.3.5"
 __author__ = "markshawn2020"
 __email__ = "shawninjuly@gmail.com"
