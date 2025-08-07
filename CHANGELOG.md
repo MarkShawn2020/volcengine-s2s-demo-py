@@ -2,6 +2,25 @@
 
 <!-- version list -->
 
+## v1.0.0 (2025-08-07)
+
+### Bug Fixes
+
+- CICD
+  ([`ea7ffd1`](https://github.com/MarkShawn2020/volcengine-s2s-demo-py/commit/ea7ffd1453e6cad0bd47f5a0b51a5c6885894d08))
+
+- CICD
+  ([`05fb599`](https://github.com/MarkShawn2020/volcengine-s2s-demo-py/commit/05fb599575c82ee50cdf5c21758ff19f61bd520e))
+
+- CICD
+  ([`71e79e8`](https://github.com/MarkShawn2020/volcengine-s2s-demo-py/commit/71e79e89d548472fe6071128b6540d2c239dc47c))
+
+### Chores
+
+- Configure semantic-release
+  ([`922a270`](https://github.com/MarkShawn2020/volcengine-s2s-demo-py/commit/922a270bb94b74896e94923c8199048809534545))
+
+
 ## v0.3.6 (2025-08-07)
 
 
