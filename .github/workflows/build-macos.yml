@@ -47,6 +47,10 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-poetry-
           
+    - name: Install system dependencies
+      run: |
+        brew install portaudio
+        
     - name: Install dependencies
       run: |
         poetry install --no-interaction --no-ansi

@@ -48,6 +48,12 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-poetry-
           
+    - name: Install system dependencies
+      run: |
+        # PyAudio on Windows usually works with pre-built wheels
+        # If it fails, we can try installing via pip first
+        pip install pyaudio
+        
     - name: Install dependencies
       run: |
         poetry install --no-interaction --no-ansi
