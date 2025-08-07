@@ -1,0 +1,228 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (e.g., 1.0.0)'
+        required: false
+        default: ''
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: Install Poetry
+      run: |
+        (Invoke-WebRequest -Uri https://install.python-poetry.org -UseBasicParsing).Content | python -
+        $env:Path += ";$env:APPDATA\Python\Scripts"
+        echo "$env:APPDATA\Python\Scripts" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        
+    - name: Configure Poetry
+      run: |
+        poetry config virtualenvs.create true
+        poetry config virtualenvs.in-project true
+        
+    - name: Install system dependencies
+      run: |
+        pip install pyaudio
+        
+    - name: Install dependencies
+      run: |
+        poetry install --no-interaction --no-ansi --without dev
+        
+    - name: Install PyInstaller
+      run: |
+        pip install pyinstaller
+        
+    - name: Build Windows executable
+      run: |
+        pyinstaller --name "Volcengine Voice Chat" `
+          --windowed `
+          --onefile `
+          --add-data "static;static" `
+          --hidden-import pydub `
+          --hidden-import numpy `
+          --hidden-import scipy `
+          --hidden-import soundfile `
+          --hidden-import websockets `
+          --hidden-import aiortc `
+          --hidden-import av `
+          --collect-all pyaudio `
+          --collect-all pydantic `
+          gui_main.py
+          
+    - name: Create portable ZIP
+      run: |
+        $version = "${{ github.event.inputs.version || github.ref_name }}"
+        if ($version -eq "") { $version = "dev" }
+        $version = $version -replace '^v', ''
+        New-Item -ItemType Directory -Force -Path "release"
+        Copy-Item "dist\Volcengine Voice Chat.exe" "release\"
+        Compress-Archive -Path "release\*" -DestinationPath "VolcengineVoiceChat-${version}-Windows.zip"
+        
+    - name: Upload Windows artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-build
+        path: |
+          VolcengineVoiceChat-*-Windows.zip
+        retention-days: 30
+
+  build-macos:
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: Install Poetry
+      run: |
+        curl -sSL https://install.python-poetry.org | python3 -
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
+        
+    - name: Configure Poetry
+      run: |
+        poetry config virtualenvs.create true
+        poetry config virtualenvs.in-project true
+        
+    - name: Install system dependencies
+      run: |
+        brew install portaudio
+        
+    - name: Install dependencies
+      run: |
+        poetry install --no-interaction --no-ansi --without dev
+        
+    - name: Install PyInstaller
+      run: |
+        pip install pyinstaller
+        
+    - name: Build macOS app
+      run: |
+        pyinstaller --name "Volcengine Voice Chat" \
+          --windowed \
+          --onefile \
+          --add-data "static:static" \
+          --hidden-import pydub \
+          --hidden-import numpy \
+          --hidden-import scipy \
+          --hidden-import soundfile \
+          --hidden-import websockets \
+          --hidden-import aiortc \
+          --hidden-import av \
+          --collect-all pyaudio \
+          --collect-all pydantic \
+          --osx-bundle-identifier "com.volcengine.voicechat" \
+          gui_main.py
+          
+    - name: Create DMG installer
+      run: |
+        VERSION="${{ github.event.inputs.version || github.ref_name }}"
+        VERSION="${VERSION#v}"
+        if [ -z "$VERSION" ]; then VERSION="dev"; fi
+        
+        # Create simple DMG
+        mkdir -p release
+        cp -r "dist/Volcengine Voice Chat.app" release/
+        hdiutil create -volname "Volcengine Voice Chat" \
+          -srcfolder release \
+          -ov -format UDZO \
+          "VolcengineVoiceChat-${VERSION}-macOS.dmg"
+          
+    - name: Upload macOS artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: macos-build
+        path: |
+          VolcengineVoiceChat-*-macOS.dmg
+        retention-days: 30
+
+  create-release:
+    needs: [build-windows, build-macos]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+        
+    - name: List artifacts
+      run: |
+        echo "Downloaded artifacts:"
+        find artifacts -type f -name "*"
+        
+    - name: Prepare release files
+      run: |
+        mkdir -p release
+        find artifacts -name "*.zip" -exec cp {} release/ \;
+        find artifacts -name "*.dmg" -exec cp {} release/ \;
+        ls -la release/
+        
+    - name: Generate checksums
+      run: |
+        cd release
+        sha256sum * > checksums.txt
+        cat checksums.txt
+        cd ..
+        
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          release/*
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+        name: Release ${{ github.ref_name }}
+        body: |
+          ## Volcengine Voice Chat ${{ github.ref_name }}
+          
+          ### 📦 Downloads
+          
+          #### Windows
+          - **VolcengineVoiceChat-*-Windows.zip** - Portable executable (no installation required)
+          
+          #### macOS  
+          - **VolcengineVoiceChat-*-macOS.dmg** - Disk image installer
+          
+          ### 🚀 Installation
+          
+          **Windows:**
+          1. Download the ZIP file
+          2. Extract to any folder
+          3. Run `Volcengine Voice Chat.exe`
+          
+          **macOS:**
+          1. Download the DMG file
+          2. Open the DMG
+          3. Drag the app to Applications
+          4. First run: Right-click and select "Open"
+          
+          ### ✅ Checksums
+          See `checksums.txt` for SHA256 verification
+          
+          ### 📝 Changelog
+          See below for what's changed in this release.
