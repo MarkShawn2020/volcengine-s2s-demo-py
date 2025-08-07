@@ -1,0 +1,270 @@
+name: Build Windows GUI
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      test_build:
+        description: 'Test build without release'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: Install Poetry
+      run: |
+        (Invoke-WebRequest -Uri https://install.python-poetry.org -UseBasicParsing).Content | python -
+        $env:Path += ";$env:APPDATA\Python\Scripts"
+        echo "$env:APPDATA\Python\Scripts" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        
+    - name: Configure Poetry
+      run: |
+        poetry config virtualenvs.create true
+        poetry config virtualenvs.in-project true
+        
+    - name: Cache Poetry dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~\AppData\Local\pypoetry\Cache
+          .venv
+        key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-poetry-
+          
+    - name: Install dependencies
+      run: |
+        poetry install --no-interaction --no-ansi
+        
+    - name: Install PyInstaller and Windows-specific tools
+      run: |
+        poetry add --group dev pyinstaller pywin32-ctypes pefile
+        
+    - name: Build Windows executable
+      run: |
+        poetry run pyinstaller --name "Volcengine Voice Chat" `
+          --windowed `
+          --onefile `
+          --icon assets/icon.ico `
+          --add-data "static;static" `
+          --add-data "assets;assets" `
+          --hidden-import pydub `
+          --hidden-import numpy `
+          --hidden-import scipy `
+          --hidden-import soundfile `
+          --hidden-import websockets `
+          --hidden-import aiortc `
+          --hidden-import av `
+          --hidden-import win32com `
+          --hidden-import win32api `
+          --collect-all pyaudio `
+          --collect-all pydantic `
+          --collect-all typing_extensions `
+          --version-file version_info.txt `
+          gui_main.py
+          
+    - name: Create version info file
+      run: |
+        $version = "${{ github.ref_name }}".TrimStart('v')
+        @"
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers=(${version}.0).Split('.').ForEach({[int]$_}),
+    prodvers=(${version}.0).Split('.').ForEach({[int]$_}),
+    mask=0x3f,
+    flags=0x0,
+    OS=0x40004,
+    fileType=0x1,
+    subtype=0x0,
+    date=(0, 0)
+  ),
+  kids=[
+    StringFileInfo(
+      [
+      StringTable(
+        u'040904B0',
+        [StringStruct(u'CompanyName', u'Volcengine'),
+        StringStruct(u'FileDescription', u'Volcengine Voice Chat Application'),
+        StringStruct(u'FileVersion', u'${version}'),
+        StringStruct(u'InternalName', u'VolcengineVoiceChat'),
+        StringStruct(u'LegalCopyright', u'Copyright (c) 2024 Volcengine'),
+        StringStruct(u'OriginalFilename', u'Volcengine Voice Chat.exe'),
+        StringStruct(u'ProductName', u'Volcengine Voice Chat'),
+        StringStruct(u'ProductVersion', u'${version}')])
+      ]), 
+    VarFileInfo([VarStruct(u'Translation', [1033, 1200])])
+  ]
+)
+"@ | Out-File -FilePath version_info.txt -Encoding utf8
+        
+    - name: Create NSIS installer
+      run: |
+        # Download NSIS
+        Invoke-WebRequest -Uri "https://downloads.sourceforge.net/project/nsis/NSIS%203/3.09/nsis-3.09-setup.exe" -OutFile nsis-setup.exe
+        Start-Process -FilePath "nsis-setup.exe" -ArgumentList "/S" -Wait
+        
+        # Add NSIS to PATH
+        $env:Path += ";C:\Program Files (x86)\NSIS"
+        
+        # Create NSIS script
+        @"
+!define PRODUCT_NAME "Volcengine Voice Chat"
+!define PRODUCT_VERSION "${{ github.ref_name }}"
+!define PRODUCT_PUBLISHER "Volcengine"
+!define PRODUCT_WEB_SITE "https://www.volcengine.com"
+!define PRODUCT_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\Volcengine Voice Chat.exe"
+!define PRODUCT_UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
+!define PRODUCT_UNINST_ROOT_KEY "HKLM"
+
+SetCompressor lzma
+!include "MUI2.nsh"
+
+Name "${PRODUCT_NAME} ${PRODUCT_VERSION}"
+OutFile "dist\VolcengineVoiceChat-${PRODUCT_VERSION}-Setup.exe"
+InstallDir "$PROGRAMFILES64\Volcengine Voice Chat"
+InstallDirRegKey HKLM "${PRODUCT_DIR_REGKEY}" ""
+ShowInstDetails show
+ShowUnInstDetails show
+
+!define MUI_ABORTWARNING
+!define MUI_ICON "assets\icon.ico"
+!define MUI_UNICON "assets\icon.ico"
+
+!insertmacro MUI_PAGE_WELCOME
+!insertmacro MUI_PAGE_LICENSE "LICENSE"
+!insertmacro MUI_PAGE_DIRECTORY
+!insertmacro MUI_PAGE_INSTFILES
+!insertmacro MUI_PAGE_FINISH
+
+!insertmacro MUI_UNPAGE_INSTFILES
+
+!insertmacro MUI_LANGUAGE "English"
+
+Section "MainSection" SEC01
+  SetOutPath "$INSTDIR"
+  SetOverwrite try
+  File "dist\Volcengine Voice Chat.exe"
+  CreateDirectory "$SMPROGRAMS\Volcengine Voice Chat"
+  CreateShortCut "$SMPROGRAMS\Volcengine Voice Chat\Volcengine Voice Chat.lnk" "$INSTDIR\Volcengine Voice Chat.exe"
+  CreateShortCut "$DESKTOP\Volcengine Voice Chat.lnk" "$INSTDIR\Volcengine Voice Chat.exe"
+SectionEnd
+
+Section -AdditionalIcons
+  CreateShortCut "$SMPROGRAMS\Volcengine Voice Chat\Uninstall.lnk" "$INSTDIR\uninst.exe"
+SectionEnd
+
+Section -Post
+  WriteUninstaller "$INSTDIR\uninst.exe"
+  WriteRegStr HKLM "${PRODUCT_DIR_REGKEY}" "" "$INSTDIR\Volcengine Voice Chat.exe"
+  WriteRegStr ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}" "DisplayName" "$(^Name)"
+  WriteRegStr ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}" "UninstallString" "$INSTDIR\uninst.exe"
+  WriteRegStr ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}" "DisplayIcon" "$INSTDIR\Volcengine Voice Chat.exe"
+  WriteRegStr ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}" "DisplayVersion" "${PRODUCT_VERSION}"
+  WriteRegStr ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}" "URLInfoAbout" "${PRODUCT_WEB_SITE}"
+  WriteRegStr ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}" "Publisher" "${PRODUCT_PUBLISHER}"
+SectionEnd
+
+Section Uninstall
+  Delete "$INSTDIR\uninst.exe"
+  Delete "$INSTDIR\Volcengine Voice Chat.exe"
+  Delete "$SMPROGRAMS\Volcengine Voice Chat\Uninstall.lnk"
+  Delete "$SMPROGRAMS\Volcengine Voice Chat\Volcengine Voice Chat.lnk"
+  Delete "$DESKTOP\Volcengine Voice Chat.lnk"
+  RMDir "$SMPROGRAMS\Volcengine Voice Chat"
+  RMDir "$INSTDIR"
+  DeleteRegKey ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}"
+  DeleteRegKey HKLM "${PRODUCT_DIR_REGKEY}"
+  SetAutoClose true
+SectionEnd
+"@ | Out-File -FilePath installer.nsi -Encoding utf8
+        
+        # Build installer
+        & "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi
+        
+    - name: Create portable ZIP
+      run: |
+        Compress-Archive -Path "dist\Volcengine Voice Chat.exe" -DestinationPath "dist\VolcengineVoiceChat-${{ github.ref_name }}-Windows-Portable.zip"
+        
+    - name: Sign Windows executable (if certificate available)
+      if: env.WINDOWS_CERTIFICATE
+      env:
+        WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+        WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+      run: |
+        # Decode certificate
+        [System.Convert]::FromBase64String($env:WINDOWS_CERTIFICATE) | Set-Content -Path certificate.pfx -Encoding Byte
+        
+        # Sign the executable
+        & "C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\signtool.exe" sign `
+          /f certificate.pfx `
+          /p $env:WINDOWS_CERTIFICATE_PASSWORD `
+          /t http://timestamp.digicert.com `
+          /fd SHA256 `
+          "dist\Volcengine Voice Chat.exe"
+          
+        # Sign the installer
+        & "C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\signtool.exe" sign `
+          /f certificate.pfx `
+          /p $env:WINDOWS_CERTIFICATE_PASSWORD `
+          /t http://timestamp.digicert.com `
+          /fd SHA256 `
+          "dist\VolcengineVoiceChat-${{ github.ref_name }}-Setup.exe"
+          
+        # Clean up
+        Remove-Item certificate.pfx
+        
+    - name: Generate checksums
+      run: |
+        cd dist
+        Get-FileHash -Algorithm SHA256 *.exe, *.zip | Format-Table -Property Hash, Path -AutoSize | Out-File -FilePath checksums-windows.txt
+        Get-Content checksums-windows.txt
+        
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-build
+        path: |
+          dist/*.exe
+          dist/*.zip
+          dist/checksums-windows.txt
+        retention-days: 30
+        
+    - name: Create Release (if tag push)
+      if: startsWith(github.ref, 'refs/tags/v')
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          dist/*.exe
+          dist/*.zip
+          dist/checksums-windows.txt
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+        name: Release ${{ github.ref_name }}
+        body: |
+          ## Volcengine Voice Chat ${{ github.ref_name }}
+          
+          ### Windows
+          - **Installer**: Download and run the Setup.exe for a standard installation
+          - **Portable**: Download the ZIP file for a portable version (no installation required)
+          
+          ### Requirements
+          - Windows 10/11 (64-bit)
+          - Audio input/output devices
+          
+          ### Checksums
+          See `checksums-windows.txt` for file integrity verification.

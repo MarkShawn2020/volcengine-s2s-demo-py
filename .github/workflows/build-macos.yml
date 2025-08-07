@@ -1,0 +1,182 @@
+name: Build macOS GUI
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      test_build:
+        description: 'Test build without release'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: Install Poetry
+      run: |
+        curl -sSL https://install.python-poetry.org | python3 -
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
+        
+    - name: Configure Poetry
+      run: |
+        poetry config virtualenvs.create true
+        poetry config virtualenvs.in-project true
+        
+    - name: Cache Poetry dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/pypoetry
+          .venv
+        key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-poetry-
+          
+    - name: Install dependencies
+      run: |
+        poetry install --no-interaction --no-ansi
+        
+    - name: Install PyInstaller
+      run: |
+        poetry add --group dev pyinstaller
+        
+    - name: Build macOS app
+      run: |
+        poetry run pyinstaller --name "Volcengine Voice Chat" \
+          --windowed \
+          --onefile \
+          --icon assets/icon.icns \
+          --add-data "static:static" \
+          --add-data "assets:assets" \
+          --hidden-import pydub \
+          --hidden-import numpy \
+          --hidden-import scipy \
+          --hidden-import soundfile \
+          --hidden-import websockets \
+          --hidden-import aiortc \
+          --hidden-import av \
+          --collect-all pyaudio \
+          --collect-all pydantic \
+          --collect-all typing_extensions \
+          --osx-bundle-identifier "com.volcengine.voicechat" \
+          gui_main.py
+          
+    - name: Create DMG installer
+      run: |
+        # Install create-dmg
+        brew install create-dmg
+        
+        # Create a temporary directory for DMG contents
+        mkdir -p dmg_contents
+        cp -r "dist/Volcengine Voice Chat.app" dmg_contents/
+        
+        # Create DMG
+        create-dmg \
+          --volname "Volcengine Voice Chat" \
+          --volicon "assets/icon.icns" \
+          --window-pos 200 120 \
+          --window-size 800 400 \
+          --icon-size 100 \
+          --icon "Volcengine Voice Chat.app" 200 190 \
+          --hide-extension "Volcengine Voice Chat.app" \
+          --app-drop-link 600 185 \
+          --no-internet-enable \
+          "dist/VolcengineVoiceChat-${{ github.ref_name }}-macOS.dmg" \
+          "dmg_contents/"
+          
+    - name: Sign macOS app (if certificates available)
+      if: env.MACOS_CERTIFICATE && env.MACOS_CERTIFICATE_PWD
+      env:
+        MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+        MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+        MACOS_IDENTITY: ${{ secrets.MACOS_IDENTITY }}
+      run: |
+        # Decode certificate
+        echo $MACOS_CERTIFICATE | base64 --decode > certificate.p12
+        
+        # Create keychain
+        security create-keychain -p temp-password build.keychain
+        security default-keychain -s build.keychain
+        security unlock-keychain -p temp-password build.keychain
+        security import certificate.p12 -k build.keychain -P $MACOS_CERTIFICATE_PWD -T /usr/bin/codesign
+        security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k temp-password build.keychain
+        
+        # Sign the app
+        codesign --deep --force --verify --verbose --sign "$MACOS_IDENTITY" "dist/Volcengine Voice Chat.app"
+        
+        # Verify signature
+        codesign --verify --verbose "dist/Volcengine Voice Chat.app"
+        
+        # Clean up
+        rm certificate.p12
+        
+    - name: Notarize macOS app (if credentials available)
+      if: env.APPLE_ID && env.APPLE_PASSWORD
+      env:
+        APPLE_ID: ${{ secrets.APPLE_ID }}
+        APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      run: |
+        # Store credentials
+        xcrun notarytool store-credentials "notarytool-profile" \
+          --apple-id "$APPLE_ID" \
+          --password "$APPLE_PASSWORD" \
+          --team-id "$APPLE_TEAM_ID"
+          
+        # Submit for notarization
+        xcrun notarytool submit "dist/VolcengineVoiceChat-${{ github.ref_name }}-macOS.dmg" \
+          --keychain-profile "notarytool-profile" \
+          --wait
+          
+        # Staple the notarization
+        xcrun stapler staple "dist/VolcengineVoiceChat-${{ github.ref_name }}-macOS.dmg"
+        
+    - name: Generate checksums
+      run: |
+        cd dist
+        shasum -a 256 *.dmg > checksums-macos.txt
+        cat checksums-macos.txt
+        
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: macos-build
+        path: |
+          dist/*.dmg
+          dist/checksums-macos.txt
+        retention-days: 30
+        
+    - name: Create Release (if tag push)
+      if: startsWith(github.ref, 'refs/tags/v')
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          dist/*.dmg
+          dist/checksums-macos.txt
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+        name: Release ${{ github.ref_name }}
+        body: |
+          ## Volcengine Voice Chat ${{ github.ref_name }}
+          
+          ### macOS
+          - Download the DMG file
+          - Open the DMG and drag the app to Applications
+          - First time running: Right-click and select "Open" to bypass Gatekeeper
+          
+          ### Checksums
+          See `checksums-macos.txt` for file integrity verification.
