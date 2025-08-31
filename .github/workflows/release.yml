@@ -25,7 +25,9 @@ jobs:
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
-        token: ${{ secrets.GITHUB_TOKEN }}
+        token: ${{ secrets.PAT || secrets.GITHUB_TOKEN }}
+        # Note: Need to set up PAT (Personal Access Token) in repository secrets
+        # to trigger other workflows. GITHUB_TOKEN won't trigger other workflows.
         
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -116,9 +118,18 @@ jobs:
         
     - name: Trigger build workflow
       if: steps.release.outputs.released == 'true'
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         echo "🚀 Tag created: ${{ steps.release.outputs.tag }}"
-        echo "📦 Build workflow will be triggered automatically by the tag push"
+        echo "📦 Triggering build workflows..."
+        
+        # Trigger build-release workflow using GitHub CLI
+        gh workflow run build-release.yml \
+          --ref "${{ steps.release.outputs.tag }}" \
+          -f version="${{ steps.release.outputs.version }}"
+        
+        echo "✅ Build workflow triggered for version ${{ steps.release.outputs.version }}"
         echo "Check progress at: https://github.com/${{ github.repository }}/actions"
 
   check-commits:
