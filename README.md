@@ -9,6 +9,7 @@
 - 🎨 **TouchDesigner集成**: 专业音频处理和创意项目支持
 - 🔧 **模块化架构**: 基于适配器模式，易于扩展
 - 📱 **跨平台兼容**: 支持Windows、macOS、Linux
+- ✏️ **Bot重命名** (v1.1.0): 支持自定义机器人名称，个性化您的AI助手
 
 ## 🚀 快速开始
 
@@ -167,6 +168,15 @@ docs/
 ├── TOUCHDESIGNER_INTEGRATION.md  # TouchDesigner集成
 └── touchdesigner_example.py    # TouchDesigner示例代码
 ```
+
+## 🆕 版本更新
+
+### v1.1.0 新功能
+- **Bot重命名功能**: 现在可以自定义您的AI助手名称，让对话体验更加个性化
+  
+  ![Bot重命名功能界面](assets/gui-support-bot-rename.png)
+  
+  在配置界面中，您可以在"机器人名称"字段中输入自定义名称（如"小安"），为您的AI助手赋予独特的身份。
 
 ## 🌟 界面预览
 
