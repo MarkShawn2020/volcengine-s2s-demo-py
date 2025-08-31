@@ -116,20 +116,32 @@ jobs:
           echo "released=false" >> $GITHUB_OUTPUT
         fi
         
-    - name: Trigger build workflow
+    - name: Trigger build workflows
       if: steps.release.outputs.released == 'true'
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         echo "🚀 Tag created: ${{ steps.release.outputs.tag }}"
-        echo "📦 Triggering build workflows..."
+        echo "📦 Triggering all build workflows..."
         
-        # Trigger build-release workflow using GitHub CLI
+        # Wait for tag to be available
+        sleep 2
+        
+        # Trigger individual build workflows
+        echo "1️⃣ Triggering Build Windows GUI..."
+        gh workflow run build-windows.yml \
+          --ref "${{ steps.release.outputs.tag }}" || echo "Note: Windows build may require tag"
+        
+        echo "2️⃣ Triggering Build macOS GUI..."
+        gh workflow run build-macos.yml \
+          --ref "${{ steps.release.outputs.tag }}" || echo "Note: macOS build may require tag"
+        
+        echo "3️⃣ Triggering Build and Release (combined)..."
         gh workflow run build-release.yml \
           --ref "${{ steps.release.outputs.tag }}" \
           -f version="${{ steps.release.outputs.version }}"
         
-        echo "✅ Build workflow triggered for version ${{ steps.release.outputs.version }}"
+        echo "✅ All build workflows triggered for version ${{ steps.release.outputs.version }}"
         echo "Check progress at: https://github.com/${{ github.repository }}/actions"
 
   check-commits:
