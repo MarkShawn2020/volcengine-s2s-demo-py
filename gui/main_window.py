@@ -19,6 +19,7 @@ try:
     from src.config import VOLCENGINE_APP_ID, VOLCENGINE_ACCESS_TOKEN
     from src.unified_app import UnifiedAudioApp
     from logger import logger
+    from gui.config_manager import ConfigManager
 except ImportError as e:
     print(f"导入错误: {e}")
     import sys
@@ -29,6 +30,9 @@ class MainWindow:
         self.root = tk.Tk()
         self.root.title("火山引擎语音对话")
         self.root.geometry("800x600")
+        
+        # 配置管理器
+        self.config_manager = ConfigManager()
         
         # 应用状态
         self.app_instance = None
@@ -42,6 +46,10 @@ class MainWindow:
         self.audio_devices = {"input": [], "output": []}
         self.selected_input_device = None
         self.selected_output_device = None
+        
+        # 从配置恢复窗口大小
+        if self.config_manager.get("window_geometry"):
+            self.root.geometry(self.config_manager.get("window_geometry"))
         
         self.setup_ui()
         self.setup_logging()
@@ -57,9 +65,9 @@ class MainWindow:
         config_frame = ttk.LabelFrame(main_frame, text="配置", padding="10")
         config_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N), pady=(0, 10))
         
-        # 适配器选择
+        # 适配器选择（从配置加载）
         ttk.Label(config_frame, text="适配器类型:").grid(row=0, column=0, sticky=tk.W, pady=2)
-        self.adapter_var = tk.StringVar(value="local")
+        self.adapter_var = tk.StringVar(value=self.config_manager.get("adapter_type", "local"))
         adapter_combo = ttk.Combobox(config_frame, textvariable=self.adapter_var, width=30)
         adapter_combo['values'] = ("local", "browser", "touchdesigner", "touchdesigner-webrtc", "touchdesigner-webrtc-proper", "text-input")
         adapter_combo.grid(row=0, column=1, sticky=(tk.W, tk.E), pady=2)
@@ -69,18 +77,26 @@ class MainWindow:
         self.dynamic_frame = ttk.Frame(config_frame)
         self.dynamic_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N), pady=(10, 0))
         
-        # 通用配置
+        # 通用配置（从配置加载）
         ttk.Label(config_frame, text="机器人名称:").grid(row=2, column=0, sticky=tk.W, pady=2)
-        self.bot_name_var = tk.StringVar(value="小塔")
-        ttk.Entry(config_frame, textvariable=self.bot_name_var, width=32).grid(row=2, column=1, sticky=(tk.W, tk.E), pady=2)
+        self.bot_name_var = tk.StringVar(value=self.config_manager.get("bot_name", "小塔"))
+        bot_name_entry = ttk.Entry(config_frame, textvariable=self.bot_name_var, width=32)
+        bot_name_entry.grid(row=2, column=1, sticky=(tk.W, tk.E), pady=2)
+        bot_name_entry.bind('<FocusOut>', self.on_bot_name_change)
+        bot_name_entry.bind('<Return>', self.on_bot_name_change)
         
         ttk.Label(config_frame, text="重连超时(秒):").grid(row=3, column=0, sticky=tk.W, pady=2)
-        self.reconnect_timeout_var = tk.StringVar(value="300.0")
-        ttk.Entry(config_frame, textvariable=self.reconnect_timeout_var, width=32).grid(row=3, column=1, sticky=(tk.W, tk.E), pady=2)
+        self.reconnect_timeout_var = tk.StringVar(value=str(self.config_manager.get("reconnect_timeout", 300.0)))
+        timeout_entry = ttk.Entry(config_frame, textvariable=self.reconnect_timeout_var, width=32)
+        timeout_entry.grid(row=3, column=1, sticky=(tk.W, tk.E), pady=2)
+        timeout_entry.bind('<FocusOut>', self.on_timeout_change)
+        timeout_entry.bind('<Return>', self.on_timeout_change)
         
-        # PCM选项
-        self.use_pcm_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(config_frame, text="使用PCM格式TTS", variable=self.use_pcm_var).grid(row=4, column=0, columnspan=2, sticky=tk.W, pady=2)
+        # PCM选项（从配置加载）
+        self.use_pcm_var = tk.BooleanVar(value=self.config_manager.get("use_pcm", True))
+        pcm_check = ttk.Checkbutton(config_frame, text="使用PCM格式TTS", variable=self.use_pcm_var)
+        pcm_check.grid(row=4, column=0, columnspan=2, sticky=tk.W, pady=2)
+        pcm_check.bind('<ButtonRelease-1>', self.on_pcm_change)
         
         # 音频设备选择
         audio_frame = ttk.LabelFrame(config_frame, text="音频设备", padding="5")
@@ -201,12 +217,23 @@ class MainWindow:
             self.input_device_combo['values'] = input_names
             self.output_device_combo['values'] = output_names
             
-            # 选择第一个设备作为默认
-            if input_names:
+            # 尝试恢复上次选择的设备，否则选择第一个设备作为默认
+            last_input = self.config_manager.get("last_input_device")
+            last_output = self.config_manager.get("last_output_device")
+            
+            if last_input and last_input in input_names:
+                self.input_device_combo.set(last_input)
+                device_index = int(last_input.split(']')[0][1:])
+                self.selected_input_device = device_index
+            elif input_names:
                 self.input_device_combo.set(input_names[0])
                 self.selected_input_device = input_devices[0][0]
             
-            if output_names:
+            if last_output and last_output in output_names:
+                self.output_device_combo.set(last_output)
+                device_index = int(last_output.split(']')[0][1:])
+                self.selected_output_device = device_index
+            elif output_names:
                 self.output_device_combo.set(output_names[0])
                 self.selected_output_device = output_devices[0][0]
                 
@@ -230,6 +257,9 @@ class MainWindow:
             device_index = int(selection.split(']')[0][1:])
             self.selected_input_device = device_index
             self.log_message(f"已选择输入设备: {selection}")
+            # 保存到配置
+            self.config_manager.set("last_input_device", selection)
+            self.config_manager.save_config()
             
     def on_output_device_change(self, event):
         """输出设备改变"""
@@ -239,6 +269,9 @@ class MainWindow:
             device_index = int(selection.split(']')[0][1:])
             self.selected_output_device = device_index
             self.log_message(f"已选择输出设备: {selection}")
+            # 保存到配置
+            self.config_manager.set("last_output_device", selection)
+            self.config_manager.save_config()
         
     def on_adapter_change(self, event):
         """适配器改变时更新动态配置"""
@@ -247,6 +280,10 @@ class MainWindow:
             widget.destroy()
             
         adapter = self.adapter_var.get()
+        
+        # 保存适配器类型到配置
+        self.config_manager.set("adapter_type", adapter)
+        self.config_manager.save_config()
         
         if adapter == "browser":
             ttk.Label(self.dynamic_frame, text="代理URL:").grid(row=0, column=0, sticky=tk.W, pady=2)
@@ -273,6 +310,36 @@ class MainWindow:
                 ttk.Entry(self.dynamic_frame, textvariable=self.webrtc_port_var, width=40).grid(row=1, column=1, sticky=(tk.W, tk.E), pady=2)
                 
         self.dynamic_frame.columnconfigure(1, weight=1)
+    
+    def on_bot_name_change(self, event):
+        """机器人名称改变时保存配置"""
+        bot_name = self.bot_name_var.get()
+        if bot_name:
+            self.config_manager.set("bot_name", bot_name)
+            self.config_manager.save_config()
+            self.log_message(f"机器人名称已更新: {bot_name}")
+    
+    def on_timeout_change(self, event):
+        """重连超时改变时保存配置"""
+        try:
+            timeout = float(self.reconnect_timeout_var.get())
+            self.config_manager.set("reconnect_timeout", timeout)
+            self.config_manager.save_config()
+            self.log_message(f"重连超时已更新: {timeout}秒")
+        except ValueError:
+            pass
+    
+    def on_pcm_change(self, event):
+        """PCM选项改变时保存配置"""
+        # 延迟读取，因为复选框状态在事件触发时还未更新
+        self.root.after(10, self._save_pcm_config)
+    
+    def _save_pcm_config(self):
+        """实际保存PCM配置"""
+        use_pcm = self.use_pcm_var.get()
+        self.config_manager.set("use_pcm", use_pcm)
+        self.config_manager.save_config()
+        self.log_message(f"PCM格式TTS: {'启用' if use_pcm else '禁用'}")
         
     def get_config(self):
         """获取当前配置"""
@@ -395,6 +462,11 @@ class MainWindow:
         
     def on_closing(self):
         """关闭窗口时的处理"""
+        # 保存窗口大小和位置
+        geometry = self.root.geometry()
+        self.config_manager.set("window_geometry", geometry)
+        self.config_manager.save_config()
+        
         if self.is_running:
             self.stop_app()
         self.root.destroy()
