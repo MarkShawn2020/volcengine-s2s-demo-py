@@ -163,11 +163,28 @@ jobs:
   create-release:
     needs: [build-windows, build-macos]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Run on tag push OR workflow_dispatch with version input
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.version != '')
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      
+    - name: Determine version and tag
+      id: version
+      run: |
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          # From workflow_dispatch input
+          VERSION="${{ github.event.inputs.version }}"
+          TAG="v${VERSION}"
+        else
+          # From tag push
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#v}"
+        fi
+        echo "version=${VERSION}" >> $GITHUB_OUTPUT
+        echo "tag=${TAG}" >> $GITHUB_OUTPUT
+        echo "Using version: ${VERSION}, tag: ${TAG}"
       
     - name: Download all artifacts
       uses: actions/download-artifact@v4
@@ -196,14 +213,15 @@ jobs:
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
+        tag_name: ${{ steps.version.outputs.tag }}
         files: |
           release/*
         draft: false
         prerelease: false
         generate_release_notes: true
-        name: Release ${{ github.ref_name }}
+        name: Release ${{ steps.version.outputs.tag }}
         body: |
-          ## Volcengine Voice Chat ${{ github.ref_name }}
+          ## Volcengine Voice Chat ${{ steps.version.outputs.tag }}
           
           ### 📦 Downloads
           
