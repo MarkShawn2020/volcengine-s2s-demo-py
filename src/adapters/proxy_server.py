@@ -14,12 +14,13 @@ logger = logging.getLogger(__name__)
 class ProxyServer:
     """代理服务器 - 解决浏览器WebSocket自定义header限制"""
 
-    def __init__(self, websocket_uri: str = "ws://localhost:8765"):
+    def __init__(self, websocket_uri: str = "ws://localhost:8765", bot_name: str = "小塔"):
         parsed_url = urlparse(websocket_uri)
         self.host = parsed_url.hostname or "localhost"
         self.port = parsed_url.port or (443 if parsed_url.scheme == "wss" else 8765)
         self.clients: Dict[str, 'ProxyClient'] = {}
         self.server = None
+        self.bot_name = bot_name
 
     async def start(self):
         """启动代理服务器"""
@@ -48,7 +49,7 @@ class ProxyServer:
         client_id = str(uuid.uuid4())
         logger.info(f"新客户端连接: {client_id}")
 
-        proxy_client = ProxyClient(client_id, websocket)
+        proxy_client = ProxyClient(client_id, websocket, self.bot_name)
         # 传递配置给ProxyClient
         if hasattr(self, 'config'):
             proxy_client.config = self.config

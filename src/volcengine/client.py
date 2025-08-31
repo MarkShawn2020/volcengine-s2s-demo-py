@@ -10,7 +10,6 @@ import websockets
 from websockets import ClientConnection, State
 
 from src.volcengine import protocol
-from src.volcengine.config import start_session_req
 
 logger = logging.getLogger(__name__)
 
@@ -25,8 +24,10 @@ seq = 0
 
 
 class VolcengineClient:
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: Dict[str, Any], bot_name: str = "小塔", tts_config: Dict[str, Any] = None):
         self.config = config
+        self.bot_name = bot_name
+        self.tts_config = tts_config
 
         self.ws: ClientConnection | None = None
         self.logid = ""
@@ -121,7 +122,16 @@ class VolcengineClient:
     async def request_start_session(self) -> None:
         """发送StartSession请求"""
         try:
-            request_params = start_session_req
+            # 动态构建start_session_req
+            request_params = {
+                "dialog": {
+                    "bot_name": self.bot_name
+                }
+            }
+            
+            # 添加TTS配置（如果提供）
+            if self.tts_config:
+                request_params["tts"] = self.tts_config
             payload_bytes = str.encode(json.dumps(request_params))
             payload_bytes = gzip.compress(payload_bytes)
             start_session_request = bytearray(protocol.generate_header())

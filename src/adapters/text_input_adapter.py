@@ -10,7 +10,6 @@ from src.adapters.base import AudioAdapter, LocalConnectionConfig
 from src.adapters.type import AdapterType
 from src.audio.threads import player_thread
 from src.audio.utils.select_audio_device import select_audio_device
-from src.config import WELCOME_MESSAGE
 from src.volcengine import protocol
 from src.volcengine.client import VolcengineClient
 from src.volcengine.config import ws_connect_config
@@ -38,7 +37,7 @@ class TextInputAdapter(AudioAdapter):
     async def connect(self) -> bool:
         """建立与火山引擎的连接"""
         try:
-            self.client = VolcengineClient(ws_connect_config)
+            self.client = VolcengineClient(ws_connect_config, self.bot_name, self.tts_config)
             await self.client.start()
             
             if self.client.is_active:
@@ -56,7 +55,7 @@ class TextInputAdapter(AudioAdapter):
     
     async def send_welcome(self):
         """发送欢迎消息 - 这个不能走 tts 接口"""
-        await self.client.push_text(WELCOME_MESSAGE)
+        await self.client.push_text(self.welcome_message)
     
     async def _send_silence_to_activate(self):
         """发送静音音频激活服务器"""

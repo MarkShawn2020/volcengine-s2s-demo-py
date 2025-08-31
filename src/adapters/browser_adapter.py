@@ -37,7 +37,7 @@ class BrowserAudioAdapter(AudioAdapter):
             proxy_url = self.config.get("proxy_url")
 
             # 启动内嵌代理服务器
-            self.proxy_server = ProxyServer(proxy_url)
+            self.proxy_server = ProxyServer(proxy_url, self.bot_name)
             self.server_task = asyncio.create_task(self.proxy_server.start())
 
             # 等待服务器启动

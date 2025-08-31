@@ -5,7 +5,6 @@ from typing import Dict, Any, AsyncGenerator, Optional
 from dataclasses import dataclass
 
 from src.adapters.type import AdapterType
-from src.config import WELCOME_MESSAGE
 
 
 @dataclass
@@ -22,6 +21,9 @@ class AudioAdapter(ABC):
         self.config = config
         self.is_connected = False
         self.session_id = None
+        self.bot_name = config.get('bot_name', '小塔')
+        self.welcome_message = f"你好，我是{self.bot_name}，今天很高兴遇见你~"
+        self.tts_config = config.get('tts_config')
 
     @abstractmethod
     async def connect(self) -> bool:
@@ -49,7 +51,7 @@ class AudioAdapter(ABC):
         pass
 
     async def send_welcome(self):
-        return await self.send_text(WELCOME_MESSAGE)
+        return await self.send_text(self.welcome_message)
 
     async def send_chat_tts_text(self, content: str, start: bool = True, end: bool = True) -> bool:
         """发送ChatTTS文本请求"""
@@ -96,10 +98,11 @@ class ConnectionConfig:
 class LocalConnectionConfig(ConnectionConfig):
     """本地连接配置"""
 
-    def __init__(self, app_id: str, access_token: str, **kwargs):
+    def __init__(self, app_id: str, access_token: str, bot_name: str = "小塔", **kwargs):
         super().__init__(
             app_id=app_id,
             access_token=access_token,
+            bot_name=bot_name,
             base_url="wss://openspeech.bytedance.com/api/v3/realtime/dialogue",
             **kwargs
             )
@@ -108,7 +111,7 @@ class LocalConnectionConfig(ConnectionConfig):
 class BrowserConnectionConfig(ConnectionConfig):
     """浏览器连接配置（通过代理服务器）"""
 
-    def __init__(self, proxy_url: str, app_id: str, access_token: str, **kwargs):
+    def __init__(self, proxy_url: str, app_id: str, access_token: str, bot_name: str = "小塔", **kwargs):
         super().__init__(
-            proxy_url=proxy_url, app_id=app_id, access_token=access_token, **kwargs
+            proxy_url=proxy_url, app_id=app_id, access_token=access_token, bot_name=bot_name, **kwargs
             )

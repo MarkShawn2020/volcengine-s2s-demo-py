@@ -5,7 +5,6 @@ from typing import Dict, Any
 
 import websockets
 
-from src.config import WELCOME_MESSAGE
 from src.volcengine import protocol
 from src.volcengine.client import VolcengineClient
 
@@ -15,12 +14,14 @@ logger = logging.getLogger(__name__)
 class ProxyClient:
     """代理客户端 - 管理单个浏览器连接"""
 
-    def __init__(self, client_id: str, websocket):
+    def __init__(self, client_id: str, websocket, bot_name: str = "小塔"):
         self.client_id = client_id
         self.websocket = websocket
         self.volcengine_client: VolcengineClient | None = None
         self.receive_task = None
         self.running = True
+        self.bot_name = bot_name
+        self.welcome_message = f"你好，我是{self.bot_name}，今天很高兴遇见你~"
 
     async def handle(self):
         """处理客户端消息"""
@@ -68,7 +69,7 @@ class ProxyClient:
         try:
             # 建立与火山引擎的连接
             from src.volcengine.config import ws_connect_config
-            self.volcengine_client = VolcengineClient(ws_connect_config)
+            self.volcengine_client = VolcengineClient(ws_connect_config, self.bot_name, None)  # TTS config handled by browser
             await self.volcengine_client.start()
             
             if self.volcengine_client.is_active:
@@ -188,8 +189,8 @@ class ProxyClient:
             logger.debug("volcengine_client not initialized")
             return
         try:
-            await self.volcengine_client.push_text(WELCOME_MESSAGE)
-            logger.info(f"已向火山引擎发送welcome消息: {WELCOME_MESSAGE}")
+            await self.volcengine_client.push_text(self.welcome_message)
+            logger.info(f"已向火山引擎发送welcome消息: {self.welcome_message}")
         except Exception as e:
             logger.error(f"发送welcome消息失败: {e}")
 

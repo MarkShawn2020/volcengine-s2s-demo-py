@@ -17,11 +17,12 @@ logger = logging.getLogger(__name__)
 class TouchDesignerWebRTCConnectionConfig(ConnectionConfig):
     """TouchDesigner WebRTC连接配置"""
 
-    def __init__(self, signaling_port: int, app_id: str, access_token: str, **kwargs):
+    def __init__(self, signaling_port: int, app_id: str, access_token: str, bot_name: str = "小塔", **kwargs):
         super().__init__(
             signaling_port=signaling_port,
             app_id=app_id,
             access_token=access_token,
+            bot_name=bot_name,
             base_url="wss://openspeech.bytedance.com/api/v3/realtime/dialogue",
             **kwargs
         )
@@ -62,7 +63,7 @@ class TouchDesignerWebRTCAudioAdapter(AudioAdapter):
         """建立与豆包的连接和WebRTC信令服务"""
         try:
             # 1. 建立与豆包的WebSocket连接
-            self.client = VolcengineClient(ws_connect_config)
+            self.client = VolcengineClient(ws_connect_config, self.bot_name, self.tts_config)
             await self.client.start()
 
             if not self.client.is_active:

@@ -70,17 +70,21 @@ class MainWindow:
         self.dynamic_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N), pady=(10, 0))
         
         # 通用配置
-        ttk.Label(config_frame, text="重连超时(秒):").grid(row=2, column=0, sticky=tk.W, pady=2)
+        ttk.Label(config_frame, text="机器人名称:").grid(row=2, column=0, sticky=tk.W, pady=2)
+        self.bot_name_var = tk.StringVar(value="小塔")
+        ttk.Entry(config_frame, textvariable=self.bot_name_var, width=32).grid(row=2, column=1, sticky=(tk.W, tk.E), pady=2)
+        
+        ttk.Label(config_frame, text="重连超时(秒):").grid(row=3, column=0, sticky=tk.W, pady=2)
         self.reconnect_timeout_var = tk.StringVar(value="300.0")
-        ttk.Entry(config_frame, textvariable=self.reconnect_timeout_var, width=32).grid(row=2, column=1, sticky=(tk.W, tk.E), pady=2)
+        ttk.Entry(config_frame, textvariable=self.reconnect_timeout_var, width=32).grid(row=3, column=1, sticky=(tk.W, tk.E), pady=2)
         
         # PCM选项
         self.use_pcm_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(config_frame, text="使用PCM格式TTS", variable=self.use_pcm_var).grid(row=3, column=0, columnspan=2, sticky=tk.W, pady=2)
+        ttk.Checkbutton(config_frame, text="使用PCM格式TTS", variable=self.use_pcm_var).grid(row=4, column=0, columnspan=2, sticky=tk.W, pady=2)
         
         # 音频设备选择
         audio_frame = ttk.LabelFrame(config_frame, text="音频设备", padding="5")
-        audio_frame.grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N), pady=(10, 0))
+        audio_frame.grid(row=5, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N), pady=(10, 0))
         
         # 输入设备
         ttk.Label(audio_frame, text="麦克风:").grid(row=0, column=0, sticky=tk.W, pady=2)
@@ -277,7 +281,8 @@ class MainWindow:
         base_config = {
             "app_id": VOLCENGINE_APP_ID,
             "access_token": VOLCENGINE_ACCESS_TOKEN,
-            "reconnect_timeout": float(self.reconnect_timeout_var.get())
+            "reconnect_timeout": float(self.reconnect_timeout_var.get()),
+            "bot_name": self.bot_name_var.get()
         }
         
         if adapter == "local":
@@ -328,7 +333,8 @@ class MainWindow:
                 config, 
                 use_tts_pcm=use_pcm,
                 input_device_index=self.selected_input_device,
-                output_device_index=self.selected_output_device
+                output_device_index=self.selected_output_device,
+                bot_name=config.get('bot_name', '小塔')
             )
             
             # 在新线程中运行应用（使用 UnifiedAudioApp 的模式）

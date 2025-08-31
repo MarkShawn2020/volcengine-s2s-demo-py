@@ -88,7 +88,7 @@ class LocalAudioAdapter(AudioAdapter):
             if hasattr(self.config, 'params') and self.config.params:
                 client_config.update(self.config.params)
             
-            self.client = VolcengineClient(client_config)
+            self.client = VolcengineClient(client_config, self.bot_name, self.tts_config)
             await self.client.start()
             
             if self.client.is_active:

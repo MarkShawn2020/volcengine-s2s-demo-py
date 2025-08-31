@@ -15,12 +15,13 @@ class UnifiedAudioApp:
     """统一音频应用 - 支持多种适配器"""
 
     def __init__(self, adapter_type: AdapterType, config: dict, use_tts_pcm: bool = True, 
-                 input_device_index: int = None, output_device_index: int = None):
+                 input_device_index: int = None, output_device_index: int = None, bot_name: str = "小塔"):
         self.adapter_type = adapter_type
         self.config = config
         self.use_tts_pcm = use_tts_pcm
         self.input_device_index = input_device_index
         self.output_device_index = output_device_index
+        self.bot_name = bot_name
 
         # 音频相关
         self.p = pyaudio.PyAudio()
@@ -43,12 +44,11 @@ class UnifiedAudioApp:
     async def initialize(self) -> bool:
         """初始化应用"""
         try:
-            # 如果是本地适配器，需要配置TTS音频格式
+            # 准备TTS配置
+            tts_config = None
             if self.use_tts_pcm:
-                # 临时导入配置
-                from src.volcengine.config import start_session_req
                 logger.info("配置为请求 PCM 格式的TTS音频流 (24kHz, Float32)")
-                start_session_req['tts'] = {
+                tts_config = {
                     "audio_config": {
                         "format": "pcm",
                         "sample_rate": 24000
@@ -67,6 +67,8 @@ class UnifiedAudioApp:
                 connection_config = LocalConnectionConfig(
                     app_id=self.config['app_id'],
                     access_token=self.config['access_token'],
+                    bot_name=self.bot_name,
+                    tts_config=tts_config,
                     **extra_params
                 )
                 self.adapter = LocalAudioAdapter(connection_config, self.input_device_index, self.output_device_index)
@@ -78,6 +80,8 @@ class UnifiedAudioApp:
                     proxy_url=self.config['proxy_url'],
                     app_id=self.config['app_id'],
                     access_token=self.config['access_token'],
+                    bot_name=self.bot_name,
+                    tts_config=tts_config,
                     **self.config.get('extra_params', {})
                 )
                 self.adapter = BrowserAudioAdapter(connection_config)
@@ -91,6 +95,8 @@ class UnifiedAudioApp:
                     listen_port=self.config.get('listen_port', 7001),
                     app_id=self.config['app_id'],
                     access_token=self.config['access_token'],
+                    bot_name=self.bot_name,
+                    tts_config=tts_config,
                     **self.config.get('extra_params', {})
                 )
                 self.adapter = TouchDesignerAudioAdapter(connection_config)
@@ -103,6 +109,8 @@ class UnifiedAudioApp:
                     signaling_port=self.config['signaling_port'],
                     app_id=self.config['app_id'],
                     access_token=self.config['access_token'],
+                    bot_name=self.bot_name,
+                    tts_config=tts_config,
                     **self.config.get('extra_params', {})
                 )
                 self.adapter = TouchDesignerWebRTCAudioAdapter(connection_config)
@@ -117,6 +125,8 @@ class UnifiedAudioApp:
                     webrtc_port=self.config['webrtc_port'],
                     app_id=self.config['app_id'],
                     access_token=self.config['access_token'],
+                    bot_name=self.bot_name,
+                    tts_config=tts_config,
                     **self.config.get('extra_params', {})
                 )
                 self.adapter = TouchDesignerProperWebRTCAudioAdapter(connection_config)
@@ -127,6 +137,8 @@ class UnifiedAudioApp:
                 connection_config = LocalConnectionConfig(
                     app_id=self.config['app_id'],
                     access_token=self.config['access_token'],
+                    bot_name=self.bot_name,
+                    tts_config=tts_config,
                     **self.config.get('extra_params', {})
                 )
                 self.adapter = TextInputAdapter(connection_config)
