@@ -105,6 +105,10 @@ jobs:
           echo "released=true" >> $GITHUB_OUTPUT
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "tag=v$NEW_VERSION" >> $GITHUB_OUTPUT
+          
+          # Ensure tag is pushed to GitHub
+          git push origin "v$NEW_VERSION"
+          echo "📌 Pushed tag v$NEW_VERSION to GitHub"
         else
           echo "ℹ️ No version change"
           echo "released=false" >> $GITHUB_OUTPUT
